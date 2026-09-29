@@ -1,5 +1,17 @@
+import {
+  allSeededModuleIds,
+  createModuleCatalog,
+  moduleId,
+} from "@/lib/mock/module-catalog";
 import { ROLE_IDS, ROLES } from "@/lib/permissions/permissions";
-import type { AppState } from "@/types";
+import type {
+  AppState,
+  Invoice,
+  ModuleAction,
+  ModuleGrant,
+  OrganizationType,
+  User,
+} from "@/types";
 
 /**
  * Seed data for the demo.
@@ -43,12 +55,64 @@ export const USER_IDS = {
   consultant: "user-consultant",
 } as const;
 
+export const PLAN_IDS = {
+  brandStandard: "plan-brand-standard",
+  brandProfessional: "plan-brand-professional",
+  brokerageStandard: "plan-brokerage-standard",
+  brokerageProfessional: "plan-brokerage-professional",
+  privateLabel: "plan-private-label-managed",
+} as const;
+
+/** Every seeded account has already been through email verification. */
+function verified(users: User[]): User[] {
+  return users.map((user) => ({ ...user, emailVerifiedAt: user.createdAt }));
+}
+
+/** Shorthand for seeded module grants: grants("brand", { files: ["view"] }). */
+function grants(
+  audience: OrganizationType,
+  bySlug: Record<string, ModuleAction[]>,
+): ModuleGrant[] {
+  return Object.entries(bySlug).map(([slug, actions]) => ({
+    moduleId: moduleId(audience, slug),
+    actions,
+  }));
+}
+
+function brandModules(...slugs: string[]): string[] {
+  return slugs.map((slug) => moduleId("brand", slug));
+}
+
+function brokerageModules(...slugs: string[]): string[] {
+  return slugs.map((slug) => moduleId("brokerage", slug));
+}
+
+function invoice(
+  number: number,
+  organizationId: string,
+  subscriptionId: string,
+  description: string,
+  amount: number,
+  issuedDaysAgo: number,
+): Invoice {
+  return {
+    id: `invoice-${number}`,
+    number: `INV-${number}`,
+    organizationId,
+    subscriptionId,
+    description,
+    amount,
+    status: "paid",
+    issuedAt: daysAgo(issuedDaysAgo),
+  };
+}
+
 /** Builds a fresh copy of the demo database. Called on first load and on reset. */
 export function createSeedState(): AppState {
   return {
     roles: ROLES.map((role) => ({ ...role })),
 
-    users: [
+    users: verified([
       {
         id: USER_IDS.constance,
         name: "Constance Reed",
@@ -120,7 +184,7 @@ export function createSeedState(): AppState {
         status: "active",
         createdAt: daysAgo(30),
       },
-    ],
+    ]),
 
     organizations: [
       {
@@ -278,6 +342,18 @@ export function createSeedState(): AppState {
         roleId: ROLE_IDS.brandMember,
         status: "active",
         source: "invitation",
+        // Bob works on accounts and reporting, and cannot delete anything.
+        moduleGrants: grants("brand", {
+          dashboard: ["view"],
+          "banner-count-graph": ["view"],
+          "categories-products-pricing": ["view"],
+          retailers: ["view", "export"],
+          contacts: ["view", "create", "edit"],
+          reports: ["view"],
+          "retail-reports": ["view"],
+          "sales-tracker": ["view", "export"],
+          files: ["view", "create"],
+        }),
         createdAt: daysAgo(96),
       },
       // ABC Brokerage: one admin and multiple Broker-role users.
@@ -297,6 +373,13 @@ export function createSeedState(): AppState {
         roleId: ROLE_IDS.broker,
         status: "active",
         source: "invitation",
+        moduleGrants: grants("brokerage", {
+          "market-overview": ["view", "create", "edit", "export"],
+          "category-review": ["view", "create", "edit"],
+          "category-review-calendar": ["view"],
+          "promotional-management": ["view", "create", "edit"],
+          files: ["view", "create"],
+        }),
         createdAt: daysAgo(88),
       },
       {
@@ -306,6 +389,11 @@ export function createSeedState(): AppState {
         roleId: ROLE_IDS.broker,
         status: "active",
         source: "invitation",
+        moduleGrants: grants("brokerage", {
+          "market-overview": ["view"],
+          "distributor-apl": ["view", "export"],
+          files: ["view"],
+        }),
         createdAt: daysAgo(80),
       },
       {
@@ -334,6 +422,12 @@ export function createSeedState(): AppState {
         roleId: ROLE_IDS.externalCollaborator,
         status: "active",
         source: "invitation",
+        // The consultant only sees the reports they were brought in for.
+        moduleGrants: grants("brand", {
+          reports: ["view"],
+          "monthly-report": ["view", "export"],
+          "trade-spend-roll-up": ["view"],
+        }),
         createdAt: daysAgo(30),
       },
       {
@@ -343,6 +437,9 @@ export function createSeedState(): AppState {
         roleId: ROLE_IDS.externalCollaborator,
         status: "active",
         source: "invitation",
+        moduleGrants: grants("brokerage", {
+          "market-overview": ["view"],
+        }),
         createdAt: daysAgo(24),
       },
     ],
@@ -431,6 +528,207 @@ export function createSeedState(): AppState {
       },
     ],
 
+    modules: createModuleCatalog(daysAgo(400)),
+
+    plans: [
+      {
+        id: PLAN_IDS.brandStandard,
+        name: "Standard",
+        audience: "brand",
+        tier: "standard",
+        description:
+          "The essentials for a brand: product specs, core CRM, files and everyday reporting.",
+        moduleIds: brandModules(
+          "dashboard",
+          "banner-count-graph",
+          "categories-products-pricing",
+          "distributors",
+          "retailers",
+          "contacts",
+          "files",
+          "reports",
+          "retail-reports",
+          "sales-tracker",
+          "monthly-report",
+        ),
+        fixedMonthlyPrice: 299,
+        createdByUserId: USER_IDS.constance,
+        createdAt: daysAgo(400),
+      },
+      {
+        id: PLAN_IDS.brandProfessional,
+        name: "Professional",
+        audience: "brand",
+        tier: "professional",
+        description:
+          "Everything a brand runs on Caboodle: full CRM, promotional planning and every report, including data upload reporting.",
+        moduleIds: allSeededModuleIds("brand").filter(
+          (id) => id !== moduleId("brand", "ask-caboodle"),
+        ),
+        fixedMonthlyPrice: 799,
+        createdByUserId: USER_IDS.constance,
+        createdAt: daysAgo(400),
+      },
+      {
+        id: PLAN_IDS.brokerageStandard,
+        name: "Standard",
+        audience: "brokerage",
+        tier: "standard",
+        description:
+          "Market overview, category reviews and a shared file repository.",
+        moduleIds: brokerageModules("market-overview", "category-review", "files"),
+        fixedMonthlyPrice: 99,
+        createdByUserId: USER_IDS.constance,
+        createdAt: daysAgo(400),
+      },
+      {
+        id: PLAN_IDS.brokerageProfessional,
+        name: "Professional",
+        audience: "brokerage",
+        tier: "professional",
+        description:
+          "Every brokerage module, including promotional management and APL tracking.",
+        moduleIds: allSeededModuleIds("brokerage"),
+        fixedMonthlyPrice: 229,
+        createdByUserId: USER_IDS.constance,
+        createdAt: daysAgo(400),
+      },
+      // Built by Caboodle for one organization, priced module by module.
+      {
+        id: PLAN_IDS.privateLabel,
+        name: "Private Label (managed)",
+        audience: "brand",
+        tier: "custom",
+        description:
+          "Set up by Caboodle for a private label brand run by its brokerage.",
+        moduleIds: brandModules(
+          "categories-products-pricing",
+          "retailers",
+          "files",
+          "reports",
+          "sales-tracker",
+        ),
+        organizationId: ORG_IDS.privateLabel,
+        createdByUserId: USER_IDS.constance,
+        createdAt: daysAgo(70),
+      },
+    ],
+
+    // Duplicate Test Organization is left without a plan on purpose.
+    subscriptions: [
+      {
+        id: "sub-acme",
+        organizationId: ORG_IDS.acme,
+        planId: PLAN_IDS.brandProfessional,
+        status: "active",
+        billingCycle: "annual",
+        source: "self_service",
+        paymentMethod: {
+          brand: "Visa",
+          last4: "4242",
+          expMonth: 8,
+          expYear: 2028,
+          holderName: "Alice Johnson",
+        },
+        createdByUserId: USER_IDS.alice,
+        createdAt: daysAgo(118),
+        startedAt: daysAgo(118),
+        currentPeriodEnd: daysFromNow(247),
+      },
+      {
+        id: "sub-abc",
+        organizationId: ORG_IDS.abc,
+        planId: PLAN_IDS.brokerageProfessional,
+        status: "active",
+        billingCycle: "monthly",
+        source: "self_service",
+        paymentMethod: {
+          brand: "Mastercard",
+          last4: "5454",
+          expMonth: 3,
+          expYear: 2029,
+          holderName: "John Carter",
+        },
+        createdByUserId: USER_IDS.john,
+        createdAt: daysAgo(108),
+        startedAt: daysAgo(108),
+        currentPeriodEnd: daysFromNow(12),
+      },
+      {
+        id: "sub-xyz",
+        organizationId: ORG_IDS.xyzBroker,
+        planId: PLAN_IDS.brokerageStandard,
+        status: "active",
+        billingCycle: "monthly",
+        source: "platform_admin",
+        createdByUserId: USER_IDS.constance,
+        createdAt: daysAgo(99),
+        startedAt: daysAgo(99),
+        currentPeriodEnd: daysFromNow(21),
+      },
+      {
+        id: "sub-west",
+        organizationId: ORG_IDS.westCoast,
+        planId: PLAN_IDS.brokerageStandard,
+        status: "active",
+        billingCycle: "monthly",
+        source: "self_service",
+        paymentMethod: {
+          brand: "Visa",
+          last4: "1881",
+          expMonth: 11,
+          expYear: 2027,
+          holderName: "Wendy Cole",
+        },
+        createdByUserId: USER_IDS.wendy,
+        createdAt: daysAgo(59),
+        startedAt: daysAgo(59),
+        currentPeriodEnd: daysFromNow(1),
+      },
+      {
+        id: "sub-private",
+        organizationId: ORG_IDS.privateLabel,
+        planId: PLAN_IDS.privateLabel,
+        status: "active",
+        billingCycle: "monthly",
+        source: "platform_admin",
+        createdByUserId: USER_IDS.constance,
+        createdAt: daysAgo(70),
+        startedAt: daysAgo(70),
+        currentPeriodEnd: daysFromNow(20),
+      },
+      {
+        id: "sub-northwind",
+        organizationId: ORG_IDS.northwind,
+        planId: PLAN_IDS.brandStandard,
+        status: "active",
+        billingCycle: "monthly",
+        source: "self_service",
+        paymentMethod: {
+          brand: "Amex",
+          last4: "1005",
+          expMonth: 5,
+          expYear: 2030,
+          holderName: "Nate Brooks",
+        },
+        createdByUserId: USER_IDS.nate,
+        createdAt: daysAgo(54),
+        startedAt: daysAgo(54),
+        currentPeriodEnd: daysFromNow(6),
+      },
+    ],
+
+    invoices: [
+      invoice(1008, ORG_IDS.xyzBroker, "sub-xyz", "Standard · monthly", 99, 9),
+      invoice(1007, ORG_IDS.privateLabel, "sub-private", "Private Label (managed) · monthly", 205, 10),
+      invoice(1006, ORG_IDS.abc, "sub-abc", "Professional · monthly", 229, 18),
+      invoice(1005, ORG_IDS.northwind, "sub-northwind", "Standard · monthly", 299, 24),
+      invoice(1004, ORG_IDS.westCoast, "sub-west", "Standard · monthly", 99, 29),
+      invoice(1003, ORG_IDS.abc, "sub-abc", "Professional · monthly", 229, 48),
+      invoice(1002, ORG_IDS.abc, "sub-abc", "Professional · monthly", 229, 78),
+      invoice(1001, ORG_IDS.acme, "sub-acme", "Professional · annual", 7990, 118),
+    ],
+
     auditEvents: [
       {
         id: "audit-1",
@@ -492,7 +790,7 @@ export const DEMO_ACCOUNTS = [
   {
     email: "bob@acmefoods.com",
     label: "Brand Member",
-    hint: "Limited permissions inside Acme Foods",
+    hint: "Limited permissions and 9 granted modules in Acme Foods",
   },
   {
     email: "john@abc-brokerage.com",
@@ -502,7 +800,7 @@ export const DEMO_ACCOUNTS = [
   {
     email: "mike@abc-brokerage.com",
     label: "Broker",
-    hint: "Broker inside ABC Brokerage",
+    hint: "Broker inside ABC Brokerage, 5 granted modules",
   },
   {
     email: "consultant@agency.com",

@@ -18,16 +18,23 @@ import { OrganizationBreadcrumb } from "@/components/layout/breadcrumb";
 
 export default function AppLayout({ children }: LayoutProps<"/">) {
   const { hydrated } = useDemo();
-  const { isSignedIn } = useSession();
+  const { isSignedIn, user } = useSession();
   const router = useRouter();
   const pathname = usePathname();
+  const emailVerified = Boolean(user?.emailVerifiedAt);
 
   useEffect(() => {
-    if (hydrated && !isSignedIn) router.replace("/login");
-  }, [hydrated, isSignedIn, router]);
+    if (!hydrated) return;
+    if (!isSignedIn) router.replace("/login");
+    // An account that never entered its email code can't use the app yet.
+    else if (!emailVerified) router.replace("/verify-email");
+  }, [hydrated, isSignedIn, emailVerified, router]);
 
   if (!hydrated) return <LoadingScreen label="Loading Caboodle" />;
   if (!isSignedIn) return <LoadingScreen label="Redirecting to sign in" />;
+  if (!emailVerified) {
+    return <LoadingScreen label="Redirecting to email verification" />;
+  }
 
   return (
     <SidebarProvider>

@@ -24,6 +24,11 @@ export type User = {
    * platform-level capability that sits outside the membership model.
    */
   isPlatformAdmin?: boolean;
+  /**
+   * When the person proved they own their email with the one-time code. Unset
+   * means the account exists but cannot go any further than verification.
+   */
+  emailVerifiedAt?: string;
   createdAt: string;
 };
 
@@ -66,7 +71,110 @@ export type Membership = {
   roleId: string;
   status: MembershipStatus;
   source: MembershipSource;
+  /**
+   * Which subscribed modules this member may use, and what they may do in
+   * each. Ignored for roles that grant `module.full_access`.
+   */
+  moduleGrants?: ModuleGrant[];
   createdAt: string;
+};
+
+/** What a member may do inside one module. */
+export type ModuleAction = "view" | "create" | "edit" | "delete" | "export";
+
+export type ModuleGrant = {
+  moduleId: string;
+  actions: ModuleAction[];
+};
+
+/**
+ * One entry in the platform module catalog: either a module or, when
+ * `parentId` is set, a sub-module. The catalog is two levels deep; screens,
+ * tabs and reports below that are listed in `features`.
+ */
+export type PlatformModule = {
+  id: string;
+  /** Brand and Brokerage organizations have different module catalogs. */
+  audience: OrganizationType;
+  /** The slug caboodle.web checks. Unique within an audience, not across. */
+  slug: string;
+  name: string;
+  description: string;
+  parentId?: string;
+  /** Menu group (for a module) or hub section (for a sub-module). */
+  group?: string;
+  /** Where the screen lives in caboodle.web today. Informational only. */
+  route?: string;
+  /** Screens, tabs and reports inside it that are not gated on their own. */
+  features: string[];
+  /**
+   * Picture shown instead of the default icon. In the demo this is a small
+   * data URL made in the browser; a real backend would store a file URL.
+   */
+  imageUrl?: string;
+  /** List price in USD per month. */
+  monthlyPrice: number;
+  sortOrder: number;
+  createdAt: string;
+};
+
+export type PlanTier = "standard" | "professional" | "custom";
+
+export type Plan = {
+  id: string;
+  name: string;
+  audience: OrganizationType;
+  tier: PlanTier;
+  description: string;
+  /** Modules and sub-modules. A sub-module only counts if its parent is here. */
+  moduleIds: string[];
+  /** A bundle price. When unset the plan costs the sum of its modules. */
+  fixedMonthlyPrice?: number;
+  /** Set when a custom plan was built for one organization only. */
+  organizationId?: string;
+  createdByUserId?: string;
+  createdAt: string;
+};
+
+export type BillingCycle = "monthly" | "annual";
+
+/** `incomplete` means a plan was chosen but payment has not gone through. */
+export type SubscriptionStatus = "incomplete" | "active" | "canceled";
+
+export type SubscriptionSource = "self_service" | "platform_admin";
+
+export type PaymentMethod = {
+  brand: string;
+  last4: string;
+  expMonth: number;
+  expYear: number;
+  holderName: string;
+};
+
+export type Subscription = {
+  id: string;
+  organizationId: string;
+  planId: string;
+  status: SubscriptionStatus;
+  billingCycle: BillingCycle;
+  source: SubscriptionSource;
+  paymentMethod?: PaymentMethod;
+  createdByUserId: string;
+  createdAt: string;
+  startedAt?: string;
+  currentPeriodEnd?: string;
+  canceledAt?: string;
+};
+
+export type Invoice = {
+  id: string;
+  number: string;
+  organizationId: string;
+  subscriptionId: string;
+  description: string;
+  amount: number;
+  status: "paid";
+  issuedAt: string;
 };
 
 export type Role = {
@@ -161,7 +269,11 @@ export type PermissionId =
   | "relationship.request"
   | "relationship.approve"
   | "relationship.reject"
-  | "relationship.manage";
+  | "relationship.manage"
+  | "billing.view"
+  | "billing.manage"
+  | "module.assign"
+  | "module.full_access";
 
 /** The full mock database. One object, persisted to localStorage. */
 export type AppState = {
@@ -174,6 +286,10 @@ export type AppState = {
   invitations: Invitation[];
   accessRequests: AccessRequest[];
   auditEvents: AuditEvent[];
+  modules: PlatformModule[];
+  plans: Plan[];
+  subscriptions: Subscription[];
+  invoices: Invoice[];
 };
 
 /** The demo "session" — who is signed in and which org they are looking at. */

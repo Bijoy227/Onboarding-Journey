@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { MoreHorizontal, UserPlus, Users } from "lucide-react";
 import { toast } from "sonner";
 
@@ -62,6 +63,7 @@ export default function MembersPage() {
 }
 
 function MembersView() {
+  const router = useRouter();
   const state = useAppState();
   const { organization, user, can } = useSession();
   const [inviteOpen, setInviteOpen] = useState(false);
@@ -253,6 +255,17 @@ function MembersView() {
                                 </DropdownMenuLabel>
                               </DropdownMenuGroup>
                               <DropdownMenuSeparator />
+                              {can("module.assign") ? (
+                                <DropdownMenuItem
+                                  onClick={() =>
+                                    router.push(
+                                      `/organization/module-access/${membership.id}`,
+                                    )
+                                  }
+                                >
+                                  Module access
+                                </DropdownMenuItem>
+                              ) : null}
                               {membership.status === "active" ? (
                                 <DropdownMenuItem
                                   onClick={() =>

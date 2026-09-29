@@ -3,10 +3,15 @@
 import Link from "next/link";
 import {
   ArrowRight,
+  Blocks,
   Building2,
+  CreditCard,
   Globe,
+  Layers,
   Link2,
+  Lock,
   Mail,
+  Receipt,
   ShieldCheck,
   UserCheck,
   Users,
@@ -20,6 +25,8 @@ import {
 } from "@/components/common/badges";
 import { EmptyState, PageHeader } from "@/components/common/states";
 import { ActivityFeed } from "@/components/features/activity-feed";
+import { ModuleActionBadges } from "@/components/features/module-action-badges";
+import { ModuleAvatar } from "@/components/features/module-icon";
 import {
   Card,
   CardContent,
@@ -29,12 +36,28 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useAppState, useSession } from "@/lib/demo/demo-provider";
-import { pluralize } from "@/lib/format";
+import { formatCurrency, pluralize } from "@/lib/format";
+import {
+  ANNUAL_MONTHS_CHARGED,
+  buildModuleTree,
+  getActiveSubscription,
+  getPlanMonthlyPrice,
+} from "@/lib/permissions/modules";
 
 export default function DashboardPage() {
   const state = useAppState();
-  const { user, organization, role, permissions, can, isPlatformAdmin } =
-    useSession();
+  const {
+    user,
+    organization,
+    role,
+    permissions,
+    can,
+    isPlatformAdmin,
+    plan,
+    pendingSubscription,
+    entitledModules,
+    moduleAccess,
+  } = useSession();
 
   if (!organization) {
     return <NoOrganizationDashboard isPlatformAdmin={isPlatformAdmin} />;
@@ -78,6 +101,12 @@ export default function DashboardPage() {
   const events = state.auditEvents
     .filter((event) => event.organizationId === organization.id)
     .slice(0, 6);
+
+  /** Top-level modules this member can open, for the "Your modules" card. */
+  const myModules = buildModuleTree(
+    entitledModules.filter((entry) => moduleAccess[entry.id]),
+  );
+  const needsPlan = !plan && can("billing.manage");
 
   return (
     <>
@@ -126,7 +155,8 @@ export default function DashboardPage() {
           stretching the grid track past the viewport on narrow screens. */}
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
         <div className="min-w-0 space-y-6">
-          {(pendingAccessRequests.length > 0 &&
+          {needsPlan ||
+          (pendingAccessRequests.length > 0 &&
             can("member.approve")) ||
           (pendingRelationshipRequests.length > 0 &&
             can("relationship.approve")) ? (
@@ -138,6 +168,22 @@ export default function DashboardPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-2">
+                {needsPlan ? (
+                  <ActionRow
+                    icon={CreditCard}
+                    title={
+                      pendingSubscription
+                        ? "Finish paying for your plan"
+                        : "Choose a plan"
+                    }
+                    description="No modules are switched on until the organization has a plan."
+                    href={
+                      pendingSubscription
+                        ? "/onboarding/payment"
+                        : "/onboarding/plan"
+                    }
+                  />
+                ) : null}
                 {pendingAccessRequests.length > 0 && can("member.approve") ? (
                   <ActionRow
                     icon={UserCheck}
@@ -158,6 +204,70 @@ export default function DashboardPage() {
               </CardContent>
             </Card>
           ) : null}
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Your modules</CardTitle>
+              <CardDescription>
+                {plan
+                  ? `From the ${plan.name} plan, limited to what you've been granted.`
+                  : `${organization.name} has no plan yet.`}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {!plan ? (
+                <EmptyState
+                  icon={CreditCard}
+                  title="No modules yet"
+                  description="Modules switch on once the organization has a plan."
+                  className="py-8"
+                />
+              ) : myModules.length === 0 ? (
+                <EmptyState
+                  icon={Lock}
+                  title="You don't have any modules yet"
+                  description="Ask an Organization Admin to grant you the modules you need."
+                  className="py-8"
+                />
+              ) : (
+                <div className="space-y-3">
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {myModules.slice(0, 6).map(({ module: entry }) => (
+                      <Link
+                        key={entry.id}
+                        href={`/modules/${entry.slug}`}
+                        className="flex items-center gap-3 rounded-lg border p-3 transition-colors hover:bg-accent"
+                      >
+                        <ModuleAvatar
+                          entry={entry}
+                          className="size-8 rounded-lg"
+                          iconClassName="size-4"
+                        />
+                        <div className="min-w-0 flex-1 space-y-1">
+                          <p className="truncate text-sm font-medium">
+                            {entry.name}
+                          </p>
+                          <ModuleActionBadges
+                            actions={moduleAccess[entry.id] ?? []}
+                          />
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+                  <LinkButton
+                    variant="outline"
+                    size="sm"
+                    className="w-full"
+                    href="/modules"
+                  >
+                    {myModules.length > 6
+                      ? `All ${myModules.length} modules`
+                      : "All modules"}
+                  </LinkButton>
+                </div>
+              )}
+            </CardContent>
+          </Card>
 
           <Card>
             <CardHeader>
@@ -189,6 +299,33 @@ export default function DashboardPage() {
                 trailing={<OrganizationTypeBadge type={organization.type} />}
               />
               <AccessChainStep label="Role" value={role?.name ?? "None"} />
+              <AccessChainStep
+                label="Plan"
+                value={
+                  plan
+                    ? `${plan.name} · ${pluralize(entitledModules.length, "module")}`
+                    : "No plan"
+                }
+                trailing={
+                  can("billing.view") ? (
+                    <LinkButton
+                      variant="ghost"
+                      size="xs"
+                      href="/organization/billing"
+                    >
+                      Billing
+                    </LinkButton>
+                  ) : null
+                }
+              />
+              <AccessChainStep
+                label="Module access"
+                value={
+                  can("module.full_access")
+                    ? "Every module, every action (role)"
+                    : `${pluralize(Object.keys(moduleAccess).length, "module")} granted to you`
+                }
+              />
               <div className="rounded-lg border bg-muted/40 p-3">
                 <p className="text-xs font-medium text-muted-foreground">
                   Permissions
@@ -265,7 +402,7 @@ function StatCard({
   highlight,
 }: {
   label: string;
-  value: number;
+  value: number | string;
   icon: React.ComponentType<{ className?: string }>;
   href?: string;
   highlight?: boolean;
@@ -348,6 +485,22 @@ function NoOrganizationDashboard({
   const state = useAppState();
 
   if (isPlatformAdmin) {
+    const subscribed = state.organizations
+      .map((org) => getActiveSubscription(state, org.id))
+      .filter((subscription) => subscription !== undefined);
+    // Annual subscriptions count at their monthly equivalent.
+    const mrr = subscribed.reduce((total, subscription) => {
+      const plan = state.plans.find((item) => item.id === subscription.planId);
+      if (!plan) return total;
+      const monthly = getPlanMonthlyPrice(state, plan);
+      return (
+        total +
+        (subscription.billingCycle === "annual"
+          ? (monthly * ANNUAL_MONTHS_CHARGED) / 12
+          : monthly)
+      );
+    }, 0);
+
     return (
       <>
         <PageHeader
@@ -382,6 +535,33 @@ function NoOrganizationDashboard({
             }
             icon={UserCheck}
             href="/platform/access-requests"
+          />
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <StatCard
+            label="Monthly recurring revenue"
+            value={formatCurrency(Math.round(mrr))}
+            icon={Receipt}
+            href="/platform/subscriptions"
+          />
+          <StatCard
+            label="Organizations on a plan"
+            value={`${subscribed.length} / ${state.organizations.length}`}
+            icon={CreditCard}
+            href="/platform/subscriptions"
+          />
+          <StatCard
+            label="Plans"
+            value={state.plans.length}
+            icon={Layers}
+            href="/platform/plans"
+          />
+          <StatCard
+            label="Catalog modules"
+            value={state.modules.length}
+            icon={Blocks}
+            href="/platform/modules"
           />
         </div>
 

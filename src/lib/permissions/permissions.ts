@@ -8,9 +8,10 @@ import type {
 } from "@/types";
 
 /**
- * The permission catalogue. Permissions are deliberately generic identity /
- * access concerns — no business modules (CRM, trade spend, product specs) live
- * here, because this prototype is only about the identity foundation.
+ * The permission catalogue. These are organization-level identity and access
+ * concerns. What a member can do inside a business module (CRM, trade spend,
+ * product specs) is not a permission here: it is a module grant on their
+ * membership, resolved in `src/lib/permissions/modules.ts`.
  */
 export const PERMISSIONS: Permission[] = [
   {
@@ -121,6 +122,32 @@ export const PERMISSIONS: Permission[] = [
     description: "Manage managed/private brands and relationship metadata.",
     group: "Relationships",
   },
+  {
+    id: "billing.view",
+    name: "View billing",
+    description: "See the plan, its modules, payment method and invoices.",
+    group: "Billing",
+  },
+  {
+    id: "billing.manage",
+    name: "Manage billing",
+    description: "Choose or change the plan and pay for it.",
+    group: "Billing",
+  },
+  {
+    id: "module.assign",
+    name: "Assign module access",
+    description:
+      "Decide which subscribed modules each member can use, and what they can do in them.",
+    group: "Modules",
+  },
+  {
+    id: "module.full_access",
+    name: "Full module access",
+    description:
+      "Use every module in the plan with every action, without a per-member grant.",
+    group: "Modules",
+  },
 ];
 
 export const PERMISSION_BY_ID = new Map<PermissionId, Permission>(
@@ -149,7 +176,7 @@ export const ROLES: Role[] = [
     id: ROLE_IDS.organizationAdmin,
     name: "Organization Admin",
     description:
-      "Full administrative control of the organization: members, roles, domains and relationships.",
+      "Full administrative control of the organization: members, roles, domains, relationships, billing and module access. Uses every module in the plan.",
     permissionIds: PERMISSIONS.map((permission) => permission.id),
   },
   {

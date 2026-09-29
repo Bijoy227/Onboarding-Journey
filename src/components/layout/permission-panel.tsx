@@ -7,8 +7,19 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useDemo, useSession } from "@/lib/demo/demo-provider";
+import { MODULE_ACTIONS } from "@/lib/permissions/modules";
 import { PERMISSIONS } from "@/lib/permissions/permissions";
 import { cn } from "@/lib/utils";
+import type { ModuleAction } from "@/types";
+
+/** One letter per module action for the compact access column. */
+const ACTION_LETTER: Record<ModuleAction, string> = {
+  view: "V",
+  create: "C",
+  edit: "E",
+  delete: "D",
+  export: "X",
+};
 
 /**
  * The permission inspector.
@@ -19,7 +30,16 @@ import { cn } from "@/lib/utils";
  */
 export function PermissionPanel() {
   const { devMode, setDevMode } = useDemo();
-  const { user, organization, role, permissions, isPlatformAdmin } = useSession();
+  const {
+    user,
+    organization,
+    role,
+    permissions,
+    isPlatformAdmin,
+    plan,
+    entitledModules,
+    moduleAccess,
+  } = useSession();
   const [collapsed, setCollapsed] = useState(false);
 
   if (!devMode || !user) return null;
@@ -57,6 +77,7 @@ export function PermissionPanel() {
             <dl className="space-y-1.5 text-xs">
               <Row label="User" value={user.name} />
               <Row label="Organization" value={organization?.name ?? "—"} />
+              <Row label="Plan" value={plan?.name ?? "—"} />
               <Row
                 label="Role"
                 value={
@@ -96,9 +117,53 @@ export function PermissionPanel() {
               </ScrollArea>
             </div>
 
+            {organization ? (
+              <div className="space-y-1">
+                <p className="text-xs font-medium text-muted-foreground">
+                  Module access ({Object.keys(moduleAccess).length} of{" "}
+                  {entitledModules.length} in plan)
+                </p>
+                <ScrollArea className="h-32 rounded-lg border">
+                  {entitledModules.length === 0 ? (
+                    <p className="px-2.5 py-2 text-[11px] text-muted-foreground">
+                      No plan, so no modules.
+                    </p>
+                  ) : (
+                    <ul className="divide-y">
+                      {entitledModules.map((entry) => {
+                        const actions = moduleAccess[entry.id];
+                        return (
+                          <li
+                            key={entry.id}
+                            className={cn(
+                              "flex items-center gap-2 px-2.5 py-1.5 text-[11px]",
+                              !actions && "text-muted-foreground",
+                              entry.parentId && "pl-6",
+                            )}
+                          >
+                            <span className="flex-1 truncate font-mono">
+                              {entry.slug}
+                            </span>
+                            <span className="shrink-0 font-mono tracking-wider">
+                              {MODULE_ACTIONS.map((action) =>
+                                actions?.includes(action.id)
+                                  ? ACTION_LETTER[action.id]
+                                  : "·",
+                              ).join("")}
+                            </span>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </ScrollArea>
+              </div>
+            ) : null}
+
             <p className="text-[11px] leading-relaxed text-muted-foreground">
               Resolved as user → membership for this organization → role →
-              permissions. Never from a user-level role flag.
+              permissions. Modules add organization → plan, then role or module
+              grant → action (V C E D X = view, create, edit, delete, export).
             </p>
           </div>
         )}

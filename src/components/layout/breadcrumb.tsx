@@ -8,7 +8,8 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
-import { useSession } from "@/lib/demo/demo-provider";
+import { useAppState, useSession } from "@/lib/demo/demo-provider";
+import { findModuleBySlug } from "@/lib/permissions/modules";
 
 /**
  * Resolves the current route back to its navigation group and item.
@@ -34,8 +35,16 @@ function findNavLocation(pathname: string) {
 }
 
 export function OrganizationBreadcrumb({ pathname }: { pathname: string }) {
+  const state = useAppState();
   const { organization, isPlatformAdmin } = useSession();
   const location = findNavLocation(pathname);
+
+  // Module pages are not in the static navigation: name them from the catalog.
+  const moduleSlug = pathname.match(/^\/modules\/([^/]+)/)?.[1];
+  const currentModule =
+    moduleSlug && organization
+      ? findModuleBySlug(state, organization.type, decodeURIComponent(moduleSlug))
+      : undefined;
 
   const context = location?.group === "Platform admin"
     ? "Caboodle Platform"
@@ -47,7 +56,18 @@ export function OrganizationBreadcrumb({ pathname }: { pathname: string }) {
         <BreadcrumbItem className="hidden sm:block">
           <span className="text-muted-foreground">{context}</span>
         </BreadcrumbItem>
-        {location ? (
+        {currentModule ? (
+          <>
+            <BreadcrumbSeparator className="hidden sm:block" />
+            <BreadcrumbItem className="hidden sm:block">
+              <span className="text-muted-foreground">Modules</span>
+            </BreadcrumbItem>
+            <BreadcrumbSeparator className="hidden sm:block" />
+            <BreadcrumbItem>
+              <BreadcrumbPage>{currentModule.name}</BreadcrumbPage>
+            </BreadcrumbItem>
+          </>
+        ) : location ? (
           <>
             <BreadcrumbSeparator className="hidden sm:block" />
             <BreadcrumbItem>

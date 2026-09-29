@@ -193,9 +193,20 @@ export async function acceptInvitation(
             .join(" "),
         email: invitation.email,
         status: "active",
+        // Opening the link from the invitation email proves the address.
+        emailVerifiedAt: new Date().toISOString(),
         createdAt: new Date().toISOString(),
       };
       draft.users = [...draft.users, user];
+    } else if (!user.emailVerifiedAt) {
+      const verifiedUser: User = {
+        ...user,
+        emailVerifiedAt: new Date().toISOString(),
+      };
+      draft.users = draft.users.map((item) =>
+        item.id === verifiedUser.id ? verifiedUser : item,
+      );
+      user = verifiedUser;
     }
 
     const existing = draft.memberships.find(

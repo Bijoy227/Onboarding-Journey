@@ -1,12 +1,18 @@
 import {
+  Blocks,
   Building2,
   ClipboardList,
+  CreditCard,
   Globe,
   GitCompareArrows,
+  KeyRound,
+  Layers,
   LayoutDashboard,
+  LayoutGrid,
   Link2,
   Mail,
   Network,
+  Receipt,
   ScrollText,
   Search,
   Settings,
@@ -33,20 +39,30 @@ export type NavGroup = {
   items: NavItem[];
   /** Only rendered for Caboodle platform administrators. */
   platformAdmin?: boolean;
+  /**
+   * The subscribed modules the member can use are listed after `items`. They
+   * come from the plan and the member's grants, so they can't be static.
+   */
+  modules?: boolean;
 };
 
 /**
  * The application navigation.
  *
- * Deliberately limited to identity, organizations, access, roles, permissions
- * and relationships. Caboodle business modules (CRM, trade spend, product
- * specs) are out of scope for this prototype.
+ * Identity, organizations, access and relationships are static. Business
+ * modules (CRM, trade spend, product specs, ...) are listed per member, from
+ * the organization's plan and that member's module grants.
  */
 export const NAV_GROUPS: NavGroup[] = [
   {
     items: [
       { title: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
     ],
+  },
+  {
+    label: "Modules",
+    modules: true,
+    items: [{ title: "All modules", href: "/modules", icon: LayoutGrid }],
   },
   {
     label: "Organization",
@@ -74,6 +90,18 @@ export const NAV_GROUPS: NavGroup[] = [
         href: "/organization/domains",
         icon: Globe,
         permission: "domain.view",
+      },
+      {
+        title: "Module access",
+        href: "/organization/module-access",
+        icon: KeyRound,
+        permission: "module.assign",
+      },
+      {
+        title: "Billing",
+        href: "/organization/billing",
+        icon: CreditCard,
+        permission: "billing.view",
       },
       {
         title: "Settings",
@@ -140,6 +168,9 @@ export const NAV_GROUPS: NavGroup[] = [
       },
       { title: "Invitations", href: "/platform/invitations", icon: Mail },
       { title: "Domain verification", href: "/platform/domains", icon: Globe },
+      { title: "Modules", href: "/platform/modules", icon: Blocks },
+      { title: "Plans", href: "/platform/plans", icon: Layers },
+      { title: "Subscriptions", href: "/platform/subscriptions", icon: Receipt },
       { title: "Audit log", href: "/platform/audit-log", icon: ScrollText },
     ],
   },

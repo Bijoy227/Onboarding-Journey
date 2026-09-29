@@ -3,7 +3,9 @@
 import {
   ArrowDown,
   ArrowLeftRight,
+  Blocks,
   Building2,
+  CreditCard,
   Globe,
   IdCard,
   KeyRound,
@@ -33,7 +35,7 @@ export default function HowItWorksPage() {
     <>
       <PageHeader
         title="How Caboodle access works"
-        description="Three ideas explain the whole model: people join organizations, organizations connect to each other, and verified domains make joining self-service."
+        description="Four ideas explain the whole model: people join organizations, organizations connect to each other, verified domains make joining self-service, and a plan decides which modules the organization has."
       />
 
       <Card>
@@ -180,6 +182,64 @@ export default function HowItWorksPage() {
               brokers — can still be invited explicitly, and that invitation is
               just as valid a way in.
             </p>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">
+            4. The plan decides the modules, the admin decides who uses them
+          </CardTitle>
+          <CardDescription>
+            Two separate questions: what has the organization paid for, and
+            what may this person do with it.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="mx-auto max-w-sm space-y-2">
+            <ChainNode
+              icon={Building2}
+              title="Organization"
+              subtitle="Acme Foods, a Brand"
+              tone="emerald"
+            />
+            <Connector />
+            <ChainNode
+              icon={CreditCard}
+              title="Plan"
+              subtitle="Standard, Professional or Custom. Brand and Brokerage plans differ"
+              tone="blue"
+            />
+            <Connector />
+            <ChainNode
+              icon={Blocks}
+              title="Modules"
+              subtitle="Product Specs, Retailers, Reports, ..."
+              tone="violet"
+            />
+            <Connector />
+            <ChainNode
+              icon={KeyRound}
+              title="Module grant on a membership"
+              subtitle="Bob: Retailers (view, export), Contacts (view, create, edit)"
+              tone="amber"
+            />
+          </div>
+
+          <div className="mt-6 grid gap-3 sm:grid-cols-3">
+            <Fact title="No plan, no modules">
+              An organization without an active plan has nothing switched on,
+              for anyone.
+            </Fact>
+            <Fact title="Admins get everything">
+              The Organization Admin role includes full module access, so
+              admins use every module in the plan.
+            </Fact>
+            <Fact title="Never more than the plan">
+              A member can only be granted modules the plan includes, and only
+              the actions they were given.
+            </Fact>
           </div>
         </CardContent>
       </Card>

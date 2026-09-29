@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Building2, Loader2, Store } from "lucide-react";
 
 import { LinkButton } from "@/components/common/link-button";
+import { OnboardingSteps } from "@/components/features/onboarding-steps";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
@@ -16,7 +17,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useSession } from "@/lib/demo/demo-provider";
+import { useVerifiedUser } from "@/lib/demo/use-verified-user";
 import { cn } from "@/lib/utils";
 import { switchOrganization } from "@/lib/services/auth-service";
 import {
@@ -34,12 +35,7 @@ import type { OrganizationType, User } from "@/types";
  * its first Organization Admin.
  */
 export default function CreateOrganizationPage() {
-  const router = useRouter();
-  const { user, isSignedIn } = useSession();
-
-  useEffect(() => {
-    if (!isSignedIn) router.replace("/signup");
-  }, [isSignedIn, router]);
+  const user = useVerifiedUser();
 
   if (!user) return null;
 
@@ -80,7 +76,8 @@ function CreateOrganizationForm({ user }: { user: User }) {
   }
 
   return (
-    <div className="mx-auto max-w-lg">
+    <div className="mx-auto max-w-lg space-y-6">
+      <OnboardingSteps current="organization" />
       <Card>
         <CardHeader>
           <CardTitle className="text-xl">Create your organization</CardTitle>

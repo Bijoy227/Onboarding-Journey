@@ -60,6 +60,9 @@ export function getCurrentUser(): User | null {
 /**
  * Registers a brand new person. They have no membership yet: the onboarding
  * journey decides whether they join an existing organization or create one.
+ *
+ * The email starts unverified. Nothing past the verification step is reachable
+ * until `verifyEmailCode` succeeds.
  */
 export async function signUp(input: {
   name: string;
@@ -97,6 +100,72 @@ export async function signUp(input: {
 
   demoStore.setSession({ userId: user.id, organizationId: null });
   return user;
+}
+
+export const VERIFICATION_CODE_LENGTH = 6;
+
+/**
+ * Simulates emailing a one-time code. Nothing is sent: the demo accepts any
+ * six-digit code, so this only exists to give the UI a realistic call to make.
+ */
+export async function sendEmailVerificationCode(
+  userId: string,
+): Promise<{ email: string; sentAt: string }> {
+  await delay(500);
+
+  const user = demoStore.getState().users.find((item) => item.id === userId);
+  if (!user) throw new AuthError("Account not found.");
+
+  return { email: user.email, sentAt: new Date().toISOString() };
+}
+
+/**
+ * Checks the one-time code. In the demo every six-digit code is correct; a
+ * real implementation would compare it with the code it emailed.
+ */
+export async function verifyEmailCode(
+  userId: string,
+  code: string,
+): Promise<User> {
+  await delay(600);
+
+  if (!new RegExp(`^\\d{${VERIFICATION_CODE_LENGTH}}$`).test(code.trim())) {
+    throw new AuthError(
+      `Enter the ${VERIFICATION_CODE_LENGTH}-digit code from the email.`,
+    );
+  }
+
+  return demoStore.mutate((draft) => {
+    const user = draft.users.find((item) => item.id === userId);
+    if (!user) throw new AuthError("Account not found.");
+    if (user.emailVerifiedAt) return user;
+
+    const updated: User = { ...user, emailVerifiedAt: new Date().toISOString() };
+    draft.users = draft.users.map((item) => (item.id === userId ? updated : item));
+
+    recordEvent(draft, {
+      action: "user.email_verified",
+      description: `${updated.name} verified ${updated.email}`,
+      actorUserId: updated.id,
+    });
+
+    return updated;
+  });
+}
+
+/**
+ * "Use a different email" on the verification screen. An account that never
+ * verified its email has nothing attached to it yet, so it is simply dropped.
+ */
+export async function discardUnverifiedAccount(userId: string): Promise<void> {
+  await delay(120);
+
+  demoStore.mutate((draft) => {
+    const user = draft.users.find((item) => item.id === userId);
+    if (!user || user.emailVerifiedAt) return;
+    draft.users = draft.users.filter((item) => item.id !== userId);
+  });
+  demoStore.setSession(null);
 }
 
 /** Switches which organization the signed-in user is currently looking at. */

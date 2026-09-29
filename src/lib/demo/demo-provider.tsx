@@ -9,6 +9,13 @@ import {
 
 import { demoStore } from "@/lib/mock/store";
 import {
+  getActiveSubscription,
+  getEntitledModules,
+  getIncompleteSubscription,
+  getModuleAccess,
+  type ModuleAccess,
+} from "@/lib/permissions/modules";
+import {
   getEffectiveRole,
   getMembership,
   getPermissions,
@@ -16,10 +23,14 @@ import {
 import type {
   AppState,
   Membership,
+  ModuleAction,
   Organization,
   PermissionId,
+  Plan,
+  PlatformModule,
   Role,
   Session,
+  Subscription,
   User,
 } from "@/types";
 
@@ -118,6 +129,20 @@ export type SessionView = {
    * platform-level capability, not an organization role.
    */
   can: (permission: PermissionId) => boolean;
+  /** The current organization's active subscription and its plan. */
+  subscription: Subscription | undefined;
+  plan: Plan | undefined;
+  /** A plan chosen in onboarding but not yet paid for. */
+  pendingSubscription: Subscription | undefined;
+  /** Every module the organization's plan includes. */
+  entitledModules: PlatformModule[];
+  /** What this member may do in each module, keyed by module id. */
+  moduleAccess: ModuleAccess;
+  /**
+   * Module-level authorization, resolved as: organization -> plan -> module,
+   * then user -> membership -> role or module grant -> action.
+   */
+  canModule: (moduleId: string, action?: ModuleAction) => boolean;
 };
 
 /** Everything a screen needs to know about who is signed in and what they may do. */
@@ -148,6 +173,12 @@ export function useSession(): SessionView {
     const role = getEffectiveRole(state, user?.id, organization?.id);
     const permissions = getPermissions(state, user?.id, organization?.id);
 
+    const subscription = getActiveSubscription(state, organization?.id);
+    const plan = subscription
+      ? state.plans.find((item) => item.id === subscription.planId)
+      : undefined;
+    const moduleAccess = getModuleAccess(state, user?.id, organization?.id);
+
     return {
       user,
       organization,
@@ -158,6 +189,13 @@ export function useSession(): SessionView {
       isPlatformAdmin: Boolean(user?.isPlatformAdmin),
       isSignedIn: Boolean(user),
       can: (permission: PermissionId) => permissions.includes(permission),
+      subscription,
+      plan,
+      pendingSubscription: getIncompleteSubscription(state, organization?.id),
+      entitledModules: getEntitledModules(state, organization?.id),
+      moduleAccess,
+      canModule: (moduleId: string, action: ModuleAction = "view") =>
+        moduleAccess[moduleId]?.includes(action) ?? false,
     };
   }, [state, session]);
 }

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+import { ModuleIcon } from "@/components/features/module-icon";
 import { NAV_GROUPS, type NavItem } from "@/components/layout/nav-config";
 import { OrganizationSwitcher } from "@/components/layout/organization-switcher";
 import { UserMenu } from "@/components/layout/user-menu";
@@ -18,21 +19,32 @@ import {
   SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarMenuSub,
+  SidebarMenuSubButton,
+  SidebarMenuSubItem,
   SidebarRail,
   SidebarSeparator,
 } from "@/components/ui/sidebar";
 import { useAppState, useSession } from "@/lib/demo/demo-provider";
+import { buildModuleTree } from "@/lib/permissions/modules";
 
 function isActiveHref(pathname: string, href: string): boolean {
   if (href === "/organization") return pathname === "/organization";
   if (href === "/relationships") return pathname === "/relationships";
+  if (href === "/modules") return pathname === "/modules";
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
 export function AppSidebar() {
   const pathname = usePathname();
   const state = useAppState();
-  const { organization, can, isPlatformAdmin } = useSession();
+  const { organization, can, isPlatformAdmin, entitledModules, moduleAccess } =
+    useSession();
+
+  /** Only modules this member can open, never the whole plan. */
+  const moduleTree = buildModuleTree(
+    entitledModules.filter((entry) => moduleAccess[entry.id]),
+  );
 
   const pendingCounts = {
     accessRequests: organization
@@ -78,6 +90,7 @@ export function AppSidebar() {
       <SidebarContent>
         {NAV_GROUPS.map((group) => {
           if (group.platformAdmin && !isPlatformAdmin) return null;
+          if (group.modules && !organization) return null;
 
           const items = group.platformAdmin
             ? group.items
@@ -109,6 +122,47 @@ export function AppSidebar() {
                       </SidebarMenuItem>
                     );
                   })}
+                  {group.modules
+                    ? moduleTree.map(({ module: entry, children }) => {
+                        const href = `/modules/${entry.slug}`;
+                        // Sub-modules unfold only while you're inside the module.
+                        const open =
+                          pathname === href ||
+                          children.some(
+                            (child) => pathname === `/modules/${child.slug}`,
+                          );
+                        return (
+                          <SidebarMenuItem key={entry.id}>
+                            <SidebarMenuButton
+                              isActive={pathname === href}
+                              tooltip={entry.name}
+                              render={<Link href={href} />}
+                            >
+                              <ModuleIcon entry={entry} className="size-4" />
+                              <span>{entry.name}</span>
+                            </SidebarMenuButton>
+                            {open && children.length > 0 ? (
+                              <SidebarMenuSub>
+                                {children.map((child) => (
+                                  <SidebarMenuSubItem key={child.id}>
+                                    <SidebarMenuSubButton
+                                      isActive={
+                                        pathname === `/modules/${child.slug}`
+                                      }
+                                      render={
+                                        <Link href={`/modules/${child.slug}`} />
+                                      }
+                                    >
+                                      <span>{child.name}</span>
+                                    </SidebarMenuSubButton>
+                                  </SidebarMenuSubItem>
+                                ))}
+                              </SidebarMenuSub>
+                            ) : null}
+                          </SidebarMenuItem>
+                        );
+                      })
+                    : null}
                 </SidebarMenu>
               </SidebarGroupContent>
             </SidebarGroup>

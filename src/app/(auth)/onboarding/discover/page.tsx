@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Building2, CheckCircle2, Clock, Loader2, SearchX } from "lucide-react";
 
 import { LinkButton } from "@/components/common/link-button";
 import { OrganizationAvatar } from "@/components/common/avatars";
+import { OnboardingSteps } from "@/components/features/onboarding-steps";
 import {
   DomainStatusBadge,
   OrganizationTypeBadge,
@@ -19,7 +20,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { useAppState, useSession } from "@/lib/demo/demo-provider";
+import { useAppState } from "@/lib/demo/demo-provider";
+import { useVerifiedUser } from "@/lib/demo/use-verified-user";
 import { ROLE_IDS } from "@/lib/permissions/permissions";
 import {
   AccessRequestError,
@@ -33,7 +35,7 @@ import {
 } from "@/lib/services/organization-service";
 
 /**
- * Step 2 of the onboarding journey: organization discovery.
+ * Step 3 of the onboarding journey: organization discovery.
  *
  * The domain is read straight off the user's work email. If an organization has
  * already claimed it, they can ask to join instead of creating a duplicate.
@@ -41,13 +43,9 @@ import {
 export default function DiscoverPage() {
   const router = useRouter();
   const state = useAppState();
-  const { user, isSignedIn } = useSession();
+  const user = useVerifiedUser();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!isSignedIn) router.replace("/signup");
-  }, [isSignedIn, router]);
 
   if (!user) return null;
 
@@ -185,6 +183,7 @@ export default function DiscoverPage() {
 
     return (
       <div className="mx-auto max-w-lg space-y-4">
+        <OnboardingSteps current="organization" className="mb-6" />
         <Card>
           <CardHeader>
             <CardTitle className="text-xl">
@@ -253,7 +252,8 @@ export default function DiscoverPage() {
   }
 
   return (
-    <div className="mx-auto max-w-lg">
+    <div className="mx-auto max-w-lg space-y-6">
+      <OnboardingSteps current="organization" />
       <Card>
         <CardHeader>
           <CardTitle className="text-xl">

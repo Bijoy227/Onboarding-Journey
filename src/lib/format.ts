@@ -48,6 +48,16 @@ export function formatDate(iso: string): string {
   });
 }
 
+/** Whole-dollar prices, e.g. $1,234. Cents are shown only when present. */
+export function formatCurrency(amount: number): string {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: Number.isInteger(amount) ? 0 : 2,
+    maximumFractionDigits: 2,
+  }).format(amount);
+}
+
 export function pluralize(count: number, singular: string, plural?: string) {
   return `${count} ${count === 1 ? singular : (plural ?? `${singular}s`)}`;
 }

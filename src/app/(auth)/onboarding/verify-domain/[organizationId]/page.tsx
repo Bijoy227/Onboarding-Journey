@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { OrganizationAvatar } from "@/components/common/avatars";
 import { OrganizationTypeBadge } from "@/components/common/badges";
 import { DomainVerificationPanel } from "@/components/features/domain-verification";
+import { OnboardingSteps } from "@/components/features/onboarding-steps";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -16,7 +17,10 @@ import {
 } from "@/components/ui/card";
 import { useAppState, useSession } from "@/lib/demo/demo-provider";
 
-/** Step 3 of the onboarding journey: prove the organization owns its domain. */
+/**
+ * Step 5 of the onboarding journey: prove the organization owns its domain.
+ * Either way, the journey continues to choosing a plan.
+ */
 export default function VerifyDomainPage({
   params,
 }: PageProps<"/onboarding/verify-domain/[organizationId]">) {
@@ -54,11 +58,12 @@ export default function VerifyDomainPage({
 
   return (
     <div className="mx-auto max-w-lg space-y-4">
+      <OnboardingSteps current="domain" className="mb-6" />
       <Card>
         <CardHeader>
           <CardTitle className="text-xl">Verify your organization</CardTitle>
           <CardDescription>
-            One last step before you start inviting people.
+            Prove you own the domain. You can also do this later from Domains.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-5">
@@ -77,20 +82,20 @@ export default function VerifyDomainPage({
             domain={domain}
             organizationName={organization.name}
             actorUserId={user.id}
-            onVerified={() => router.push("/dashboard")}
+            onVerified={() => router.push("/onboarding/plan")}
           />
 
           {!domain.verified ? (
             <Button
               variant="ghost"
               className="w-full"
-              onClick={() => router.push("/dashboard")}
+              onClick={() => router.push("/onboarding/plan")}
             >
               Skip for now
             </Button>
           ) : (
-            <Button className="w-full" onClick={() => router.push("/dashboard")}>
-              Go to {organization.name}
+            <Button className="w-full" onClick={() => router.push("/onboarding/plan")}>
+              Continue to choose a plan
             </Button>
           )}
         </CardContent>

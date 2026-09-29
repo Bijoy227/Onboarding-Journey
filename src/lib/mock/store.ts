@@ -10,7 +10,10 @@ import type { AppState, Session } from "@/types";
  * services, not the UI.
  */
 
-const STATE_KEY = "caboodle.demo.state.v1";
+// v2 added the module catalog, plans and subscriptions. Bumping the key means
+// a browser holding v1 data starts from the new seed instead of a state that
+// is missing those collections.
+const STATE_KEY = "caboodle.demo.state.v2";
 const SESSION_KEY = "caboodle.demo.session.v1";
 const DEV_MODE_KEY = "caboodle.demo.devmode.v1";
 
@@ -97,6 +100,10 @@ class DemoStore {
       invitations: [...this.state.invitations],
       accessRequests: [...this.state.accessRequests],
       auditEvents: [...this.state.auditEvents],
+      modules: [...this.state.modules],
+      plans: [...this.state.plans],
+      subscriptions: [...this.state.subscriptions],
+      invoices: [...this.state.invoices],
     };
 
     const result = mutator(draft);

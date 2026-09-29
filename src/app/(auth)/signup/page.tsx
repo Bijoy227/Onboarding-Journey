@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 
+import { OnboardingSteps } from "@/components/features/onboarding-steps";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
@@ -23,7 +24,7 @@ import { AuthError, signUp } from "@/lib/services/auth-service";
  *
  * Creating an account does not create an organization, and does not require one
  * to exist. Those are separate steps, which is what makes self-service
- * onboarding possible.
+ * onboarding possible. The next step verifies the email address.
  */
 export default function SignUpPage() {
   const router = useRouter();
@@ -38,7 +39,7 @@ export default function SignUpPage() {
     setPending(true);
     try {
       await signUp({ name, email });
-      router.push("/onboarding/discover");
+      router.push("/verify-email");
     } catch (caught) {
       setError(
         caught instanceof AuthError
@@ -50,12 +51,14 @@ export default function SignUpPage() {
   }
 
   return (
-    <div className="mx-auto max-w-md">
+    <div className="mx-auto max-w-md space-y-6">
+      <OnboardingSteps current="account" />
       <Card>
         <CardHeader>
           <CardTitle className="text-xl">Create your Caboodle account</CardTitle>
           <CardDescription>
-            Use your work email. We&apos;ll look for your organization next.
+            Use your work email. We&apos;ll send a code to verify it, then
+            look for your organization.
           </CardDescription>
         </CardHeader>
         <CardContent>
