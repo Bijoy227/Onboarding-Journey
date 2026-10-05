@@ -5,14 +5,15 @@ import {
   ArrowRight,
   Blocks,
   Building2,
-  CreditCard,
+  Cable,
   Globe,
-  Layers,
+  KeyRound,
   Link2,
   Lock,
   Mail,
-  Receipt,
+  PauseCircle,
   ShieldCheck,
+  Tag,
   UserCheck,
   Users,
 } from "lucide-react";
@@ -20,8 +21,9 @@ import {
 import { LinkButton } from "@/components/common/link-button";
 import { OrganizationAvatar } from "@/components/common/avatars";
 import {
-  OrganizationTypeBadge,
+  BrandAccessBadge,
   DomainStatusBadge,
+  OrganizationTypeBadge,
 } from "@/components/common/badges";
 import { EmptyState, PageHeader } from "@/components/common/states";
 import { ActivityFeed } from "@/components/features/activity-feed";
@@ -36,13 +38,19 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useAppState, useSession } from "@/lib/demo/demo-provider";
-import { formatCurrency, pluralize } from "@/lib/format";
+import { pluralize } from "@/lib/format";
 import {
-  ANNUAL_MONTHS_CHARGED,
+  ACCESS_KIND_LABEL,
+  getBrandAccessRows,
+} from "@/lib/permissions/access";
+import {
   buildModuleTree,
-  getActiveSubscription,
-  getPlanMonthlyPrice,
+  getEnabledModules,
+  moduleHref,
 } from "@/lib/permissions/modules";
+import { getRole } from "@/lib/permissions/permissions";
+import { switchBrand } from "@/lib/services/auth-service";
+import { getConnectionsForOrganization } from "@/lib/services/connection-service";
 
 export default function DashboardPage() {
   const state = useAppState();
@@ -52,10 +60,12 @@ export default function DashboardPage() {
     role,
     permissions,
     can,
+    access,
     isPlatformAdmin,
-    plan,
-    pendingSubscription,
-    entitledModules,
+    isSupport,
+    availableModules,
+    brands,
+    activeBrand,
     moduleAccess,
   } = useSession();
 
@@ -63,35 +73,50 @@ export default function DashboardPage() {
     return <NoOrganizationDashboard isPlatformAdmin={isPlatformAdmin} />;
   }
 
+  if (!access) {
+    return (
+      <>
+        <PageHeader title={organization.name} />
+        <EmptyState
+          icon={PauseCircle}
+          title={`Your access to ${organization.name} is paused`}
+          description={
+            organization.status === "suspended"
+              ? `${organization.name} is suspended, which stops access for every member. Contact Caboodle.`
+              : "Your membership isn't active. An administrator can restore it."
+          }
+        />
+      </>
+    );
+  }
+
+  const isBrokerage = organization.type === "brokerage";
+
   const members = state.memberships.filter(
     (membership) =>
       membership.organizationId === organization.id &&
       membership.status === "active",
   );
-
-  const relationships = state.relationships.filter(
-    (relationship) =>
-      (relationship.sourceOrganizationId === organization.id ||
-        relationship.targetOrganizationId === organization.id) &&
-      relationship.status === "active",
-  );
+  const connections = getConnectionsForOrganization(state, organization.id);
 
   const pendingAccessRequests = state.accessRequests.filter(
     (request) =>
       request.organizationId === organization.id && request.status === "pending",
   );
-
   const pendingInvitations = state.invitations.filter(
     (invitation) =>
       invitation.organizationId === organization.id &&
       invitation.status === "pending",
   );
 
-  const pendingRelationshipRequests = state.relationships.filter(
-    (relationship) =>
-      relationship.targetOrganizationId === organization.id &&
-      relationship.status === "pending",
-  );
+  /** Brokers who can't open any Brand yet: something an admin can fix. */
+  const unassigned = isBrokerage
+    ? members.filter(
+        (membership) =>
+          !getRole(state, membership.roleId)?.hasFullBrandAccess &&
+          getBrandAccessRows(state, membership.id).length === 0,
+      )
+    : [];
 
   const domains = state.domains.filter(
     (domain) => domain.organizationId === organization.id,
@@ -102,11 +127,14 @@ export default function DashboardPage() {
     .filter((event) => event.organizationId === organization.id)
     .slice(0, 6);
 
-  /** Top-level modules this member can open, for the "Your modules" card. */
+  /** Top-level modules this person can open on the active Brand. */
   const myModules = buildModuleTree(
-    entitledModules.filter((entry) => moduleAccess[entry.id]),
+    availableModules.filter((entry) => moduleAccess[entry.id]),
   );
-  const needsPlan = !plan && can("billing.manage");
+
+  const attention =
+    (pendingAccessRequests.length > 0 && can("member.approve")) ||
+    (unassigned.length > 0 && can("access.manage"));
 
   return (
     <>
@@ -115,8 +143,16 @@ export default function DashboardPage() {
         description={
           <>
             You are working in <strong>{organization.name}</strong> as{" "}
-            <strong>{role?.name ?? "a member"}</strong>. Switching organization
-            changes your role, your permissions and everything you can see.
+            <strong>
+              {isSupport ? "Platform Admin (support)" : (role?.name ?? "a member")}
+            </strong>
+            {isBrokerage && activeBrand ? (
+              <>
+                , on <strong>{activeBrand.brand.name}</strong>
+              </>
+            ) : null}
+            . Switching organization changes your role and permissions;
+            switching Brand changes which modules you can use.
           </>
         }
       />
@@ -128,12 +164,21 @@ export default function DashboardPage() {
           icon={Users}
           href={can("member.view") ? "/organization/members" : undefined}
         />
-        <StatCard
-          label="Connected organizations"
-          value={relationships.length}
-          icon={Link2}
-          href={can("relationship.view") ? "/relationships" : undefined}
-        />
+        {can("connection.view") ? (
+          <StatCard
+            label={isBrokerage ? "Connected brands" : "Connected brokerages"}
+            value={connections.filter((item) => item.status === "active").length}
+            icon={Link2}
+            href="/connections"
+          />
+        ) : (
+          <StatCard
+            label={isBrokerage ? "Your brands" : "Modules you can use"}
+            value={isBrokerage ? brands.length : Object.keys(moduleAccess).length}
+            icon={isBrokerage ? Tag : Blocks}
+            href={isBrokerage ? "/organization" : "/modules"}
+          />
+        )}
         <StatCard
           label="Pending access requests"
           value={pendingAccessRequests.length}
@@ -155,35 +200,13 @@ export default function DashboardPage() {
           stretching the grid track past the viewport on narrow screens. */}
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
         <div className="min-w-0 space-y-6">
-          {needsPlan ||
-          (pendingAccessRequests.length > 0 &&
-            can("member.approve")) ||
-          (pendingRelationshipRequests.length > 0 &&
-            can("relationship.approve")) ? (
+          {attention ? (
             <Card>
               <CardHeader>
                 <CardTitle>Needs your attention</CardTitle>
-                <CardDescription>
-                  Requests waiting on an Organization Admin.
-                </CardDescription>
+                <CardDescription>Waiting on an admin.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-2">
-                {needsPlan ? (
-                  <ActionRow
-                    icon={CreditCard}
-                    title={
-                      pendingSubscription
-                        ? "Finish paying for your plan"
-                        : "Choose a plan"
-                    }
-                    description="No modules are switched on until the organization has a plan."
-                    href={
-                      pendingSubscription
-                        ? "/onboarding/payment"
-                        : "/onboarding/plan"
-                    }
-                  />
-                ) : null}
                 {pendingAccessRequests.length > 0 && can("member.approve") ? (
                   <ActionRow
                     icon={UserCheck}
@@ -192,15 +215,72 @@ export default function DashboardPage() {
                     href="/administration/access-requests"
                   />
                 ) : null}
-                {pendingRelationshipRequests.length > 0 &&
-                can("relationship.approve") ? (
+                {unassigned.length > 0 && can("access.manage") ? (
                   <ActionRow
-                    icon={Link2}
-                    title={`${pluralize(pendingRelationshipRequests.length, "organization wants", "organizations want")} to connect`}
-                    description="Review incoming relationship requests."
-                    href="/relationships/requests"
+                    icon={KeyRound}
+                    title={`${pluralize(unassigned.length, "broker has", "brokers have")} no Brands yet`}
+                    description="Assign them to a connected Brand so they can work."
+                    href="/organization/brand-access"
                   />
                 ) : null}
+              </CardContent>
+            </Card>
+          ) : null}
+
+          {isBrokerage ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>Your brands</CardTitle>
+                <CardDescription>
+                  {isSupport
+                    ? `Every Brand connected to ${organization.name}, through support access.`
+                    : role?.hasFullBrandAccess
+                      ? `Every Brand connected to ${organization.name}, from your role.`
+                      : "The connected Brands you are assigned to. Pick one to work on it."}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {brands.length === 0 ? (
+                  <EmptyState
+                    icon={Tag}
+                    title="No brands yet"
+                    description={
+                      role?.hasFullBrandAccess
+                        ? "The Platform Admin hasn't connected any Brands to this brokerage."
+                        : "Ask an admin to assign you to a connected Brand."
+                    }
+                    className="py-8"
+                  />
+                ) : (
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {brands.map((entry) => (
+                      <button
+                        key={entry.brand.id}
+                        type="button"
+                        onClick={() => switchBrand(entry.brand.id)}
+                        className={`flex items-center gap-3 rounded-lg border p-3 text-left transition-colors hover:bg-accent ${
+                          entry.brand.id === activeBrand?.brand.id
+                            ? "border-primary bg-accent/40"
+                            : ""
+                        }`}
+                      >
+                        <OrganizationAvatar organization={entry.brand} />
+                        <span className="min-w-0 flex-1 space-y-1">
+                          <span className="block truncate text-sm font-medium">
+                            {entry.brand.name}
+                          </span>
+                          <span className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+                            <BrandAccessBadge kind={entry.kind} />
+                            {pluralize(Object.keys(entry.modules).length, "module")}
+                            {entry.brand.id === activeBrand?.brand.id
+                              ? " · active"
+                              : ""}
+                          </span>
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
           ) : null}
@@ -209,24 +289,30 @@ export default function DashboardPage() {
             <CardHeader>
               <CardTitle>Your modules</CardTitle>
               <CardDescription>
-                {plan
-                  ? `From the ${plan.name} plan, limited to what you've been granted.`
-                  : `${organization.name} has no plan yet.`}
+                {activeBrand
+                  ? isBrokerage
+                    ? `${organization.name}'s modules plus ${activeBrand.brand.name}'s own, limited to your access.`
+                    : `${organization.name}'s enabled modules, limited to your access.`
+                  : "Data is always reached through a Brand."}
               </CardDescription>
             </CardHeader>
             <CardContent>
-              {!plan ? (
+              {availableModules.length === 0 ? (
                 <EmptyState
-                  icon={CreditCard}
+                  icon={Blocks}
                   title="No modules yet"
-                  description="Modules switch on once the organization has a plan."
+                  description="The Platform Admin enables modules for each organization."
                   className="py-8"
                 />
               ) : myModules.length === 0 ? (
                 <EmptyState
                   icon={Lock}
-                  title="You don't have any modules yet"
-                  description="Ask an Organization Admin to grant you the modules you need."
+                  title="You can't open any modules yet"
+                  description={
+                    activeBrand
+                      ? "Ask an admin to grant you the modules you need under Brand access."
+                      : "Ask an admin to assign you to a Brand."
+                  }
                   className="py-8"
                 />
               ) : (
@@ -235,7 +321,7 @@ export default function DashboardPage() {
                     {myModules.slice(0, 6).map(({ module: entry }) => (
                       <Link
                         key={entry.id}
-                        href={`/modules/${entry.slug}`}
+                        href={moduleHref(entry, organization.type)}
                         className="flex items-center gap-3 rounded-lg border p-3 transition-colors hover:bg-accent"
                       >
                         <ModuleAvatar
@@ -260,9 +346,7 @@ export default function DashboardPage() {
                     className="w-full"
                     href="/modules"
                   >
-                    {myModules.length > 6
-                      ? `All ${myModules.length} modules`
-                      : "All modules"}
+                    All modules
                   </LinkButton>
                 </div>
               )}
@@ -287,51 +371,49 @@ export default function DashboardPage() {
             <CardHeader>
               <CardTitle>Your access</CardTitle>
               <CardDescription>
-                How Caboodle resolved what you can do.
+                How Caboodle resolved what you can do, on every request.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
               <AccessChainStep label="User" value={user?.name ?? ""} />
-              <AccessChainStep label="Membership" value="Active" />
+              <AccessChainStep
+                label="Membership"
+                value={isSupport ? "None: support access" : "Active"}
+              />
               <AccessChainStep
                 label="Organization"
                 value={organization.name}
                 trailing={<OrganizationTypeBadge type={organization.type} />}
               />
-              <AccessChainStep label="Role" value={role?.name ?? "None"} />
               <AccessChainStep
-                label="Plan"
-                value={
-                  plan
-                    ? `${plan.name} · ${pluralize(entitledModules.length, "module")}`
-                    : "No plan"
-                }
-                trailing={
-                  can("billing.view") ? (
-                    <LinkButton
-                      variant="ghost"
-                      size="xs"
-                      href="/organization/billing"
-                    >
-                      Billing
-                    </LinkButton>
-                  ) : null
-                }
+                label="Role"
+                value={isSupport ? "Platform Admin" : (role?.name ?? "None")}
               />
               <AccessChainStep
-                label="Module access"
+                label="Brand"
+                value={activeBrand?.brand.name ?? "No brand"}
+              />
+              <AccessChainStep
+                label="Access on this brand"
                 value={
-                  can("module.full_access")
-                    ? "Every module, every action (role)"
-                    : `${pluralize(Object.keys(moduleAccess).length, "module")} granted to you`
+                  activeBrand
+                    ? `${ACCESS_KIND_LABEL[activeBrand.kind]} · ${pluralize(
+                        Object.keys(moduleAccess).length,
+                        "module",
+                      )} of ${availableModules.length} available`
+                    : "—"
+                }
+                trailing={
+                  activeBrand ? <BrandAccessBadge kind={activeBrand.kind} /> : null
                 }
               />
               <div className="rounded-lg border bg-muted/40 p-3">
                 <p className="text-xs font-medium text-muted-foreground">
-                  Permissions
+                  Organization permissions
                 </p>
                 <p className="mt-1 text-sm">
-                  {permissions.length} granted in this organization
+                  {permissions.length} granted by the role. They say what you
+                  may administer, never what data you see.
                 </p>
                 <div className="mt-2 flex flex-wrap gap-1">
                   {permissions.slice(0, 6).map((permission) => (
@@ -485,27 +567,19 @@ function NoOrganizationDashboard({
   const state = useAppState();
 
   if (isPlatformAdmin) {
-    const subscribed = state.organizations
-      .map((org) => getActiveSubscription(state, org.id))
-      .filter((subscription) => subscription !== undefined);
-    // Annual subscriptions count at their monthly equivalent.
-    const mrr = subscribed.reduce((total, subscription) => {
-      const plan = state.plans.find((item) => item.id === subscription.planId);
-      if (!plan) return total;
-      const monthly = getPlanMonthlyPrice(state, plan);
-      return (
-        total +
-        (subscription.billingCycle === "annual"
-          ? (monthly * ANNUAL_MONTHS_CHARGED) / 12
-          : monthly)
-      );
-    }, 0);
+    const brands = state.organizations.filter((org) => org.type === "brand");
+    const brokerages = state.organizations.filter(
+      (org) => org.type === "brokerage",
+    );
+    const withoutModules = state.organizations.filter(
+      (org) => getEnabledModules(state, org.id).length === 0,
+    );
 
     return (
       <>
         <PageHeader
           title="Caboodle platform"
-          description="You are administering the platform itself, not a customer organization. Customers create and run their own organizations."
+          description="You are administering the platform itself, not a customer organization. Customers create and run their own organizations; you enable their modules, connect Brands to Brokerages, and can set an organization up yourself when needed."
         />
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <StatCard
@@ -521,10 +595,14 @@ function NoOrganizationDashboard({
             href="/platform/users"
           />
           <StatCard
-            label="Relationships"
-            value={state.relationships.length}
-            icon={Link2}
-            href="/platform/relationships"
+            label="Active connections"
+            value={
+              state.brandConnections.filter(
+                (connection) => connection.status === "active",
+              ).length
+            }
+            icon={Cable}
+            href="/platform/connections"
           />
           <StatCard
             label="Pending access requests"
@@ -540,22 +618,23 @@ function NoOrganizationDashboard({
 
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <StatCard
-            label="Monthly recurring revenue"
-            value={formatCurrency(Math.round(mrr))}
-            icon={Receipt}
-            href="/platform/subscriptions"
+            label="Brands"
+            value={brands.length}
+            icon={Tag}
+            href="/platform/organizations"
           />
           <StatCard
-            label="Organizations on a plan"
-            value={`${subscribed.length} / ${state.organizations.length}`}
-            icon={CreditCard}
-            href="/platform/subscriptions"
+            label="Brokerages"
+            value={brokerages.length}
+            icon={Link2}
+            href="/platform/organizations"
           />
           <StatCard
-            label="Plans"
-            value={state.plans.length}
-            icon={Layers}
-            href="/platform/plans"
+            label="Organizations with no modules"
+            value={withoutModules.length}
+            icon={Blocks}
+            href="/platform/organizations"
+            highlight={withoutModules.length > 0}
           />
           <StatCard
             label="Catalog modules"
@@ -569,7 +648,7 @@ function NoOrganizationDashboard({
           <CardHeader>
             <CardTitle>Platform activity</CardTitle>
             <CardDescription>
-              Identity events across every organization.
+              Identity and access events across every organization.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -584,7 +663,7 @@ function NoOrganizationDashboard({
     <>
       <PageHeader
         title="You are not in an organization yet"
-        description="Organizations are the business entities in Caboodle. Join one that already exists, or create your own."
+        description="Organizations are the business entities in Caboodle: Brands and Brokerages. Join one that already exists, or create your own."
       />
       <EmptyState
         icon={ShieldCheck}

@@ -18,8 +18,8 @@ import {
 import { useAppState, useSession } from "@/lib/demo/demo-provider";
 
 /**
- * Step 5 of the onboarding journey: prove the organization owns its domain.
- * Either way, the journey continues to choosing a plan.
+ * The last step of the onboarding journey: prove the organization owns its
+ * domain. Either way, the journey ends at the new organization's dashboard.
  */
 export default function VerifyDomainPage({
   params,
@@ -82,28 +82,29 @@ export default function VerifyDomainPage({
             domain={domain}
             organizationName={organization.name}
             actorUserId={user.id}
-            onVerified={() => router.push("/onboarding/plan")}
+            onVerified={() => router.push("/dashboard")}
           />
 
           {!domain.verified ? (
             <Button
               variant="ghost"
               className="w-full"
-              onClick={() => router.push("/onboarding/plan")}
+              onClick={() => router.push("/dashboard")}
             >
               Skip for now
             </Button>
           ) : (
-            <Button className="w-full" onClick={() => router.push("/onboarding/plan")}>
-              Continue to choose a plan
+            <Button className="w-full" onClick={() => router.push("/dashboard")}>
+              Continue to {organization.name}
             </Button>
           )}
         </CardContent>
       </Card>
 
       <p className="text-center text-xs text-muted-foreground">
-        You are already the Organization Admin. Verification is about proving
-        domain ownership, not about granting you access.
+        You are already its {organization.type === "brand" ? "Brand Admin" : "Brokerage Admin"}.
+        Verification is about proving domain ownership, not about granting you
+        access. Modules switch on once Caboodle enables them for {organization.name}.
       </p>
     </div>
   );

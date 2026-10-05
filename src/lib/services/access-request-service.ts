@@ -1,5 +1,6 @@
 import { createId, delay, demoStore } from "@/lib/mock/store";
 import { nameOf, orgNameOf, recordEvent } from "@/lib/services/audit-service";
+import { syncBrandAccessForRole } from "@/lib/services/brand-access-service";
 import { domainFromEmail } from "@/lib/services/organization-service";
 import type { AccessRequest, Membership } from "@/types";
 
@@ -99,7 +100,11 @@ export async function requestOrganizationAccess(input: {
   });
 }
 
-/** Approving a request is what actually creates the membership. */
+/**
+ * Approving a request is what actually creates the membership. A Brand
+ * member's Brand Access is created with it, at Full (decision D2); a Broker
+ * starts with no Brands until the admin assigns some.
+ */
 export async function approveAccessRequest(
   requestId: string,
   actorUserId: string,
@@ -139,6 +144,7 @@ export async function approveAccessRequest(
           item.id === existing.id ? membership : item,
         )
       : [...draft.memberships, membership];
+    syncBrandAccessForRole(draft, membership, actorUserId);
 
     draft.accessRequests = draft.accessRequests.map((item) =>
       item.id === requestId

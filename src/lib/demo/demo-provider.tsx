@@ -9,28 +9,22 @@ import {
 
 import { demoStore } from "@/lib/mock/store";
 import {
-  getActiveSubscription,
-  getEntitledModules,
-  getIncompleteSubscription,
-  getModuleAccess,
-  type ModuleAccess,
-} from "@/lib/permissions/modules";
-import {
-  getEffectiveRole,
-  getMembership,
-  getPermissions,
-} from "@/lib/permissions/permissions";
+  getActiveBrand,
+  getActiveModules,
+  resolveAccess,
+  type AccessContext,
+  type ResolvedBrand,
+} from "@/lib/permissions/access";
+import type { ModuleAccess } from "@/lib/permissions/modules";
 import type {
   AppState,
   Membership,
   ModuleAction,
   Organization,
   PermissionId,
-  Plan,
   PlatformModule,
   Role,
   Session,
-  Subscription,
   User,
 } from "@/types";
 
@@ -113,34 +107,43 @@ export function useDemo(): DemoContextValue {
 
 export type SessionView = {
   user: User | null;
+  /** The workspace: which membership requests act through. */
   organization: Organization | null;
   membership: Membership | undefined;
   role: Role | undefined;
   permissions: PermissionId[];
-  /** Every organization the user is an active member of. */
+  /** Every organization the user holds an active membership in. */
   organizations: Organization[];
   isPlatformAdmin: boolean;
+  /** The Platform Admin is inside an organization through support access. */
+  isSupport: boolean;
   isSignedIn: boolean;
   /**
-   * The authorization primitive used across the UI.
+   * Organization-level authorization: what this person may administer.
    *
    * Resolved as: user -> membership for the current organization -> role ->
-   * permissions. Platform Admin is deliberately excluded: it is a separate
-   * platform-level capability, not an organization role.
+   * permissions. It never gives access to data.
    */
   can: (permission: PermissionId) => boolean;
-  /** The current organization's active subscription and its plan. */
-  subscription: Subscription | undefined;
-  plan: Plan | undefined;
-  /** A plan chosen in onboarding but not yet paid for. */
-  pendingSubscription: Subscription | undefined;
-  /** Every module the organization's plan includes. */
-  entitledModules: PlatformModule[];
-  /** What this member may do in each module, keyed by module id. */
+  /** The full resolved context, or null without a way into the organization. */
+  access: AccessContext | null;
+  /** What the organization itself has enabled. */
+  enabledModules: PlatformModule[];
+  /**
+   * Everything usable on the active Brand: the organization's own modules,
+   * plus that Brand's modules when working on it from a Brokerage.
+   */
+  availableModules: PlatformModule[];
+  /** Every Brand this person can work on in this organization. */
+  brands: ResolvedBrand[];
+  /** The Brand requests run against (the BrandID header). */
+  activeBrand: ResolvedBrand | undefined;
+  /** What this person may do in each module on the active Brand. */
   moduleAccess: ModuleAccess;
   /**
-   * Module-level authorization, resolved as: organization -> plan -> module,
-   * then user -> membership -> role or module grant -> action.
+   * Module-level authorization on the active Brand, resolved as:
+   * available modules, then role (admin) or Brand Access (Full or Custom
+   * grants) -> action.
    */
   canModule: (moduleId: string, action?: ModuleAction) => boolean;
 };
@@ -154,45 +157,49 @@ export function useSession(): SessionView {
       ? (state.users.find((item) => item.id === session.userId) ?? null)
       : null;
 
-    const organizationIds = state.memberships
-      .filter(
-        (membership) =>
-          membership.userId === user?.id && membership.status === "active",
-      )
-      .map((membership) => membership.organizationId);
-
+    const organizationIds = new Set(
+      state.memberships
+        .filter(
+          (membership) =>
+            membership.userId === user?.id && membership.status === "active",
+        )
+        .map((membership) => membership.organizationId),
+    );
     const organizations = state.organizations.filter((org) =>
-      organizationIds.includes(org.id),
+      organizationIds.has(org.id),
     );
 
     const organization =
       state.organizations.find((org) => org.id === session?.organizationId) ??
       null;
 
-    const membership = getMembership(state, user?.id, organization?.id);
-    const role = getEffectiveRole(state, user?.id, organization?.id);
-    const permissions = getPermissions(state, user?.id, organization?.id);
-
-    const subscription = getActiveSubscription(state, organization?.id);
-    const plan = subscription
-      ? state.plans.find((item) => item.id === subscription.planId)
-      : undefined;
-    const moduleAccess = getModuleAccess(state, user?.id, organization?.id);
+    const access = resolveAccess(
+      state,
+      user?.id,
+      organization?.id,
+      session?.brandId,
+    );
+    const permissions = access?.permissions ?? [];
+    const moduleAccess = getActiveModules(access);
+    const brands = access?.brands ?? [];
+    const activeBrand = getActiveBrand(access);
 
     return {
       user,
       organization,
-      membership,
-      role,
+      membership: access?.membership,
+      role: access?.role,
       permissions,
       organizations,
       isPlatformAdmin: Boolean(user?.isPlatformAdmin),
+      isSupport: Boolean(access?.isSupport),
       isSignedIn: Boolean(user),
       can: (permission: PermissionId) => permissions.includes(permission),
-      subscription,
-      plan,
-      pendingSubscription: getIncompleteSubscription(state, organization?.id),
-      entitledModules: getEntitledModules(state, organization?.id),
+      access,
+      enabledModules: access?.enabledModules ?? [],
+      availableModules: activeBrand?.available ?? [],
+      brands,
+      activeBrand,
       moduleAccess,
       canModule: (moduleId: string, action: ModuleAction = "view") =>
         moduleAccess[moduleId]?.includes(action) ?? false,

@@ -99,7 +99,7 @@ export function UnauthorizedState({
           </p>
           <p className="text-sm text-muted-foreground">
             {description ??
-              "Your role in this organization does not grant this capability. Switch to an Organization Admin account to see it."}
+              "Your role in this organization does not grant this capability. Switch to an admin account to see it."}
           </p>
           {permission ? (
             <p className="pt-1 font-mono text-xs text-muted-foreground">

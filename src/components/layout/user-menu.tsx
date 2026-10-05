@@ -35,16 +35,19 @@ import { resetDemo, signOut } from "@/lib/services/auth-service";
  * is the single most-used control during the walkthrough.
  */
 export function UserMenu() {
-  const { user, organization, role, isPlatformAdmin } = useSession();
+  const { user, organization, role, isPlatformAdmin, isSupport, activeBrand } =
+    useSession();
   const { devMode, setDevMode } = useDemo();
   const { isMobile } = useSidebar();
   const router = useRouter();
 
   if (!user) return null;
 
-  const roleLabel = isPlatformAdmin
-    ? "Platform Admin"
-    : (role?.name ?? "No role in this organization");
+  const roleLabel = isSupport
+    ? "Platform Admin · support"
+    : isPlatformAdmin
+      ? "Platform Admin"
+      : (role?.name ?? "No role in this organization");
 
   return (
     <SidebarMenu>
@@ -104,6 +107,14 @@ export function UserMenu() {
                 <span className="text-muted-foreground">Role</span>
                 <span className="truncate font-medium">{roleLabel}</span>
               </div>
+              {organization?.type === "brokerage" ? (
+                <div className="flex items-center justify-between gap-4">
+                  <span className="text-muted-foreground">Brand</span>
+                  <span className="truncate font-medium">
+                    {activeBrand?.brand.name ?? "—"}
+                  </span>
+                </div>
+              ) : null}
             </div>
 
             <DropdownMenuSeparator />

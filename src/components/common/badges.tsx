@@ -1,18 +1,21 @@
+import { ShieldCheck } from "lucide-react";
+
 import { Badge } from "@/components/ui/badge";
+import type { BrandAccessKind } from "@/lib/permissions/access";
 import { cn } from "@/lib/utils";
 import type {
   AccessRequestStatus,
+  BrandConnectionStatus,
   InvitationStatus,
   MembershipStatus,
   OrganizationStatus,
   OrganizationType,
-  RelationshipStatus,
 } from "@/types";
 
 /**
  * One consistent vocabulary of status colours across the whole prototype, so
  * "Pending" always looks the same whether it is a domain, an invitation, a
- * membership or a relationship.
+ * membership or a connection.
  */
 type Tone = "positive" | "pending" | "negative" | "neutral";
 
@@ -65,19 +68,15 @@ export function MembershipStatusBadge({ status }: { status: MembershipStatus }) 
   const tone: Tone =
     status === "active"
       ? "positive"
-      : status === "pending"
-        ? "pending"
-        : status === "suspended"
-          ? "negative"
-          : "neutral";
+      : status === "suspended"
+        ? "negative"
+        : "neutral";
   const label =
     status === "active"
       ? "Active"
-      : status === "pending"
-        ? "Pending"
-        : status === "suspended"
-          ? "Suspended"
-          : "Removed";
+      : status === "suspended"
+        ? "Suspended"
+        : "Removed";
   return <ToneBadge tone={tone}>{label}</ToneBadge>;
 }
 
@@ -108,21 +107,39 @@ export function AccessRequestStatusBadge({
   return <ToneBadge tone={tone}>{label}</ToneBadge>;
 }
 
-export function RelationshipStatusBadge({
+export function ConnectionStatusBadge({
   status,
 }: {
-  status: RelationshipStatus;
+  status: BrandConnectionStatus;
 }) {
   const tone: Tone =
-    status === "active"
-      ? "positive"
-      : status === "pending"
-        ? "pending"
-        : status === "rejected"
-          ? "negative"
-          : "neutral";
-  const label = status === "active" ? "Connected" : status.charAt(0).toUpperCase() + status.slice(1);
+    status === "active" ? "positive" : status === "suspended" ? "pending" : "neutral";
+  const label =
+    status === "active" ? "Connected" : status === "suspended" ? "Suspended" : "Ended";
   return <ToneBadge tone={tone}>{label}</ToneBadge>;
+}
+
+/**
+ * How someone reaches a Brand: derived from an admin role or support access,
+ * or a Brand Access row that is Full or Custom.
+ */
+export function BrandAccessBadge({ kind }: { kind: BrandAccessKind }) {
+  if (kind === "custom") {
+    return (
+      <Badge
+        variant="outline"
+        className="border-blue-500/20 bg-blue-500/10 text-blue-700 dark:text-blue-400"
+      >
+        Custom
+      </Badge>
+    );
+  }
+  return (
+    <ToneBadge tone="positive">
+      {kind === "full" ? null : <ShieldCheck className="size-3" />}
+      {kind === "admin" ? "Full via role" : kind === "support" ? "Support" : "Full"}
+    </ToneBadge>
+  );
 }
 
 /** Brand vs Brokerage. Deliberately visually distinct, since the difference

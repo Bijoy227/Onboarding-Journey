@@ -118,6 +118,18 @@ function InvitationsView() {
                       </TableCell>
                       <TableCell>
                         <RoleBadge name={role?.name ?? "—"} />
+                        {invitation.brandOrganizationIds?.length ? (
+                          <p className="mt-1 max-w-48 truncate text-xs text-muted-foreground">
+                            {invitation.brandOrganizationIds
+                              .map(
+                                (id) =>
+                                  state.organizations.find((org) => org.id === id)
+                                    ?.name,
+                              )
+                              .filter(Boolean)
+                              .join(", ")}
+                          </p>
+                        ) : null}
                       </TableCell>
                       <TableCell className="hidden md:table-cell">
                         <span className="text-sm text-muted-foreground">

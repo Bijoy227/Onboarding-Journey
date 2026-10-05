@@ -1,3 +1,4 @@
+import { migrateState } from "@/lib/mock/migrations";
 import { createSeedState } from "@/lib/mock/seed";
 import type { AppState, Session } from "@/types";
 
@@ -10,11 +11,12 @@ import type { AppState, Session } from "@/types";
  * services, not the UI.
  */
 
-// v2 added the module catalog, plans and subscriptions. Bumping the key means
-// a browser holding v1 data starts from the new seed instead of a state that
-// is missing those collections.
-const STATE_KEY = "caboodle.demo.state.v2";
-const SESSION_KEY = "caboodle.demo.session.v1";
+// v3 is architecture v2: plans, subscriptions and relationships gave way to
+// module assignments, brand connections and brand access. Bumping the keys
+// means a browser holding older data starts from the new seed instead of a
+// state that is missing those collections.
+const STATE_KEY = "caboodle.demo.state.v3";
+const SESSION_KEY = "caboodle.demo.session.v2";
 const DEV_MODE_KEY = "caboodle.demo.devmode.v1";
 
 type Listener = () => void;
@@ -38,7 +40,9 @@ class DemoStore {
     try {
       const rawState = window.localStorage.getItem(STATE_KEY);
       if (rawState) {
-        this.state = JSON.parse(rawState) as AppState;
+        const saved = JSON.parse(rawState) as AppState;
+        this.state = migrateState(saved);
+        if (this.state !== saved) this.persistState();
       } else {
         this.persistState();
       }
@@ -96,14 +100,13 @@ class DemoStore {
       domains: [...this.state.domains],
       memberships: [...this.state.memberships],
       roles: [...this.state.roles],
-      relationships: [...this.state.relationships],
+      brandConnections: [...this.state.brandConnections],
+      brandAccess: [...this.state.brandAccess],
       invitations: [...this.state.invitations],
       accessRequests: [...this.state.accessRequests],
       auditEvents: [...this.state.auditEvents],
       modules: [...this.state.modules],
-      plans: [...this.state.plans],
-      subscriptions: [...this.state.subscriptions],
-      invoices: [...this.state.invoices],
+      moduleAssignments: [...this.state.moduleAssignments],
     };
 
     const result = mutator(draft);

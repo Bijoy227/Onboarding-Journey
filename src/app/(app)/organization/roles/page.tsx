@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Check, Minus } from "lucide-react";
+import { Check, Minus, ShieldCheck } from "lucide-react";
 
 import { PermissionGuard } from "@/components/common/permission-guard";
 import { PageHeader } from "@/components/common/states";
@@ -32,7 +32,7 @@ import { pluralize } from "@/lib/format";
 
 export default function RolesPage() {
   return (
-    <PermissionGuard permission="role.view">
+    <PermissionGuard permission="organization.view">
       <RolesView />
     </PermissionGuard>
   );
@@ -52,7 +52,7 @@ function RolesView() {
     <>
       <PageHeader
         title="Roles"
-        description="A role is a named collection of permissions. Roles attach to memberships, so the same person can hold different roles in different organizations."
+        description="A role says what a member may administer: members, invitations, brand assignments. It never gives data on its own; module access lives on each Brand Access. Roles attach to memberships, so the same person can hold different roles in different organizations."
       />
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)]">
@@ -77,9 +77,14 @@ function RolesView() {
               >
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-sm font-medium">{role.name}</p>
-                  {myRole?.id === role.id ? (
-                    <Badge variant="secondary">Your role</Badge>
-                  ) : null}
+                  <span className="flex gap-1">
+                    {role.isSystem ? null : (
+                      <Badge variant="outline">Custom</Badge>
+                    )}
+                    {myRole?.id === role.id ? (
+                      <Badge variant="secondary">Your role</Badge>
+                    ) : null}
+                  </span>
                 </div>
                 <p className="mt-1 text-xs text-muted-foreground">
                   {pluralize(role.permissionIds.length, "permission")} ·{" "}
@@ -97,6 +102,37 @@ function RolesView() {
               <CardDescription>{selected.description}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-5">
+              <div
+                className={cn(
+                  "flex items-start gap-3 rounded-lg border p-3 text-sm",
+                  selected.hasFullBrandAccess
+                    ? "border-emerald-500/20 bg-emerald-500/5"
+                    : "bg-muted/30",
+                )}
+              >
+                <ShieldCheck
+                  className={cn(
+                    "mt-0.5 size-4 shrink-0",
+                    selected.hasFullBrandAccess
+                      ? "text-emerald-600 dark:text-emerald-400"
+                      : "text-muted-foreground",
+                  )}
+                />
+                <p className={cn(!selected.hasFullBrandAccess && "text-muted-foreground")}>
+                  <span className="font-medium text-foreground">
+                    {selected.hasFullBrandAccess
+                      ? "Full brand access"
+                      : "No derived brand access"}
+                  </span>{" "}
+                  {selected.hasFullBrandAccess
+                    ? organization?.type === "brand"
+                      ? "Every module this Brand has enabled, with every action. Worked out from the role, never stored, and it can't be restricted."
+                      : "Every module this Brokerage has enabled, with every action, on every Brand actively connected to it, including Brands connected later."
+                    : organization?.type === "brand"
+                      ? "Works on the Brand through their Brand Access: Full by default, or a custom list of modules."
+                      : "Works only on the Brands an admin assigns, each at Full or Custom."}
+                </p>
+              </div>
               {PERMISSION_GROUPS.map((group) => {
                 const permissions = PERMISSIONS.filter(
                   (permission) => permission.group === group,
@@ -163,6 +199,23 @@ function RolesView() {
                 </TableRow>
               </TableHeader>
               <TableBody>
+                <TableRow>
+                  <TableCell className="text-xs font-medium">
+                    Full brand access{" "}
+                    <span className="font-normal text-muted-foreground">
+                      (role flag)
+                    </span>
+                  </TableCell>
+                  {roles.map((role) => (
+                    <TableCell key={role.id} className="text-center">
+                      {role.hasFullBrandAccess ? (
+                        <Check className="mx-auto size-4 text-emerald-600 dark:text-emerald-400" />
+                      ) : (
+                        <Minus className="mx-auto size-4 text-muted-foreground" />
+                      )}
+                    </TableCell>
+                  ))}
+                </TableRow>
                 {PERMISSIONS.map((permission) => (
                   <TableRow key={permission.id}>
                     <TableCell className="font-mono text-xs">

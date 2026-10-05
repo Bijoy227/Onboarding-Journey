@@ -8,46 +8,36 @@ import type {
 } from "@/types";
 
 /**
- * The permission catalogue. These are organization-level identity and access
- * concerns. What a member can do inside a business module (CRM, trade spend,
- * product specs) is not a permission here: it is a module grant on their
- * membership, resolved in `src/lib/permissions/modules.ts`.
+ * The organization permission catalogue (architecture v2, section 4.2).
+ *
+ * These say what a member may administer: members, invitations, brand
+ * assignments. They never give access to data. What a person may do inside a
+ * business module is a module grant on their Brand Access, resolved in
+ * `src/lib/permissions/access.ts`.
  */
 export const PERMISSIONS: Permission[] = [
   {
     id: "organization.view",
     name: "View organization",
-    description: "See the organization profile and overview.",
+    description: "See the organization profile.",
     group: "Organization",
   },
   {
     id: "organization.update",
     name: "Update organization",
-    description: "Edit organization name, profile and settings.",
+    description: "Edit the organization's profile and settings.",
     group: "Organization",
   },
   {
     id: "member.view",
     name: "View members",
-    description: "See who belongs to the organization.",
+    description: "See the member list.",
     group: "Members",
   },
   {
     id: "member.invite",
     name: "Invite members",
-    description: "Send invitations to join the organization.",
-    group: "Members",
-  },
-  {
-    id: "member.update",
-    name: "Update members",
-    description: "Change a member's details.",
-    group: "Members",
-  },
-  {
-    id: "member.remove",
-    name: "Remove members",
-    description: "Remove a member from the organization.",
+    description: "Send and revoke invitations.",
     group: "Members",
   },
   {
@@ -57,22 +47,22 @@ export const PERMISSIONS: Permission[] = [
     group: "Members",
   },
   {
-    id: "member.suspend",
-    name: "Suspend members",
-    description: "Temporarily suspend a membership.",
+    id: "member.update",
+    name: "Change roles",
+    description: "Change a member's role.",
     group: "Members",
   },
   {
-    id: "role.view",
-    name: "View roles",
-    description: "See roles and the permissions they grant.",
-    group: "Roles",
+    id: "member.suspend",
+    name: "Suspend members",
+    description: "Suspend or restore a membership.",
+    group: "Members",
   },
   {
-    id: "role.assign",
-    name: "Assign roles",
-    description: "Change which role a member holds.",
-    group: "Roles",
+    id: "member.remove",
+    name: "Remove members",
+    description: "Remove a member from the organization.",
+    group: "Members",
   },
   {
     id: "domain.view",
@@ -83,70 +73,22 @@ export const PERMISSIONS: Permission[] = [
   {
     id: "domain.manage",
     name: "Manage domains",
-    description: "Add or remove organization domains.",
+    description: "Add, verify and remove email domains.",
     group: "Domains",
   },
   {
-    id: "domain.verify",
-    name: "Verify domains",
-    description: "Run domain verification.",
-    group: "Domains",
-  },
-  {
-    id: "relationship.view",
-    name: "View relationships",
-    description: "See connected organizations.",
-    group: "Relationships",
-  },
-  {
-    id: "relationship.request",
-    name: "Request relationships",
-    description: "Ask another organization to connect.",
-    group: "Relationships",
-  },
-  {
-    id: "relationship.approve",
-    name: "Approve relationships",
-    description: "Accept an incoming relationship request.",
-    group: "Relationships",
-  },
-  {
-    id: "relationship.reject",
-    name: "Reject relationships",
-    description: "Decline an incoming relationship request.",
-    group: "Relationships",
-  },
-  {
-    id: "relationship.manage",
-    name: "Manage relationships",
-    description: "Manage managed/private brands and relationship metadata.",
-    group: "Relationships",
-  },
-  {
-    id: "billing.view",
-    name: "View billing",
-    description: "See the plan, its modules, payment method and invoices.",
-    group: "Billing",
-  },
-  {
-    id: "billing.manage",
-    name: "Manage billing",
-    description: "Choose or change the plan and pay for it.",
-    group: "Billing",
-  },
-  {
-    id: "module.assign",
-    name: "Assign module access",
+    id: "connection.view",
+    name: "View connections",
     description:
-      "Decide which subscribed modules each member can use, and what they can do in them.",
-    group: "Modules",
+      "See connected organizations: a Brand sees its Brokerages, a Brokerage sees its Brands.",
+    group: "Connections",
   },
   {
-    id: "module.full_access",
-    name: "Full module access",
+    id: "access.manage",
+    name: "Manage brand access",
     description:
-      "Use every module in the plan with every action, without a per-member grant.",
-    group: "Modules",
+      "Assign members to Brands and edit their module permissions for each one.",
+    group: "Access",
   },
 ];
 
@@ -160,61 +102,85 @@ export const PERMISSION_GROUPS = Array.from(
 
 /** Role identifiers used throughout the seed data. */
 export const ROLE_IDS = {
-  organizationAdmin: "role-org-admin",
+  brandAdmin: "role-brand-admin",
   brandMember: "role-brand-member",
+  brokerageAdmin: "role-brokerage-admin",
   broker: "role-broker",
-  externalCollaborator: "role-external-collaborator",
 } as const;
 
+const ADMIN_PERMISSIONS: PermissionId[] = PERMISSIONS.map(
+  (permission) => permission.id,
+);
+
 /**
- * Roles are collections of permissions, and are NOT tied to a specific
- * organization. "Organization Admin" means the same thing inside a Brand and
- * inside a Brokerage — what differs is the membership it is attached to.
+ * The four seeded system roles, one set per organization type. They are
+ * separate from the global Identity roles: only ADMIN (the Platform Admin)
+ * survives there. The Platform Admin can add custom roles for either type
+ * (src/lib/services/role-service.ts); the system roles never change.
  */
 export const ROLES: Role[] = [
   {
-    id: ROLE_IDS.organizationAdmin,
-    name: "Organization Admin",
+    id: ROLE_IDS.brandAdmin,
+    key: "brand-admin",
+    name: "Brand Admin",
     description:
-      "Full administrative control of the organization: members, roles, domains, relationships, billing and module access. Uses every module in the plan.",
-    permissionIds: PERMISSIONS.map((permission) => permission.id),
+      "Every Brand permission, and full access to every module the Brand has enabled.",
+    organizationType: "brand",
+    hasFullBrandAccess: true,
+    isSystem: true,
+    permissionIds: ADMIN_PERMISSIONS,
   },
   {
     id: ROLE_IDS.brandMember,
+    key: "brand-member",
     name: "Brand Member",
     description:
-      "Works inside a Brand. Can see the organization, its members and its connected brokerages.",
+      "Works on the Brand's data through their Brand Access: Full by default, or a custom list of modules.",
     organizationType: "brand",
-    permissionIds: ["organization.view", "member.view", "relationship.view"],
+    hasFullBrandAccess: false,
+    isSystem: true,
+    permissionIds: ["organization.view", "member.view", "connection.view"],
+  },
+  {
+    id: ROLE_IDS.brokerageAdmin,
+    key: "brokerage-admin",
+    name: "Brokerage Admin",
+    description:
+      "Every Brokerage permission, and full access to every Brand actively connected to the Brokerage.",
+    organizationType: "brokerage",
+    hasFullBrandAccess: true,
+    isSystem: true,
+    permissionIds: ADMIN_PERMISSIONS,
   },
   {
     id: ROLE_IDS.broker,
+    key: "broker",
     name: "Broker",
     description:
-      "Works inside a Brokerage. Can see the organization and request brand relationships.",
+      "Works only on the Brands they are assigned to, each one Full or Custom.",
     organizationType: "brokerage",
-    permissionIds: [
-      "organization.view",
-      "member.view",
-      "relationship.view",
-      "relationship.request",
-    ],
-  },
-  {
-    id: ROLE_IDS.externalCollaborator,
-    name: "External Collaborator",
-    description:
-      "An invited collaborator from outside the organization's verified domain. Read-only access.",
-    permissionIds: ["organization.view", "member.view", "relationship.view"],
+    hasFullBrandAccess: false,
+    isSystem: true,
+    permissionIds: ["organization.view", "member.view"],
   },
 ];
 
+/** The admin role for an organization type. */
+export function adminRoleId(type: OrganizationType): string {
+  return type === "brand" ? ROLE_IDS.brandAdmin : ROLE_IDS.brokerageAdmin;
+}
+
+/** The non-admin role for an organization type. */
+export function memberRoleId(type: OrganizationType): string {
+  return type === "brand" ? ROLE_IDS.brandMember : ROLE_IDS.broker;
+}
+
 /**
- * The single authorization primitive of the prototype.
+ * Organization-level authorization.
  *
  * Access is never derived from something like `user.role === "BrandOwner"`.
  * It is always resolved as:
- *   user -> membership for this organization -> role -> permissions
+ *   user -> active membership in an active organization -> role -> permissions
  */
 export function hasPermission(
   state: AppState,
@@ -235,13 +201,22 @@ export function getPermissions(
   return role ? role.permissionIds : [];
 }
 
-/** The active membership linking a user to an organization, if any. */
+/**
+ * The active membership linking a user to an organization, if any. The user,
+ * the membership and the organization must all be active.
+ */
 export function getMembership(
   state: AppState,
   userId: string | null | undefined,
   organizationId: string | null | undefined,
 ): Membership | undefined {
   if (!userId || !organizationId) return undefined;
+  const user = state.users.find((item) => item.id === userId);
+  if (!user || user.status === "suspended") return undefined;
+  const organization = state.organizations.find(
+    (item) => item.id === organizationId,
+  );
+  if (!organization || organization.status !== "active") return undefined;
   return state.memberships.find(
     (membership) =>
       membership.userId === userId &&
@@ -267,8 +242,18 @@ export function getAssignableRoles(
   organizationType: OrganizationType,
 ): Role[] {
   return state.roles.filter(
-    (role) =>
-      role.organizationType === undefined ||
-      role.organizationType === organizationType,
+    (role) => role.organizationType === organizationType,
   );
+}
+
+export function getRole(state: AppState, roleId: string): Role | undefined {
+  return state.roles.find((role) => role.id === roleId);
+}
+
+/**
+ * Can this role change other members' roles? Every organization keeps at
+ * least one active member who can, so it is never left unmanageable.
+ */
+export function canManageRoles(role: Role | undefined): boolean {
+  return Boolean(role?.permissionIds.includes("member.update"));
 }

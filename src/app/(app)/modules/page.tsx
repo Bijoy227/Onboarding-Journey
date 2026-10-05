@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { Blocks, CreditCard, Lock } from "lucide-react";
+import { Blocks, Lock, Tag } from "lucide-react";
 
+import { BrandAccessBadge } from "@/components/common/badges";
 import { LinkButton } from "@/components/common/link-button";
 import { EmptyState, PageHeader } from "@/components/common/states";
 import { ModuleActionBadges } from "@/components/features/module-action-badges";
@@ -10,29 +11,32 @@ import { ModuleAvatar, ModuleIcon } from "@/components/features/module-icon";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { useAppState, useSession } from "@/lib/demo/demo-provider";
-import { formatCurrency, pluralize } from "@/lib/format";
+import { pluralize } from "@/lib/format";
 import {
   buildModuleTree,
   getModuleTree,
+  moduleHref,
   type ModuleAccess,
   type ModuleNode,
 } from "@/lib/permissions/modules";
+import type { OrganizationType } from "@/types";
 import { cn } from "@/lib/utils";
 
 /**
- * Every module in the organization's plan, and which of them this member can
- * open. Modules the plan lacks are listed underneath as what an upgrade adds.
+ * Every module the organization has enabled, and which of them this person
+ * can open on the active Brand. In a Brokerage the Brand's own enabled modules
+ * follow, since they flow through to the people working on it. Catalog
+ * modules that aren't enabled are listed underneath.
  */
 export default function ModulesPage() {
   const state = useAppState();
   const {
     organization,
-    plan,
-    pendingSubscription,
-    entitledModules,
+    enabledModules,
+    availableModules,
     moduleAccess,
+    activeBrand,
     can,
-    role,
   } = useSession();
 
   if (!organization) {
@@ -40,50 +44,66 @@ export default function ModulesPage() {
       <EmptyState
         icon={Blocks}
         title="Modules belong to an organization"
-        description="Join or create an organization to use Caboodle modules."
+        description="Join an organization to use Caboodle modules."
       />
     );
   }
 
-  if (!plan) {
+  if (organization.type === "brand" && enabledModules.length === 0) {
     return (
       <>
         <PageHeader title="Modules" />
         <EmptyState
-          icon={CreditCard}
-          title={`${organization.name} has no plan yet`}
-          description={
-            can("billing.manage")
-              ? "Choose a plan to switch modules on for your organization."
-              : "Modules switch on once an Organization Admin chooses a plan."
-          }
-          action={
-            can("billing.manage") ? (
-              <LinkButton
-                href={
-                  pendingSubscription
-                    ? "/onboarding/payment"
-                    : "/onboarding/plan"
-                }
-              >
-                {pendingSubscription ? "Finish checkout" : "Choose a plan"}
-              </LinkButton>
-            ) : null
-          }
+          icon={Blocks}
+          title={`${organization.name} has no modules yet`}
+          description="The Platform Admin enables modules for each organization. Until then there is nothing to open."
         />
       </>
     );
   }
 
-  const tree = buildModuleTree(entitledModules);
-  const entitledIds = new Set(entitledModules.map((entry) => entry.id));
-  const usable = tree.filter((node) => moduleAccess[node.module.id]).length;
-  const fullAccess = can("module.full_access");
+  if (!activeBrand) {
+    return (
+      <>
+        <PageHeader title="Modules" />
+        <EmptyState
+          icon={Tag}
+          title="You aren't assigned to a Brand yet"
+          description={`All data belongs to a Brand. Ask a ${organization.name} admin to assign you to one of the Brands connected to ${organization.name}.`}
+        />
+      </>
+    );
+  }
 
-  // What the plan doesn't include, for the upgrade section.
-  const notInPlan = getModuleTree(state, organization.type).filter(
-    (node) => !entitledIds.has(node.module.id),
+  const isBrokerage = organization.type === "brokerage";
+  const availableIds = new Set(availableModules.map((entry) => entry.id));
+  const tree = buildModuleTree(
+    availableModules.filter((entry) => entry.audience === organization.type),
   );
+  const brandTree = buildModuleTree(
+    availableModules.filter((entry) => entry.audience !== organization.type),
+  );
+  const usable = [...tree, ...brandTree].filter(
+    (node) => moduleAccess[node.module.id],
+  ).length;
+
+  const notEnabled = getModuleTree(state, organization.type).filter(
+    (node) => !availableIds.has(node.module.id),
+  );
+  const notOnBrand = isBrokerage
+    ? getModuleTree(state, "brand").filter(
+        (node) => !availableIds.has(node.module.id),
+      )
+    : [];
+
+  const accessSentence =
+    activeBrand.kind === "admin"
+      ? "As an admin you have every action in every enabled module."
+      : activeBrand.kind === "support"
+        ? "Support access gives every action; it is audited."
+        : activeBrand.kind === "full"
+          ? "Your access is Full: everything enabled, including modules added later."
+          : "Your access is Custom: an admin chose these modules for you.";
 
   return (
     <>
@@ -91,48 +111,103 @@ export default function ModulesPage() {
         title="Modules"
         description={
           <>
-            {organization.name} is on the <strong>{plan.name}</strong> plan with{" "}
-            {pluralize(tree.length, "module")}. You can open{" "}
-            <strong>{usable}</strong> of them.{" "}
-            {fullAccess
-              ? `As ${role?.name ?? "an admin"} you have every action in every module.`
-              : "What you can do in each is set by your Organization Admin."}
+            {organization.name} has {pluralize(tree.length, "module")} enabled.
+            {isBrokerage ? (
+              <>
+                {" "}
+                <strong>{activeBrand.brand.name}</strong> adds{" "}
+                {pluralize(brandTree.length, "module")} of its own. On it you
+                can open <strong>{usable}</strong>.
+              </>
+            ) : (
+              <>
+                {" "}
+                You can open <strong>{usable}</strong> of them.
+              </>
+            )}{" "}
+            {accessSentence}
           </>
         }
         actions={
-          can("module.assign") ? (
-            <LinkButton
-              size="sm"
-              variant="outline"
-              href="/organization/module-access"
-            >
-              Manage module access
-            </LinkButton>
-          ) : null
-        }
-      />
-
-      <ModuleGrid nodes={tree} moduleAccess={moduleAccess} />
-
-      {notInPlan.length > 0 ? (
-        <div className="space-y-3">
-          <div className="flex flex-wrap items-end justify-between gap-2">
-            <div>
-              <h2 className="text-sm font-semibold">Not in your plan</h2>
-              <p className="text-sm text-muted-foreground">
-                Available to{" "}
-                {organization.type === "brand" ? "Brands" : "Brokerages"} on
-                another plan.
-              </p>
-            </div>
-            {can("billing.manage") ? (
-              <LinkButton size="sm" variant="outline" href="/onboarding/plan">
-                Change plan
+          <div className="flex items-center gap-2">
+            <BrandAccessBadge kind={activeBrand.kind} />
+            {can("access.manage") ? (
+              <LinkButton
+                size="sm"
+                variant="outline"
+                href="/organization/brand-access"
+              >
+                Manage brand access
               </LinkButton>
             ) : null}
           </div>
+        }
+      />
+
+      <ModuleGrid
+        nodes={tree}
+        moduleAccess={moduleAccess}
+        workspaceType={organization.type}
+      />
+
+      {isBrokerage ? (
+        <div className="space-y-3">
+          <div>
+            <h2 className="text-sm font-semibold">
+              From {activeBrand.brand.name}
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              Modules {activeBrand.brand.name} has enabled flow through to
+              everyone working on it. They change when you switch Brand.
+            </p>
+          </div>
+          {brandTree.length === 0 ? (
+            <p className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">
+              {activeBrand.brand.name} has no modules enabled yet.
+            </p>
+          ) : (
+            <ModuleGrid
+              nodes={brandTree}
+              moduleAccess={moduleAccess}
+                    workspaceType={organization.type}
+            />
+          )}
+        </div>
+      ) : null}
+
+      <NotEnabled
+        title={`Not enabled for ${organization.name}`}
+        description={`In the ${isBrokerage ? "Brokerage" : "Brand"} catalog. Only the Platform Admin can enable modules for an organization.`}
+        nodes={notEnabled}
+      />
+      <NotEnabled
+        title={`Not enabled for ${activeBrand.brand.name}`}
+        description={`In the Brand catalog. The Platform Admin enables these per Brand.`}
+        nodes={notOnBrand}
+      />
+    </>
+  );
+}
+
+function NotEnabled({
+  title,
+  description,
+  nodes,
+}: {
+  title: string;
+  description: string;
+  nodes: ModuleNode[];
+}) {
+  return (
+    <>
+      {nodes.length > 0 ? (
+        <div className="space-y-3">
+          <div>
+            <h2 className="text-sm font-semibold">{title}</h2>
+            <p className="text-sm text-muted-foreground">{description}</p>
+          </div>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {notInPlan.map(({ module: entry }) => (
+            {nodes.map(({ module: entry }) => (
               <div
                 key={entry.id}
                 className="flex items-center gap-3 rounded-xl border border-dashed p-3 text-muted-foreground"
@@ -141,9 +216,7 @@ export default function ModulesPage() {
                 <span className="min-w-0 flex-1 truncate text-sm">
                   {entry.name}
                 </span>
-                <span className="text-xs tabular-nums">
-                  {formatCurrency(entry.monthlyPrice)}/mo
-                </span>
+                <Lock className="size-3.5 shrink-0" />
               </div>
             ))}
           </div>
@@ -156,9 +229,11 @@ export default function ModulesPage() {
 function ModuleGrid({
   nodes,
   moduleAccess,
+  workspaceType,
 }: {
   nodes: ModuleNode[];
   moduleAccess: ModuleAccess;
+  workspaceType: OrganizationType;
 }) {
   const groups = Array.from(
     new Set(nodes.map((node) => node.module.group ?? "Other")),
@@ -220,7 +295,7 @@ function ModuleGrid({
                   </Card>
                 );
                 return actions.length > 0 ? (
-                  <Link key={entry.id} href={`/modules/${entry.slug}`}>
+                  <Link key={entry.id} href={moduleHref(entry, workspaceType)}>
                     {body}
                   </Link>
                 ) : (

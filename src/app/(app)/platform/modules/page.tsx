@@ -1,12 +1,11 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useState } from "react";
 import {
   ChevronRight,
   ChevronsDownUp,
   ChevronsUpDown,
   MoreHorizontal,
-  Pencil,
   Plus,
   Search,
 } from "lucide-react";
@@ -47,23 +46,27 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { useAppState, useSession } from "@/lib/demo/demo-provider";
-import { formatCurrency, pluralize } from "@/lib/format";
-import { getModuleTree, type ModuleNode } from "@/lib/permissions/modules";
+import { pluralize } from "@/lib/format";
+import {
+  MODULE_ACTIONS,
+  getModuleOrganizationCount,
+  getModuleTree,
+  type ModuleNode,
+} from "@/lib/permissions/modules";
 import {
   ModuleError,
   deleteModule,
   getModuleUsage,
-  updateModule,
 } from "@/lib/services/module-service";
 import { cn } from "@/lib/utils";
-import type { OrganizationType, PlatformModule } from "@/types";
+import type { ModuleAction, OrganizationType, PlatformModule } from "@/types";
 
 /**
  * Columns shared by the header and every tree row, so they line up. Narrow
- * screens keep only the module, its price and the actions.
+ * screens keep only the module, its available actions and the menu.
  */
 const ROW_GRID =
-  "grid grid-cols-[minmax(0,1fr)_auto_2rem] items-center gap-x-3 md:grid-cols-[minmax(0,1fr)_11rem_4.5rem_7.5rem_2rem]";
+  "grid grid-cols-[minmax(0,1fr)_auto_2rem] items-center gap-x-3 md:grid-cols-[minmax(0,1fr)_11rem_6.5rem_7.5rem_2rem]";
 
 /**
  * Where the tree's connector runs: the row's left padding (12px), the
@@ -94,13 +97,6 @@ function ModulesCatalog() {
     (total, node) => total + node.children.length,
     0,
   );
-  const listTotal = tree.reduce(
-    (total, node) =>
-      total +
-      node.module.monthlyPrice +
-      node.children.reduce((sum, child) => sum + child.monthlyPrice, 0),
-    0,
-  );
   const usage = deleting ? getModuleUsage(state, deleting.id) : null;
   const parentsWithChildren = tree
     .filter((node) => node.children.length > 0)
@@ -122,9 +118,8 @@ function ModulesCatalog() {
       })
     : tree;
 
-  function planCount(moduleId: string) {
-    return state.plans.filter((plan) => plan.moduleIds.includes(moduleId))
-      .length;
+  function organizationCount(moduleId: string) {
+    return getModuleOrganizationCount(state, moduleId);
   }
 
   function toggle(moduleId: string) {
@@ -144,7 +139,7 @@ function ModulesCatalog() {
     <>
       <PageHeader
         title="Modules"
-        description="The catalog plans are built from, as a tree: each module with the sub-modules under it. Brands and Brokerages have separate catalogs; the same slug can exist in both as different modules. Seeded from the modules caboodle.web checks today."
+        description="The catalog the Platform Admin enables modules from, as a tree: each module with the sub-modules under it, and the actions it supports. Brands and Brokerages have separate catalogs; the same slug can exist in both as different modules. Seeded from the modules caboodle.web checks today."
         actions={
           <Button
             size="sm"
@@ -171,8 +166,11 @@ function ModulesCatalog() {
         />
         <p className="text-sm text-muted-foreground">
           {pluralize(tree.length, "module")} ·{" "}
-          {pluralize(subCount, "sub-module")} · everything at list price{" "}
-          {formatCurrency(listTotal)}/mo
+          {pluralize(subCount, "sub-module")} ·{" "}
+          {pluralize(
+            state.organizations.filter((org) => org.type === audience).length,
+            audience === "brand" ? "Brand" : "Brokerage",
+          )}
         </p>
       </div>
 
@@ -222,8 +220,8 @@ function ModulesCatalog() {
           >
             <span className="pl-8">Module</span>
             <span className="hidden md:block">Group</span>
-            <span className="hidden text-right md:block">In plans</span>
-            <span className="text-right">Price</span>
+            <span className="hidden text-right md:block">Organizations</span>
+            <span className="text-right">Actions</span>
             <span />
           </div>
           <ul>
@@ -245,7 +243,7 @@ function ModulesCatalog() {
                         ? () => toggle(entry.id)
                         : undefined
                     }
-                    planCount={planCount(entry.id)}
+                    organizationCount={organizationCount(entry.id)}
                     onEdit={() => setDialog({ kind: "edit", entry })}
                     onAddChild={() =>
                       setDialog({
@@ -255,7 +253,6 @@ function ModulesCatalog() {
                       })
                     }
                     onDelete={() => setDeleting(entry)}
-                    actorUserId={user?.id ?? ""}
                   />
                   {open && (children.length > 0 || showAdd) ? (
                     <ul aria-label={`Sub-modules of ${entry.name}`}>
@@ -264,12 +261,11 @@ function ModulesCatalog() {
                           <TreeRow
                             entry={child}
                             last={!showAdd && index === children.length - 1}
-                            planCount={planCount(child.id)}
+                            organizationCount={organizationCount(child.id)}
                             onEdit={() =>
                               setDialog({ kind: "edit", entry: child })
                             }
                             onDelete={() => setDeleting(child)}
-                            actorUserId={user?.id ?? ""}
                           />
                         </li>
                       ))}
@@ -314,17 +310,19 @@ function ModulesCatalog() {
             <AlertDialogTitle>Delete {deleting?.name}?</AlertDialogTitle>
             <AlertDialogDescription>
               {usage &&
-              (usage.plans > 0 || usage.members > 0 || usage.subModules > 0)
-                ? `It comes out of ${pluralize(usage.plans, "plan")}${
-                    usage.members > 0
-                      ? ` and ${pluralize(usage.members, "member's grants", "members' grants")}`
+              (usage.organizations > 0 ||
+                usage.grants > 0 ||
+                usage.subModules > 0)
+                ? `It is disabled for ${pluralize(usage.organizations, "organization")}${
+                    usage.grants > 0
+                      ? ` and removed from ${pluralize(usage.grants, "custom brand access", "custom brand accesses")}`
                       : ""
                   }${
                     usage.subModules > 0
                       ? `, together with its ${pluralize(usage.subModules, "sub-module")}`
                       : ""
-                  }. Organizations on those plans lose it straight away.`
-                : "Nothing uses it yet, so nobody loses anything."}
+                  }. Everyone in those organizations loses it straight away.`
+                : "No organization has it enabled, so nobody loses anything."}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -366,11 +364,10 @@ function TreeRow({
   connectorBelow = false,
   last = false,
   onToggle,
-  planCount,
+  organizationCount,
   onEdit,
   onAddChild,
   onDelete,
-  actorUserId,
 }: {
   entry: PlatformModule;
   childCount?: number;
@@ -380,11 +377,10 @@ function TreeRow({
   /** The last sub-module: its line stops at the elbow. */
   last?: boolean;
   onToggle?: () => void;
-  planCount: number;
+  organizationCount: number;
   onEdit: () => void;
   onAddChild?: () => void;
   onDelete: () => void;
-  actorUserId: string;
 }) {
   const isChild = Boolean(entry.parentId);
 
@@ -490,10 +486,10 @@ function TreeRow({
         ) : null}
       </div>
       <span className="hidden text-right text-sm text-muted-foreground md:block">
-        {planCount}
+        {organizationCount}
       </span>
       <div className="justify-self-end">
-        <PriceCell entry={entry} actorUserId={actorUserId} />
+        <ActionsCell entry={entry} onEdit={onEdit} />
       </div>
       <DropdownMenu>
         <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" />}>
@@ -550,99 +546,56 @@ function AddChildRow({
   );
 }
 
-/** Click the price to change it in place. Enter saves, Escape cancels. */
-function PriceCell({
+/** One letter per action: view, create, update, delete, import, export. */
+const ACTION_LETTER: Record<ModuleAction, string> = {
+  view: "V",
+  create: "C",
+  update: "U",
+  delete: "D",
+  import: "I",
+  export: "X",
+};
+
+/**
+ * The actions this module supports, one letter each. Clicking opens the
+ * editor, where they are changed.
+ */
+function ActionsCell({
   entry,
-  actorUserId,
+  onEdit,
 }: {
   entry: PlatformModule;
-  actorUserId: string;
+  onEdit: () => void;
 }) {
-  const [editing, setEditing] = useState(false);
-  const [value, setValue] = useState(String(entry.monthlyPrice));
-  const [saving, setSaving] = useState(false);
-  // Enter submits and then the input blurs; Escape closes and then blurs.
-  // Either way only the first of the two may act.
-  const settled = useRef(false);
-
-  function start() {
-    settled.current = false;
-    setValue(String(entry.monthlyPrice));
-    setEditing(true);
-  }
-
-  function cancel() {
-    settled.current = true;
-    setEditing(false);
-  }
-
-  async function save() {
-    if (settled.current) return;
-    settled.current = true;
-    const next = Number(value);
-    if (value.trim() === "" || next === entry.monthlyPrice) {
-      setEditing(false);
-      return;
-    }
-    setSaving(true);
-    try {
-      await updateModule(entry.id, { monthlyPrice: next }, actorUserId);
-      toast.success("Price updated", {
-        description: `${entry.name}: ${formatCurrency(next)}/mo. Plans priced by module follow automatically.`,
-      });
-      setEditing(false);
-    } catch (caught) {
-      toast.error(
-        caught instanceof ModuleError
-          ? caught.message
-          : "Could not update the price",
-      );
-      // Leave the field open so the value can be corrected.
-      settled.current = false;
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  if (!editing) {
-    return (
-      <button
-        type="button"
-        onClick={start}
-        className="group inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-sm tabular-nums hover:bg-accent"
-        aria-label={`Edit price of ${entry.name}`}
-      >
-        {formatCurrency(entry.monthlyPrice)}
-        <span className="text-xs text-muted-foreground">/mo</span>
-        <Pencil className="size-3 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
-      </button>
-    );
-  }
-
   return (
-    <form
-      className="inline-flex items-center justify-end gap-1"
-      onSubmit={(event) => {
-        event.preventDefault();
-        void save();
-      }}
-    >
-      <span className="text-sm text-muted-foreground">$</span>
-      <Input
-        autoFocus
-        type="number"
-        min={0}
-        inputMode="decimal"
-        value={value}
-        disabled={saving}
-        onChange={(event) => setValue(event.target.value)}
-        onBlur={() => void save()}
-        onKeyDown={(event) => {
-          if (event.key === "Escape") cancel();
-        }}
-        className="h-7 w-20 text-right tabular-nums"
-        aria-label={`Monthly price of ${entry.name}`}
-      />
-    </form>
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <button
+            type="button"
+            onClick={onEdit}
+            className="rounded-md px-1.5 py-0.5 font-mono text-xs tracking-wider transition-colors hover:bg-accent"
+            aria-label={`Available actions in ${entry.name}`}
+          />
+        }
+      >
+        {MODULE_ACTIONS.map((action) =>
+          entry.availableActions.includes(action.id) ? (
+            <span key={action.id}>{ACTION_LETTER[action.id]}</span>
+          ) : (
+            <span key={action.id} className="text-muted-foreground/40">
+              ·
+            </span>
+          ),
+        )}
+      </TooltipTrigger>
+      <TooltipContent>
+        {MODULE_ACTIONS.filter((action) =>
+          entry.availableActions.includes(action.id),
+        )
+          .map((action) => action.label)
+          .join(", ")}
+      </TooltipContent>
+    </Tooltip>
   );
 }

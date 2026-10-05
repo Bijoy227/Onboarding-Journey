@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import { ModuleIcon } from "@/components/features/module-icon";
+import { BrandSwitcher } from "@/components/layout/brand-switcher";
 import { NAV_GROUPS, type NavItem } from "@/components/layout/nav-config";
 import { OrganizationSwitcher } from "@/components/layout/organization-switcher";
 import { UserMenu } from "@/components/layout/user-menu";
@@ -26,11 +27,15 @@ import {
   SidebarSeparator,
 } from "@/components/ui/sidebar";
 import { useAppState, useSession } from "@/lib/demo/demo-provider";
-import { buildModuleTree } from "@/lib/permissions/modules";
+import {
+  buildModuleTree,
+  moduleHref,
+  type ModuleNode,
+} from "@/lib/permissions/modules";
+import type { OrganizationType } from "@/types";
 
 function isActiveHref(pathname: string, href: string): boolean {
   if (href === "/organization") return pathname === "/organization";
-  if (href === "/relationships") return pathname === "/relationships";
   if (href === "/modules") return pathname === "/modules";
   return pathname === href || pathname.startsWith(`${href}/`);
 }
@@ -38,12 +43,26 @@ function isActiveHref(pathname: string, href: string): boolean {
 export function AppSidebar() {
   const pathname = usePathname();
   const state = useAppState();
-  const { organization, can, isPlatformAdmin, entitledModules, moduleAccess } =
-    useSession();
+  const {
+    organization,
+    can,
+    isPlatformAdmin,
+    availableModules,
+    moduleAccess,
+    activeBrand,
+  } = useSession();
 
-  /** Only modules this member can open, never the whole plan. */
+  /**
+   * Only modules this person can open on the active Brand. In a Brokerage the
+   * Brokerage's own tools come first, then the Brand's modules, listed under
+   * the Brand's name.
+   */
+  const usable = availableModules.filter((entry) => moduleAccess[entry.id]);
   const moduleTree = buildModuleTree(
-    entitledModules.filter((entry) => moduleAccess[entry.id]),
+    usable.filter((entry) => entry.audience === organization?.type),
+  );
+  const brandModuleTree = buildModuleTree(
+    usable.filter((entry) => entry.audience !== organization?.type),
   );
 
   const pendingCounts = {
@@ -52,13 +71,6 @@ export function AppSidebar() {
           (request) =>
             request.organizationId === organization.id &&
             request.status === "pending",
-        ).length
-      : 0,
-    relationshipRequests: organization
-      ? state.relationships.filter(
-          (relationship) =>
-            relationship.targetOrganizationId === organization.id &&
-            relationship.status === "pending",
         ).length
       : 0,
     invitations: organization
@@ -76,6 +88,8 @@ export function AppSidebar() {
    */
   const visibleItems = (items: NavItem[]) =>
     items.filter((item) => {
+      if (item.organizationType && item.organizationType !== organization?.type)
+        return false;
       if (!item.permission) return true;
       if (!organization) return false;
       return can(item.permission);
@@ -85,6 +99,7 @@ export function AppSidebar() {
     <Sidebar collapsible="icon">
       <SidebarHeader>
         <OrganizationSwitcher />
+        <BrandSwitcher />
       </SidebarHeader>
 
       <SidebarContent>
@@ -97,7 +112,23 @@ export function AppSidebar() {
             : visibleItems(group.items);
           if (items.length === 0) return null;
 
-          return (
+          const brandGroup =
+            group.modules && brandModuleTree.length > 0 && activeBrand ? (
+              <SidebarGroup key="brand-modules">
+                <SidebarGroupLabel>{activeBrand.brand.name}</SidebarGroupLabel>
+                <SidebarGroupContent>
+                  <SidebarMenu>
+                    <ModuleTreeItems
+                      tree={brandModuleTree}
+                      pathname={pathname}
+                      workspaceType={organization?.type}
+                    />
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              </SidebarGroup>
+            ) : null;
+
+          return [
             <SidebarGroup key={group.label ?? "root"}>
               {group.label ? (
                 <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
@@ -122,51 +153,18 @@ export function AppSidebar() {
                       </SidebarMenuItem>
                     );
                   })}
-                  {group.modules
-                    ? moduleTree.map(({ module: entry, children }) => {
-                        const href = `/modules/${entry.slug}`;
-                        // Sub-modules unfold only while you're inside the module.
-                        const open =
-                          pathname === href ||
-                          children.some(
-                            (child) => pathname === `/modules/${child.slug}`,
-                          );
-                        return (
-                          <SidebarMenuItem key={entry.id}>
-                            <SidebarMenuButton
-                              isActive={pathname === href}
-                              tooltip={entry.name}
-                              render={<Link href={href} />}
-                            >
-                              <ModuleIcon entry={entry} className="size-4" />
-                              <span>{entry.name}</span>
-                            </SidebarMenuButton>
-                            {open && children.length > 0 ? (
-                              <SidebarMenuSub>
-                                {children.map((child) => (
-                                  <SidebarMenuSubItem key={child.id}>
-                                    <SidebarMenuSubButton
-                                      isActive={
-                                        pathname === `/modules/${child.slug}`
-                                      }
-                                      render={
-                                        <Link href={`/modules/${child.slug}`} />
-                                      }
-                                    >
-                                      <span>{child.name}</span>
-                                    </SidebarMenuSubButton>
-                                  </SidebarMenuSubItem>
-                                ))}
-                              </SidebarMenuSub>
-                            ) : null}
-                          </SidebarMenuItem>
-                        );
-                      })
-                    : null}
+                  {group.modules ? (
+                    <ModuleTreeItems
+                      tree={moduleTree}
+                      pathname={pathname}
+                      workspaceType={organization?.type}
+                    />
+                  ) : null}
                 </SidebarMenu>
               </SidebarGroupContent>
-            </SidebarGroup>
-          );
+            </SidebarGroup>,
+            brandGroup,
+          ];
         })}
       </SidebarContent>
 
@@ -177,4 +175,49 @@ export function AppSidebar() {
       <SidebarRail />
     </Sidebar>
   );
+}
+
+/** Modules and, while inside one, its sub-modules. */
+function ModuleTreeItems({
+  tree,
+  pathname,
+  workspaceType,
+}: {
+  tree: ModuleNode[];
+  pathname: string;
+  workspaceType: OrganizationType | undefined;
+}) {
+  return tree.map(({ module: entry, children }) => {
+    const href = moduleHref(entry, workspaceType);
+    // Sub-modules unfold only while you're inside the module.
+    const open =
+      pathname === href ||
+      children.some((child) => pathname === moduleHref(child, workspaceType));
+    return (
+      <SidebarMenuItem key={entry.id}>
+        <SidebarMenuButton
+          isActive={pathname === href}
+          tooltip={entry.name}
+          render={<Link href={href} />}
+        >
+          <ModuleIcon entry={entry} className="size-4" />
+          <span>{entry.name}</span>
+        </SidebarMenuButton>
+        {open && children.length > 0 ? (
+          <SidebarMenuSub>
+            {children.map((child) => (
+              <SidebarMenuSubItem key={child.id}>
+                <SidebarMenuSubButton
+                  isActive={pathname === moduleHref(child, workspaceType)}
+                  render={<Link href={moduleHref(child, workspaceType)} />}
+                >
+                  <span>{child.name}</span>
+                </SidebarMenuSubButton>
+              </SidebarMenuSubItem>
+            ))}
+          </SidebarMenuSub>
+        ) : null}
+      </SidebarMenuItem>
+    );
+  });
 }

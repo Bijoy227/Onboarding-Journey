@@ -32,7 +32,7 @@ import type { OrganizationType, User } from "@/types";
  *
  * Note what this form does NOT ask for: a "Brand Owner" or a "Broker user". The
  * organization is the business entity; the person creating it simply becomes
- * its first Organization Admin.
+ * its first admin (Brand Admin or Brokerage Admin).
  */
 export default function CreateOrganizationPage() {
   const user = useVerifiedUser();
@@ -61,7 +61,8 @@ function CreateOrganizationForm({ user }: { user: User }) {
         name,
         type,
         domain,
-        createdByUserId: user.id,
+        actorUserId: user.id,
+        creatorJoinsAsAdmin: true,
       });
       switchOrganization(organization.id);
       router.push(`/onboarding/verify-domain/${organization.id}`);
@@ -82,7 +83,9 @@ function CreateOrganizationForm({ user }: { user: User }) {
         <CardHeader>
           <CardTitle className="text-xl">Create your organization</CardTitle>
           <CardDescription>
-            You&apos;ll become its first Organization Admin automatically.
+            You&apos;ll become its first{" "}
+            {type === "brand" ? "Brand Admin" : "Brokerage Admin"}{" "}
+            automatically.
           </CardDescription>
         </CardHeader>
         <CardContent>

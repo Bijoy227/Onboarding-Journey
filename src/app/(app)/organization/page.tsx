@@ -1,10 +1,12 @@
 "use client";
 
-import { Building2, Globe, Link2, Users } from "lucide-react";
+import { Blocks, Building2, Globe, Link2, Users } from "lucide-react";
 
 import { LinkButton } from "@/components/common/link-button";
 import { OrganizationAvatar } from "@/components/common/avatars";
 import {
+  BrandAccessBadge,
+  ConnectionStatusBadge,
   DomainStatusBadge,
   MembershipStatusBadge,
   OrganizationStatusBadge,
@@ -15,6 +17,7 @@ import { PermissionGuard } from "@/components/common/permission-guard";
 import { EmptyState, PageHeader } from "@/components/common/states";
 import {
   Card,
+  CardAction,
   CardContent,
   CardDescription,
   CardHeader,
@@ -22,6 +25,11 @@ import {
 } from "@/components/ui/card";
 import { useAppState, useSession } from "@/lib/demo/demo-provider";
 import { formatDate, pluralize } from "@/lib/format";
+import { buildModuleTree } from "@/lib/permissions/modules";
+import {
+  getConnectedOrganization,
+  getConnectionsForOrganization,
+} from "@/lib/services/connection-service";
 
 export default function OrganizationOverviewPage() {
   return (
@@ -33,7 +41,7 @@ export default function OrganizationOverviewPage() {
 
 function OrganizationOverview() {
   const state = useAppState();
-  const { organization, can } = useSession();
+  const { organization, can, enabledModules, brands } = useSession();
 
   if (!organization) return null;
 
@@ -47,25 +55,8 @@ function OrganizationOverview() {
     (domain) => domain.organizationId === organization.id,
   );
 
-  const relationships = state.relationships.filter(
-    (relationship) =>
-      (relationship.sourceOrganizationId === organization.id ||
-        relationship.targetOrganizationId === organization.id) &&
-      relationship.status === "active",
-  );
-
-  /** A brokerage that manages this brand outright, if one does. */
-  const managedBy = state.relationships.find(
-    (relationship) =>
-      relationship.targetOrganizationId === organization.id &&
-      relationship.type === "brokerage_manages_brand" &&
-      relationship.status === "active",
-  );
-  const managerOrganization = managedBy
-    ? state.organizations.find(
-        (org) => org.id === managedBy.sourceOrganizationId,
-      )
-    : undefined;
+  const connections = getConnectionsForOrganization(state, organization.id);
+  const enabledTree = buildModuleTree(enabledModules);
 
   return (
     <>
@@ -96,48 +87,34 @@ function OrganizationOverview() {
             <p className="text-sm text-muted-foreground">
               Created {formatDate(organization.createdAt)} ·{" "}
               {pluralize(memberships.length, "member")} ·{" "}
-              {pluralize(relationships.length, "connected organization")}
+              {pluralize(connections.length, "connection")} ·{" "}
+              {pluralize(enabledModules.length, "module")} enabled
             </p>
           </div>
         </CardContent>
       </Card>
 
-      {managerOrganization ? (
-        <Card className="border-violet-500/30">
-          <CardHeader>
-            <CardTitle className="text-base">
-              Managed by {managerOrganization.name}
-            </CardTitle>
-            <CardDescription>
-              This brand is operated by a brokerage rather than by its own
-              members. A Brand does not need a &ldquo;Brand Owner&rdquo; user to
-              exist in Caboodle.
-            </CardDescription>
-          </CardHeader>
-        </Card>
-      ) : null}
-
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
-          <CardHeader className="flex-row items-center justify-between space-y-0">
-            <div>
-              <CardTitle className="text-base">Members</CardTitle>
-              <CardDescription>
-                People with a membership in {organization.name}.
-              </CardDescription>
-            </div>
-            {can("member.view") ? (
-              <LinkButton variant="ghost" size="sm" href="/organization/members">
-                View all
-              </LinkButton>
-            ) : null}
+          <CardHeader>
+            <CardTitle className="text-base">Members</CardTitle>
+            <CardDescription>
+              People with a membership in {organization.name}.
+            </CardDescription>
+            <CardAction>
+              {can("member.view") ? (
+                <LinkButton variant="ghost" size="sm" href="/organization/members">
+                  View all
+                </LinkButton>
+              ) : null}
+            </CardAction>
           </CardHeader>
           <CardContent>
             {memberships.length === 0 ? (
               <EmptyState
                 icon={Users}
                 title="No direct members"
-                description="This organization is managed through a relationship rather than by its own members."
+                description="A Brand doesn't need members of its own: a connected brokerage can run it."
               />
             ) : (
               <ul className="space-y-3">
@@ -177,18 +154,18 @@ function OrganizationOverview() {
 
         <div className="space-y-6">
           <Card>
-            <CardHeader className="flex-row items-center justify-between space-y-0">
-              <div>
-                <CardTitle className="text-base">Domains</CardTitle>
-                <CardDescription>
-                  Verified domains power organization discovery.
-                </CardDescription>
-              </div>
-              {can("domain.view") ? (
-                <LinkButton variant="ghost" size="sm" href="/organization/domains">
-                  Manage
-                </LinkButton>
-              ) : null}
+            <CardHeader>
+              <CardTitle className="text-base">Domains</CardTitle>
+              <CardDescription>
+                Verified domains power organization discovery.
+              </CardDescription>
+              <CardAction>
+                {can("domain.view") ? (
+                  <LinkButton variant="ghost" size="sm" href="/organization/domains">
+                    Manage
+                  </LinkButton>
+                ) : null}
+              </CardAction>
             </CardHeader>
             <CardContent>
               {domains.length === 0 ? (
@@ -212,73 +189,145 @@ function OrganizationOverview() {
           </Card>
 
           <Card>
-            <CardHeader className="flex-row items-center justify-between space-y-0">
-              <div>
-                <CardTitle className="text-base">
-                  Connected organizations
-                </CardTitle>
-                <CardDescription>
-                  {organization.type === "brand"
-                    ? "Brokerages representing this brand."
-                    : "Brands this brokerage works with."}
-                </CardDescription>
-              </div>
-              {can("relationship.view") ? (
-                <LinkButton variant="ghost" size="sm" href="/relationships">
-                  View all
+            <CardHeader>
+              <CardTitle className="text-base">Enabled modules</CardTitle>
+              <CardDescription>
+                Set by the Platform Admin. Nobody in {organization.name} can
+                go above this list.
+                {organization.type === "brokerage"
+                  ? " On each connected Brand you also get that Brand's enabled modules."
+                  : " Connected brokerages get these too when they work on this Brand."}
+              </CardDescription>
+              <CardAction>
+                <LinkButton variant="ghost" size="sm" href="/modules">
+                  View
                 </LinkButton>
-              ) : null}
+              </CardAction>
             </CardHeader>
             <CardContent>
-              {relationships.length === 0 ? (
-                <EmptyState icon={Link2} title="No connections yet" />
+              {enabledTree.length === 0 ? (
+                <EmptyState
+                  icon={Blocks}
+                  title="No modules yet"
+                  description="A new organization starts with none until the Platform Admin enables some."
+                />
               ) : (
-                <ul className="space-y-2">
-                  {relationships.map((relationship) => {
-                    const otherId =
-                      relationship.sourceOrganizationId === organization.id
-                        ? relationship.targetOrganizationId
-                        : relationship.sourceOrganizationId;
-                    const other = state.organizations.find(
-                      (org) => org.id === otherId,
-                    );
-                    if (!other) return null;
-                    return (
-                      <li
-                        key={relationship.id}
-                        className="flex items-center gap-3 rounded-lg border p-3"
-                      >
-                        <OrganizationAvatar
-                          organization={other}
-                          className="size-7 text-[10px]"
-                        />
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-medium">
-                            {other.name}
-                          </p>
-                          <p className="truncate text-xs text-muted-foreground">
-                            {relationship.type === "brokerage_manages_brand"
-                              ? "Managed brand"
-                              : (relationship.regions?.join(", ") ??
-                                "Represents brand")}
-                          </p>
-                        </div>
-                        <OrganizationTypeBadge type={other.type} />
-                      </li>
-                    );
-                  })}
-                </ul>
+                <div className="flex flex-wrap gap-1.5">
+                  {enabledTree.map(({ module: entry, children }) => (
+                    <span
+                      key={entry.id}
+                      className="rounded-md border px-2 py-1 text-xs"
+                    >
+                      {entry.name}
+                      {children.length > 0 ? (
+                        <span className="text-muted-foreground">
+                          {" "}
+                          +{children.length}
+                        </span>
+                      ) : null}
+                    </span>
+                  ))}
+                </div>
               )}
             </CardContent>
           </Card>
+
+          {can("connection.view") ? (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">
+                  {organization.type === "brand" ? "Brokerages" : "Brands"}
+                </CardTitle>
+                <CardDescription>
+                  {organization.type === "brand"
+                    ? "Brokerages working with this Brand, connected by the Platform Admin."
+                    : "Brands connected to this brokerage by the Platform Admin."}
+                </CardDescription>
+                <CardAction>
+                  <LinkButton variant="ghost" size="sm" href="/connections">
+                    View all
+                  </LinkButton>
+                </CardAction>
+              </CardHeader>
+              <CardContent>
+                {connections.length === 0 ? (
+                  <EmptyState icon={Link2} title="No connections yet" />
+                ) : (
+                  <ul className="space-y-2">
+                    {connections.map((connection) => {
+                      const other = getConnectedOrganization(
+                        state,
+                        connection,
+                        organization.id,
+                      );
+                      if (!other) return null;
+                      return (
+                        <li
+                          key={connection.id}
+                          className="flex items-center gap-3 rounded-lg border p-3"
+                        >
+                          <OrganizationAvatar
+                            organization={other}
+                            className="size-7 text-[10px]"
+                          />
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-medium">
+                              {other.name}
+                            </p>
+                            <p className="truncate text-xs text-muted-foreground">
+                              {connection.regions?.join(", ") || "No region set"}
+                            </p>
+                          </div>
+                          <ConnectionStatusBadge status={connection.status} />
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </CardContent>
+            </Card>
+          ) : organization.type === "brokerage" ? (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Your brands</CardTitle>
+                <CardDescription>
+                  The connected Brands you are assigned to. Your role
+                  doesn&apos;t show the brokerage&apos;s whole portfolio.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {brands.length === 0 ? (
+                  <EmptyState icon={Link2} title="No brands assigned yet" />
+                ) : (
+                  <ul className="space-y-2">
+                    {brands.map((entry) => (
+                      <li
+                        key={entry.brand.id}
+                        className="flex items-center gap-3 rounded-lg border p-3"
+                      >
+                        <OrganizationAvatar
+                          organization={entry.brand}
+                          className="size-7 text-[10px]"
+                        />
+                        <p className="min-w-0 flex-1 truncate text-sm font-medium">
+                          {entry.brand.name}
+                        </p>
+                        <BrandAccessBadge kind={entry.kind} />
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </CardContent>
+            </Card>
+          ) : null}
         </div>
       </div>
 
-      {memberships.length === 0 && !managerOrganization ? (
+      {memberships.length === 0 ? (
         <EmptyState
           icon={Building2}
           title="This organization has no members"
-          description="It can still exist, hold domains and take part in relationships."
+          description="It can still exist, hold domains, have modules enabled and be connected to brokerages."
         />
       ) : null}
     </>

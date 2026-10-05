@@ -37,6 +37,7 @@ export async function signIn(email: string): Promise<Session> {
   const session: Session = {
     userId: user.id,
     organizationId: organizations[0]?.id ?? null,
+    brandId: null,
   };
 
   demoStore.setSession(session);
@@ -98,7 +99,7 @@ export async function signUp(input: {
     return created;
   });
 
-  demoStore.setSession({ userId: user.id, organizationId: null });
+  demoStore.setSession({ userId: user.id, organizationId: null, brandId: null });
   return user;
 }
 
@@ -168,11 +169,46 @@ export async function discardUnverifiedAccount(userId: string): Promise<void> {
   demoStore.setSession(null);
 }
 
-/** Switches which organization the signed-in user is currently looking at. */
+/**
+ * Switches which organization the signed-in user acts through (the
+ * OrganizationID header). The active Brand starts over in the new workspace.
+ */
 export function switchOrganization(organizationId: string | null): void {
   const session = demoStore.getSession();
   if (!session) return;
-  demoStore.setSession({ ...session, organizationId });
+  demoStore.setSession({ ...session, organizationId, brandId: null });
+}
+
+/** Switches the active Brand (the BrandID header) inside the workspace. */
+export function switchBrand(brandId: string): void {
+  const session = demoStore.getSession();
+  if (!session) return;
+  demoStore.setSession({ ...session, brandId });
+}
+
+/**
+ * The Platform Admin opens a customer organization for support. The resolver
+ * gives full access there, and the visit is written to the audit log.
+ */
+export function openSupportWorkspace(
+  organizationId: string,
+  actorUserId: string,
+): void {
+  demoStore.mutate((draft) => {
+    const organization = draft.organizations.find(
+      (org) => org.id === organizationId,
+    );
+    recordEvent(draft, {
+      action: "support.opened",
+      description: `${
+        draft.users.find((user) => user.id === actorUserId)?.name ?? "Someone"
+      } opened ${organization?.name ?? "an organization"} with support access`,
+      actorUserId,
+      organizationId,
+      isSupportAccess: true,
+    });
+  });
+  switchOrganization(organizationId);
 }
 
 /** Restores the original demo data and signs out. */

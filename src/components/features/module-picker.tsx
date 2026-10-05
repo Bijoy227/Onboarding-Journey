@@ -3,12 +3,11 @@
 import { Checkbox } from "@/components/ui/checkbox";
 import { ModuleAvatar } from "@/components/features/module-icon";
 import type { ModuleNode } from "@/lib/permissions/modules";
-import { formatCurrency } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { PlatformModule } from "@/types";
 
 /**
- * Pick modules and sub-modules for a plan.
+ * Pick the modules and sub-modules an organization has enabled.
  *
  * Ticking a sub-module ticks its module too, and unticking a module drops its
  * sub-modules, so the selection always matches how access resolves.
@@ -17,13 +16,11 @@ export function ModulePicker({
   tree,
   value,
   onChange,
-  showPrices = true,
   disabled,
 }: {
   tree: ModuleNode[];
   value: string[];
   onChange: (moduleIds: string[]) => void;
-  showPrices?: boolean;
   disabled?: boolean;
 }) {
   const selected = new Set(value);
@@ -79,7 +76,6 @@ export function ModulePicker({
                       onCheckedChange={(checked) =>
                         toggle(node.module, checked)
                       }
-                      showPrice={showPrices}
                       disabled={disabled}
                     />
                     {childCount > 0 ? (
@@ -109,7 +105,6 @@ export function ModulePicker({
                             onCheckedChange={(checked) =>
                               toggle(child, checked)
                             }
-                            showPrice={showPrices}
                             disabled={disabled}
                             compact
                           />
@@ -130,14 +125,12 @@ function PickerRow({
   entry,
   checked,
   onCheckedChange,
-  showPrice,
   disabled,
   compact,
 }: {
   entry: PlatformModule;
   checked: boolean;
   onCheckedChange: (checked: boolean) => void;
-  showPrice: boolean;
   disabled?: boolean;
   compact?: boolean;
 }) {
@@ -173,18 +166,6 @@ function PickerRow({
           </span>
         ) : null}
       </span>
-      {showPrice ? (
-        <span
-          className={cn(
-            "shrink-0 tabular-nums text-muted-foreground",
-            compact ? "text-xs" : "text-sm",
-            checked && "text-foreground",
-          )}
-        >
-          {formatCurrency(entry.monthlyPrice)}
-          <span className="text-xs text-muted-foreground">/mo</span>
-        </span>
-      ) : null}
     </label>
   );
 }

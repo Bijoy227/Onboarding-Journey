@@ -1,5 +1,10 @@
 import { createId, delay, demoStore } from "@/lib/mock/store";
+import { getRole } from "@/lib/permissions/permissions";
 import { nameOf, orgNameOf, recordEvent } from "@/lib/services/audit-service";
+import {
+  getAssignableBrandIds,
+  syncBrandAccessForRole,
+} from "@/lib/services/brand-access-service";
 import { domainFromEmail } from "@/lib/services/organization-service";
 import type { Invitation, Membership, User } from "@/types";
 
@@ -25,10 +30,15 @@ export function isExternalEmail(email: string, organizationId: string): boolean 
     );
 }
 
+/**
+ * Invites someone into an organization with a role. A Broker invitation can
+ * name the connected Brands to assign on acceptance, each starting at Full.
+ */
 export async function inviteMember(input: {
   email: string;
   organizationId: string;
   roleId: string;
+  brandOrganizationIds?: string[];
   invitedByUserId: string;
 }): Promise<Invitation> {
   await delay();
@@ -65,6 +75,28 @@ export async function inviteMember(input: {
     throw new InvitationError("That person is already a member.");
   }
 
+  const organization = state.organizations.find(
+    (org) => org.id === input.organizationId,
+  );
+  const role = getRole(state, input.roleId);
+  if (!organization || role?.organizationType !== organization.type) {
+    throw new InvitationError("Choose a role for this organization.");
+  }
+
+  // Admins get every Brand by role, and a Brand member gets their own Brand,
+  // so only a Broker invitation lists Brands.
+  const brandOrganizationIds =
+    organization.type === "brokerage" && !role.hasFullBrandAccess
+      ? Array.from(new Set(input.brandOrganizationIds ?? []))
+      : [];
+  const assignable = getAssignableBrandIds(state, organization.id);
+  const notConnected = brandOrganizationIds.filter((id) => !assignable.has(id));
+  if (notConnected.length > 0) {
+    throw new InvitationError(
+      "Only Brands actively connected to this Brokerage can be assigned.",
+    );
+  }
+
   return demoStore.mutate((draft) => {
     const now = new Date();
     const invitation: Invitation = {
@@ -72,6 +104,8 @@ export async function inviteMember(input: {
       email,
       organizationId: input.organizationId,
       roleId: input.roleId,
+      brandOrganizationIds:
+        brandOrganizationIds.length > 0 ? brandOrganizationIds : undefined,
       invitedByUserId: input.invitedByUserId,
       status: "pending",
       token: createId("token"),
@@ -86,7 +120,13 @@ export async function inviteMember(input: {
       description: `${nameOf(draft, input.invitedByUserId)} invited ${email} to ${orgNameOf(
         draft,
         input.organizationId,
-      )}`,
+      )}${
+        brandOrganizationIds.length > 0
+          ? `, assigned to ${brandOrganizationIds
+              .map((id) => orgNameOf(draft, id))
+              .join(", ")}`
+          : ""
+      }`,
       actorUserId: input.invitedByUserId,
       organizationId: input.organizationId,
     });
@@ -156,7 +196,9 @@ export function getInvitationByToken(token: string): Invitation | undefined {
 }
 
 /**
- * Accepts an invitation and creates the membership.
+ * Accepts an invitation and creates the membership, plus its Brand Access:
+ * the Brand itself for a Brand member, or each listed Brand that is still
+ * actively connected for a Broker.
  *
  * If nobody has signed up with that email yet, the account is created here so
  * the demo can walk straight through the invite link without a signup detour.
@@ -230,6 +272,12 @@ export async function acceptInvitation(
     draft.memberships = existing
       ? draft.memberships.map((item) => (item.id === existing.id ? membership : item))
       : [...draft.memberships, membership];
+    syncBrandAccessForRole(
+      draft,
+      membership,
+      invitation.invitedByUserId,
+      invitation.brandOrganizationIds,
+    );
 
     draft.invitations = draft.invitations.map((item) =>
       item.id === invitation.id ? { ...item, status: "accepted" as const } : item,

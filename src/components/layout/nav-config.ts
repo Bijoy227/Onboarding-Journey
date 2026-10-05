@@ -1,20 +1,16 @@
 import {
   Blocks,
   Building2,
+  Cable,
   ClipboardList,
-  CreditCard,
   Globe,
   GitCompareArrows,
   KeyRound,
-  Layers,
   LayoutDashboard,
   LayoutGrid,
   Link2,
   Mail,
-  Network,
-  Receipt,
   ScrollText,
-  Search,
   Settings,
   ShieldCheck,
   Users,
@@ -22,7 +18,7 @@ import {
   Workflow,
 } from "lucide-react";
 
-import type { PermissionId } from "@/types";
+import type { OrganizationType, PermissionId } from "@/types";
 
 export type NavItem = {
   title: string;
@@ -30,8 +26,10 @@ export type NavItem = {
   icon: React.ComponentType<{ className?: string }>;
   /** Hidden from the sidebar when the current membership lacks this. */
   permission?: PermissionId;
+  /** Only shown in workspaces of this organization type. */
+  organizationType?: OrganizationType;
   /** Which pending queue drives the count bubble, if any. */
-  badge?: "accessRequests" | "relationshipRequests" | "invitations";
+  badge?: "accessRequests" | "invitations";
 };
 
 export type NavGroup = {
@@ -40,8 +38,9 @@ export type NavGroup = {
   /** Only rendered for Caboodle platform administrators. */
   platformAdmin?: boolean;
   /**
-   * The subscribed modules the member can use are listed after `items`. They
-   * come from the plan and the member's grants, so they can't be static.
+   * The modules the person can use on the active Brand are listed after
+   * `items`. They come from the organization's enabled modules and the
+   * person's role or Brand Access, so they can't be static.
    */
   modules?: boolean;
 };
@@ -49,9 +48,9 @@ export type NavGroup = {
 /**
  * The application navigation.
  *
- * Identity, organizations, access and relationships are static. Business
- * modules (CRM, trade spend, product specs, ...) are listed per member, from
- * the organization's plan and that member's module grants.
+ * Identity, organizations, connections and access are static. Business
+ * modules (CRM, trade spend, product specs, ...) are listed per person and
+ * per Brand, from the active Brand's module map.
  */
 export const NAV_GROUPS: NavGroup[] = [
   {
@@ -83,7 +82,27 @@ export const NAV_GROUPS: NavGroup[] = [
         title: "Roles",
         href: "/organization/roles",
         icon: ShieldCheck,
-        permission: "role.view",
+        permission: "organization.view",
+      },
+      {
+        title: "Brands",
+        href: "/connections",
+        icon: Link2,
+        permission: "connection.view",
+        organizationType: "brokerage",
+      },
+      {
+        title: "Brokerages",
+        href: "/connections",
+        icon: Link2,
+        permission: "connection.view",
+        organizationType: "brand",
+      },
+      {
+        title: "Brand access",
+        href: "/organization/brand-access",
+        icon: KeyRound,
+        permission: "access.manage",
       },
       {
         title: "Domains",
@@ -92,46 +111,10 @@ export const NAV_GROUPS: NavGroup[] = [
         permission: "domain.view",
       },
       {
-        title: "Module access",
-        href: "/organization/module-access",
-        icon: KeyRound,
-        permission: "module.assign",
-      },
-      {
-        title: "Billing",
-        href: "/organization/billing",
-        icon: CreditCard,
-        permission: "billing.view",
-      },
-      {
         title: "Settings",
         href: "/organization/settings",
         icon: Settings,
         permission: "organization.update",
-      },
-    ],
-  },
-  {
-    label: "Relationships",
-    items: [
-      {
-        title: "Connected organizations",
-        href: "/relationships",
-        icon: Link2,
-        permission: "relationship.view",
-      },
-      {
-        title: "Requests",
-        href: "/relationships/requests",
-        icon: GitCompareArrows,
-        permission: "relationship.view",
-        badge: "relationshipRequests",
-      },
-      {
-        title: "Find organizations",
-        href: "/relationships/find",
-        icon: Search,
-        permission: "relationship.request",
       },
     ],
   },
@@ -159,8 +142,10 @@ export const NAV_GROUPS: NavGroup[] = [
     platformAdmin: true,
     items: [
       { title: "Organizations", href: "/platform/organizations", icon: Building2 },
+      { title: "Connections", href: "/platform/connections", icon: Cable },
+      { title: "Modules", href: "/platform/modules", icon: Blocks },
+      { title: "Roles", href: "/platform/roles", icon: ShieldCheck },
       { title: "Users", href: "/platform/users", icon: Users },
-      { title: "Relationships", href: "/platform/relationships", icon: Network },
       {
         title: "Access requests",
         href: "/platform/access-requests",
@@ -168,9 +153,6 @@ export const NAV_GROUPS: NavGroup[] = [
       },
       { title: "Invitations", href: "/platform/invitations", icon: Mail },
       { title: "Domain verification", href: "/platform/domains", icon: Globe },
-      { title: "Modules", href: "/platform/modules", icon: Blocks },
-      { title: "Plans", href: "/platform/plans", icon: Layers },
-      { title: "Subscriptions", href: "/platform/subscriptions", icon: Receipt },
       { title: "Audit log", href: "/platform/audit-log", icon: ScrollText },
     ],
   },

@@ -145,8 +145,9 @@ export default function DiscoverPage() {
               </AlertDescription>
             </Alert>
             <p className="text-center text-xs text-muted-foreground">
-              In the demo, sign in as an Organization Admin to approve it, then
-              come back.
+              In the demo, sign in as an admin of{" "}
+              {result.kind === "found" ? result.organization.name : "it"} to
+              approve it, then come back.
             </p>
             <LinkButton variant="outline" className="w-full" href="/login">
               Switch demo user

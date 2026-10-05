@@ -2,13 +2,16 @@ import { Check } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
+/**
+ * Self-service onboarding: create an account, verify the email, then join or
+ * create an organization and verify its domain. There are no plan or payment
+ * steps; modules are enabled per organization by the Platform Admin.
+ */
 export const ONBOARDING_STEPS = [
   { id: "account", label: "Account" },
   { id: "verify-email", label: "Verify email" },
   { id: "organization", label: "Organization" },
   { id: "domain", label: "Domain" },
-  { id: "plan", label: "Plan" },
-  { id: "payment", label: "Payment" },
 ] as const;
 
 export type OnboardingStepId = (typeof ONBOARDING_STEPS)[number]["id"];
@@ -16,8 +19,7 @@ export type OnboardingStepId = (typeof ONBOARDING_STEPS)[number]["id"];
 /**
  * Where the person is in the onboarding journey.
  *
- * `steps` narrows the list for shorter journeys, e.g. an existing organization
- * changing its plan only goes through plan and payment.
+ * `steps` narrows the list for shorter journeys.
  */
 export function OnboardingSteps({
   current,

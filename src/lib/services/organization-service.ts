@@ -1,5 +1,5 @@
 import { createId, delay, demoStore } from "@/lib/mock/store";
-import { ROLE_IDS } from "@/lib/permissions/permissions";
+import { adminRoleId } from "@/lib/permissions/permissions";
 import { nameOf, recordEvent } from "@/lib/services/audit-service";
 import type {
   MembershipPolicy,
@@ -70,28 +70,43 @@ export function findDomainOwner(
 }
 
 /**
- * Self-service organization creation.
+ * Creates an organization. Two paths lead here:
  *
- * The creator automatically becomes an Organization Admin. No "Brand Owner" or
- * "Broker User" is requested, because the organization is not represented by a
- * user.
+ * - Self-service: a person creates the organization for their own work email
+ *   domain and becomes its first admin (Brand Admin or Brokerage Admin). No
+ *   "Brand Owner" or "Broker user" is asked for, because the organization is
+ *   not represented by a user.
+ * - The Platform Admin (flow F1): the organization starts with no members, and
+ *   the first admin is invited separately.
+ *
+ * Either way it starts with no modules until the Platform Admin enables some
+ * (decision D4).
  */
 export async function createOrganization(input: {
   name: string;
   type: OrganizationType;
-  domain: string;
-  createdByUserId: string;
+  /** Primary email domain, added unverified. Required for self-service. */
+  domain?: string;
+  description?: string;
   membershipPolicy?: MembershipPolicy;
+  actorUserId: string;
+  /** Self-service: the person creating it becomes its first admin. */
+  creatorJoinsAsAdmin?: boolean;
 }): Promise<Organization> {
   await delay();
 
-  const domain = input.domain.trim().toLowerCase();
   const name = input.name.trim();
+  const domain = input.domain?.trim().toLowerCase() ?? "";
 
   if (!name) throw new OrganizationError("Give the organization a name.");
-  if (!domain) throw new OrganizationError("A work email domain is required.");
+  if (input.creatorJoinsAsAdmin && !domain) {
+    throw new OrganizationError("A work email domain is required.");
+  }
+  if (domain && !domain.includes(".")) {
+    throw new OrganizationError("Enter a valid domain, for example acmefoods.com.");
+  }
 
-  const owner = findDomainOwner(domain);
+  const owner = domain ? findDomainOwner(domain) : undefined;
   if (owner) {
     throw new OrganizationError(
       `${domain} is already associated with ${owner.name}. You cannot claim this domain until ownership is resolved.`,
@@ -105,40 +120,48 @@ export async function createOrganization(input: {
       type: input.type,
       status: "active",
       membershipPolicy: input.membershipPolicy ?? "verified_domain",
+      description: input.description?.trim() || undefined,
       createdAt: new Date().toISOString(),
-      createdByUserId: input.createdByUserId,
-    };
-
-    const organizationDomain: OrganizationDomain = {
-      id: createId("dom"),
-      organizationId: organization.id,
-      domain,
-      verified: false,
-      isPrimary: true,
-      verificationToken: `caboodle-verification=${domain.split(".")[0]}-${Math.floor(
-        100000 + Math.random() * 899999,
-      )}`,
+      createdByUserId: input.actorUserId,
     };
 
     draft.organizations = [...draft.organizations, organization];
-    draft.domains = [...draft.domains, organizationDomain];
-    draft.memberships = [
-      ...draft.memberships,
-      {
-        id: createId("mem"),
-        userId: input.createdByUserId,
+
+    if (domain) {
+      const organizationDomain: OrganizationDomain = {
+        id: createId("dom"),
         organizationId: organization.id,
-        roleId: ROLE_IDS.organizationAdmin,
-        status: "active",
-        source: "created",
-        createdAt: new Date().toISOString(),
-      },
-    ];
+        domain,
+        verified: false,
+        isPrimary: true,
+        verificationToken: `caboodle-verification=${domain.split(".")[0]}-${Math.floor(
+          100000 + Math.random() * 899999,
+        )}`,
+      };
+      draft.domains = [...draft.domains, organizationDomain];
+    }
+
+    if (input.creatorJoinsAsAdmin) {
+      draft.memberships = [
+        ...draft.memberships,
+        {
+          id: createId("mem"),
+          userId: input.actorUserId,
+          organizationId: organization.id,
+          roleId: adminRoleId(organization.type),
+          status: "active",
+          source: "created",
+          createdAt: new Date().toISOString(),
+        },
+      ];
+    }
 
     recordEvent(draft, {
       action: "organization.created",
-      description: `${nameOf(draft, input.createdByUserId)} created ${organization.name}`,
-      actorUserId: input.createdByUserId,
+      description: `${nameOf(draft, input.actorUserId)} created the ${
+        organization.type === "brand" ? "Brand" : "Brokerage"
+      } ${organization.name}`,
+      actorUserId: input.actorUserId,
       organizationId: organization.id,
     });
 

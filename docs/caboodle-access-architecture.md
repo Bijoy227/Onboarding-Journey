@@ -151,6 +151,7 @@ Organization.BrandAccessModules ──* 1─────────────
 - Module entitlements stay in the existing `Configuration` schema.
 - User ids in the new tables are `uuid`, matching the existing link tables such as `BrandBrokers.BrokerID`.
 - There is no FK to `Identity.Users`. It lives in another DbContext and its `Id` is `text`, the same situation every existing link table has. Every other relationship above is a real FK.
+- `MainDbContext` has no soft-delete hook and no global query filter. Wherever this design says a row is soft-deleted, the code must set `Deleted` itself, filter on it in every query, and add `WHERE "Deleted" = FALSE` to every unique index, as the existing tables do.
 
 **Enums** follow the repo rule for open enums: values start at 5 with gaps of 5. `ModuleActions` is a fixed `[Flags]` enum.
 
@@ -222,7 +223,7 @@ Unique index on `(BrokerageOrganizationID, BrandOrganizationID)` where `Status <
 | `AssignedByUserID`, `AssignedOn` | | |
 | audit columns | | |
 
-- Unique index on `(MembershipID, BrandOrganizationID)`.
+- Unique index on `(MembershipID, BrandOrganizationID)` where not deleted. Ending a connection soft-deletes these rows (F6), so a later reconnect must be able to assign the same Brand again.
 - In a **Brand** organization the row is created automatically with the membership, with `BrandOrganizationID = Membership.OrganizationID`. Every non-admin therefore resolves the same way.
 - In a **Brokerage** the Brokerage Admin creates one row per assigned Brand. A row can only be created while an active connection exists (section 8).
 - **Admins have no rows.** Their access is derived from the role.
@@ -271,7 +272,7 @@ The Platform Admin is not a member of any organization. The role is the existing
 |---|---|
 | `Permissions.Platform.Organizations.View` / `.Create` / `.Update` | list, create and rename organizations; suspend and restore them |
 | `Permissions.Platform.BrandConnections.View` / `.Manage` | connect, suspend and end Brand ↔ Brokerage connections |
-| `Permissions.Configuration.ModuleAssignments.Assign` | **existing**; now targets `OrganizationID` |
+| `Permissions.Configuration.ModuleAssignments.View` / `.Assign` | **existing**; `.View` previews and reads enabled modules, `.Assign` applies them. Both now target `OrganizationID`. |
 | `Permissions.Platform.Memberships.View` / `.Manage` | support: see anyone's access and fix memberships |
 
 **Support access.** The Platform Admin may open any organization and Brand. The resolver gives her full access. Every such request is written to the audit trail with `IsSupportAccess = true`.
@@ -305,7 +306,7 @@ The Platform Admin is not a member of any organization. The role is the existing
 
 ### 4.3 Module actions
 
-`View`, `Create`, `Edit`, `Delete`, `Export`. Today's backend actions map onto them:
+`View`, `Create`, `Edit`, `Delete`, `Export`. Today's backend actions are the string constants of the static class `CaboodleAction` (it is not an enum). Its 12 members map onto them as follows:
 
 | Today's `CaboodleAction` | Module action |
 |---|---|
@@ -315,6 +316,8 @@ The Platform Admin is not a member of any organization. The role is the existing
 | Upsert | `Create` when the payload has no id, otherwise `Edit`. The handler decides. |
 | Delete | `Delete` |
 | Export | `Export` |
+| Execute | None. It only guards Platform operations (seeding the module catalog, the soft-delete purge, the file-key backfill), which stay `[MustHavePermission]`. |
+| Generate, Clean | None. Defined but not used anywhere. |
 
 ---
 
@@ -420,7 +423,7 @@ ModuleMap Custom(Grants grants, ModuleSet enabled) =>
           .WithViewOn(RequiredDependencies(grants, enabled));
 ```
 
-The last line matters. Market Overview has a `Required` dependency on Product Spec, Retailers and Distributors (`ModuleDependencies`). A user who is granted Market Overview therefore also gets **view** on those enabled data sources, so the screen's lookups work. Nothing extra is stored for this.
+The last line matters. Market Overview has a `Required` dependency on Product Spec, Regions, Retailers and Distributors (`ModuleDependencies`, seeded in `ModuleCatalogSeedData`). A user who is granted Market Overview therefore also gets **view** on those enabled data sources, so the screen's lookups work. Nothing extra is stored for this.
 
 ### 6.3 How endpoints use it
 
@@ -575,11 +578,14 @@ The server enforces all of these, not only the UI.
 10. **Brand-owned data** (product specs, retailers, promotions, trade spend) is keyed by `BrandID`. It is shared by the Brand's users and by every connected Brokerage user who has the module.
 11. **Brokerage-owned data** (market overviews, category reviews, brand reports, promo tabs) belongs to **(Brokerage, Brand)**. Two Brokerages serving the same Brand must not see each other's records (decision D6).
     - Today `MarketOverview`, `CategoryReview`, `CategoryReviewCalender` and `BrandReport` carry only `BrandID` and `CreatedBy`, with no brokerage column.
+    - `CategoryReview.BrandID` is nullable: a category review can be saved with no Brand, and those rows are scoped to the broker company through `CreatedBy`. They need the brokerage column too, and a module check that doesn't depend on an active Brand.
     - They need a `BrokerageOrganizationID` column, backfilled from the creator's membership.
     - `PromoTabs.BrokerID` already means "the broker company".
 12. **Every change is audited:** connections, entitlements, memberships, roles, Brand Access, grants and support access. The existing `ModuleAssignmentHistories` and `Auditing` trail patterns cover this.
 13. **Every endpoint declares its authorization.** Add a unit test that reflects over the controllers and fails if an action has none of `[RequireModule]`, `[RequireOrgPermission]`, `[MustHavePermission]` or `[AllowAnonymous]`.
-    - Today many brand endpoints have no attribute at all: all 41 TradeSpends endpoints, all 25 TradeSpendsSandbox endpoints, PipeLines, the KeHE, UNFI and SPINS reports, Reports and Dashboard.
+    - Today many endpoints have no attribute at all. Because of the global `MapControllers().RequireAuthorization()`, that means any signed-in user can call them.
+    - Controllers where no action has an attribute: TradeSpends (48), TradeSpendsSandbox (26), KeHE (22), UNFI (22), SPINS (19), PipeLines (18), DistributorSalesReports (18), Directory (16), Files (14), Reports (11), IntelligenceChat (6), Profile (6), DistributionCenter (5), DataHub Export (4) and Dashboard (2).
+    - Several others are only partly covered: Brokers (40 of 53 actions have no attribute), DataHub (27 of 68), Banners (21 of 25), Distributors (21 of 24) and Brands (7 of 19).
 
 ---
 
@@ -591,7 +597,7 @@ Routes follow the repo rule that the controller class name is the prefix.
 |---|---|---|
 | `OrganizationsController` → `/organizations` | `GET`, `POST`, `PUT {id}`, `PUT {id}/status` | Platform |
 | `BrandConnectionsController` → `/brandconnections` | `GET ?brokerageId&brandId`, `POST`, `PUT {id}/status` (Active or Suspended), `DELETE {id}` (ends it) | Platform |
-| `ConfigurationsController` → `/configurations` (existing) | `module-assignments/preview`, `/apply`, `/details` now take `organizationId` | Platform |
+| `ConfigurationsController` → `/configurations` (existing) | `POST module-assignments/preview`, `/apply`, `/details` and `/backfill-all` now take `organizationId`. `backfill-all` assigns every active module to every Brand and every active `BROKER` user today; it must target organizations instead. | Platform: `preview` and `details` need `Permissions.Configuration.ModuleAssignments.View`; `apply` and `backfill-all` need `.Assign` |
 | `MembersController` → `/members` | `GET`, `PUT {membershipId}/role`, `PUT {membershipId}/status`, `DELETE {membershipId}` | `member.*` |
 | `InvitationsController` → `/invitations` | `GET`, `POST`, `POST {id}/resend`, `DELETE {id}`; anonymous `GET {token}` and `POST {token}/accept` | `member.invite` |
 | `BrandAccessController` → `/brandaccess` | `GET ?membershipId`, `PUT {membershipId}/brands`, `PUT {brandAccessId}/modules` | `access.manage` |
@@ -622,7 +628,7 @@ In `/members` and `/brandaccess`, a Platform Admin passes `OrganizationID` for s
 | `Permissions.Broker.*` role claims | module grants checked with `[RequireModule]` |
 | `BrandValidationMiddleware` and the per-module access helpers | the resolver (6.2) |
 | `GET /brands/me` (+ `CanAccessTradespend` rule) | `GET /me/access`. Trade spend access becomes a normal module entitlement (decision D9). |
-| `PATCH /brands/assign-brand-to-broker`, `assign-brands-to-sub-brokers`, `assign-user-to-brand`, `remove-*` | `POST /brandconnections` (Platform) and `PUT /brandaccess/{membershipId}/brands` (Brokerage Admin) |
+| `PATCH /brands/assign-brand-to-broker`, `POST /brands/assign-brands-to-sub-brokers`, `PUT /brands/assign-user-to-brand`, and `DELETE /brands/remove-brand-from-broker`, `remove-brands-from-broker`, `remove-owner-from-brand` | `POST /brandconnections` (Platform) and `PUT /brandaccess/{membershipId}/brands` (Brokerage Admin) |
 | `POST /users/{id}/assign-role` with `BrandIDs` | membership and role endpoints (`/members`) |
 
 ### 10.2 Migration, in one EF migration plus a backfill job
@@ -636,7 +642,7 @@ Every existing `BrandID`, `ModuleAssignments.BrokerId` and `PromoTabs.BrokerID` 
 1. **Pre-checks.** Run these as report-only queries first and fix or accept each one:
    - sub-broker `BrandBrokers` rows for a Brand that the parent broker is not linked to (they would break invariant 3);
    - duplicate `BrandBrokers` rows (there is no unique constraint today);
-   - rows where `Deleted` and `DeletedOn` disagree (the EF delete path sets only `DeletedOn`), so read both;
+   - rows where `Deleted` and `DeletedOn` disagree. Only Identity's `BaseDbContext` soft-deletes through EF, by setting `DeletedOn`. Business tables live in `MainDbContext`, which has no soft-delete hook: `DeleteAsync` hard-deletes, and hand-written SQL often sets `Deleted = TRUE` and leaves `DeletedOn` null. Treat `Deleted` as the authoritative flag, which is also what existing reads and filtered unique indexes use;
    - `UsersHierarchy.ParentUserID` disagreeing with `BrandBrokers.ParentBrokerID` (use `ParentBrokerID`, list the mismatches);
    - brand sub-users whose `UsersHierarchy` parent is a brand id (written by `AssignBrandToUserRequest`).
 2. Create the `Organization` schema and seed the four roles and their permissions.

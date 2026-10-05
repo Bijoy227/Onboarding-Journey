@@ -1,10 +1,20 @@
 # Onboarding-Journey
 
-A frontend-only prototype of the proposed Caboodle identity model: **Organization → Membership → Role → Permission**, plus organization-to-organization relationships, verified-domain onboarding, and subscriptions: **Organization → Plan → Modules**, with each member granted specific modules and actions.
+A frontend-only prototype of the proposed Caboodle access model, **architecture v2**:
+
+**Platform Admin → Organizations → Brands → Users → Module access → Permissions**
+
+- People join organizations (Brands and Brokerages) through a **membership** with one **role**. The role says what they may administer, never what data they see. There are four system roles, and the Platform Admin can create **custom roles** for Brand-type or Brokerage-type organizations.
+- People **create their own organization** from their work email domain, and verify that domain, or find and join one that already exists.
+- The **Platform Admin** **enables modules** per organization and **connects Brands to Brokerages**. There is no request/approve flow between organizations, and no plans, payment, subscriptions or billing.
+- Every piece of business data belongs to a **Brand**. On a Brand, a Brokerage's people get the Brokerage's own modules (Market Overview, Category Review, Promotional Management, ...) **plus every module that Brand has enabled**: Brand modules flow through.
+- Each membership without full brand access has one **Brand Access** per Brand it works on, either **Full** (follows what is available on that Brand) or **Custom** (an explicit list of modules and actions).
+- Admins get full access to their own Brand or to every connected Brand, worked out from the role at request time, never stored.
+- **Effective access = what is available on the Brand ∩ what the person was given**, resolved in one place.
 
 It exists to make the model understandable to a non-technical audience, while keeping the code structured so a real backend can replace the mock services later.
 
-The functional source of truth is [docs/caboodle-organization-identity-demo.md](docs/caboodle-organization-identity-demo.md).
+The design is [docs/caboodle-access-architecture.md](docs/caboodle-access-architecture.md). The demo follows its recommendations for decisions D1 to D9, with two exceptions: self-service organization creation is kept (D7), and a Brand's modules flow through to the brokerages working on it (the D1 alternative). [docs/caboodle-organization-identity-demo.md](docs/caboodle-organization-identity-demo.md) is the original product brief; v2 replaces its relationship, plan and billing parts.
 
 ## Running it
 
@@ -27,79 +37,93 @@ No passwords are checked. Pick an account from the login screen, or type its ema
 
 | Account | Email | Sees |
 |---|---|---|
-| Platform Admin | `constance@caboodle.com` | The whole platform: organizations, users, relationships, module catalog, plans, subscriptions, audit log |
-| Brand Admin | `alice@acmefoods.com` | Acme Foods (Professional plan), full administrative control and every module |
-| Brand Member | `bob@acmefoods.com` | Acme Foods, read-only identity access; 9 granted modules, no delete anywhere |
-| Brokerage Admin | `john@abc-brokerage.com` | ABC Brokerage (Professional plan), full administrative control |
-| Broker | `mike@abc-brokerage.com` | ABC Brokerage, can request brand relationships; 5 granted modules |
-| External Collaborator | `consultant@agency.com` | Member of **two** organizations, external email domain; only a few reports |
+| Platform Admin | `constance@caboodle.com` | The whole platform: organizations, connections, enabled modules, the module catalog, users, audit log. Can open any organization with audited support access. |
+| Brand Admin | `alice@acmefoods.com` | Acme Foods. Every Brand permission and every module Acme has enabled. |
+| Brand Member | `bob@acmefoods.com` | Acme Foods with **Custom** access: 9 modules, no delete anywhere. |
+| Brokerage Admin | `john@abc-brokerage.com` | ABC Brokerage. Full access to every connected Brand (Acme Foods, XYZ Private Label). |
+| Broker | `mike@abc-brokerage.com` | ABC Brokerage. Acme Foods at **Full**, XYZ Private Label at **Custom**: the worked example in section 5 of the design. |
+| Consultant | `consultant@agency.com` | External domain, two memberships that never merge: Brand Member at Acme, Broker at ABC. |
 
-Turn on **Demo mode** in the profile menu to show a panel listing the current user, organization, role, plan, every effective permission and the actions held in each module. It updates as you switch accounts, which is the quickest way to explain the authorization model.
+Turn on **Demo mode** in the profile menu to show a panel with the current user, organization, role, active Brand, every organization permission and the actions held in each module on that Brand.
 
 ## Walkthrough
 
-Everything below works against mock state — no backend, no email, no DNS.
+Everything below works against mock state: no backend, no email, no DNS.
 
-1. **Self-service onboarding.** Sign out → *Create an account* with `you@acmefoods.com`. A code screen stands in for the verification email: any 6-digit code works, and a "demo inbox" shows a code you can use. Discovery then finds Acme Foods from the email domain and offers to request access. Nobody at Caboodle had to create that organization.
-2. **New organization.** Sign up with a free domain (for example `you@freshfields.com`), verify the email, and create the organization. Try the domain `conflicted.com` to see the domain-conflict path. The creator becomes Organization Admin automatically, then verifies the domain (simulated).
-3. **Plan and payment.** The journey continues to *Choose a plan*: Standard, Professional, or Custom, where you tick individual modules and sub-modules and pay their list price. Brands and Brokerages see different plans because their module catalogs differ. Monthly or annual (two months free). Payment is a dummy checkout: *Fill test card* uses `4242 4242 4242 4242`; a number ending in `0002` is declined. Paying activates the plan and issues an invoice.
-4. **Modules and module access.** After onboarding the admin can open every module in the plan. *Organization → Module access* decides, per member, which modules they can use and which actions they have in each (view, create, edit, delete, export). As Bob, *Contacts* lets him create and edit but shows delete and export locked; *Distributors* says he has no access; *Ask Caboodle* says it isn't in the plan. Grant him something as Alice and it appears in his sidebar.
-5. **Billing.** *Organization → Billing* shows the plan, its modules, the card on file and invoices, and *Change plan* re-runs the plan and payment steps.
-6. **Approve a request.** As Alice, go to *Administration → Access requests*. Sarah Johnson is waiting. Approving is what creates her membership.
-7. **Invite someone.** *Members → Invite member*. Use an external address like `someone@agency.com` to see that an external domain is flagged but never blocked. Open the invitation from *Administration → Invitations* to accept it as the invitee.
-8. **Connect two organizations.** As John (ABC Brokerage), *Relationships → Find organizations* → request a relationship with Northwind Traders. As Alice, *Relationships → Requests* shows West Coast Brokerage waiting for approval.
-9. **One brand, many brokerages.** Acme Foods is connected to ABC Brokerage (Northeast) and XYZ Brokerage (Midwest).
-10. **A brand with no owner.** As John, open *Relationships → Managed brands → XYZ Private Label*: zero members, operated entirely through the management relationship.
-11. **Permissions are real.** As Bob, *Settings* disappears from the sidebar — and navigating straight to `/organization/settings` shows an unauthorized state rather than the page.
-12. **One person, many organizations.** Sign in as the consultant and use the organization switcher in the sidebar header. Role, permissions and modules change with the organization.
-13. **Platform administration.** As Constance, the Platform Admin section covers organizations, users, relationships, domain verification and the audit log. *Audit log → Reset demo data* restores the original seed.
-14. **Catalog, plans and subscriptions.** *Platform admin → Modules* is the Brand and Brokerage module catalog, seeded from what caboodle.web gates today, shown as a tree of modules and the sub-modules under them (fold modules away, or search and keep matches under their parent). Add, edit or delete modules and sub-modules, give each one an image that replaces its default icon everywhere, and click any price to change it. *Plans* lists Standard, Professional and custom plans per organization type; create custom plans priced by module or as a bundle, optionally private to one organization. *Subscriptions* puts any organization on any plan for its type without payment. Duplicate Test Organization starts with no plan, and XYZ Private Label is on a custom plan Caboodle built for it.
+1. **The access chain.** As Mike, the sidebar has a **Brand switcher** under the organization switcher. On Acme Foods he is Full: every module ABC has enabled, plus Acme's own modules, listed under "Acme Foods" in the sidebar. Switch to XYZ Private Label: only Market Overview (view, create, update) and Files (view). Open Promotional Management: locked on this Brand. *How access works* walks through the same example.
+2. **Connect a Brand.** As Constance, *Platform admin → Organizations → ABC Brokerage → Connect a Brand* → Northwind Traders. Sign in as John: Northwind is there at once, at full access. Sign in as Mike: it isn't, because he hasn't been assigned to it.
+3. **Assign and restrict.** As John, *Organization → Brand access*. *Assign brands* gives a broker connected Brands, each starting at Full. Click an assignment to open the editor: switch to Custom (everything starts ticked, so restricting means unticking), or reset to full access. Only the actions a module supports are offered.
+4. **Enabled modules are the ceiling.** As Constance, *Edit modules* on ABC Brokerage and enable Distributor APL. Mike gets it on Acme (Full) but not on XYZ Private Label (Custom never grows on its own), and Sarah Lee's dormant Distributor APL grant comes back.
+5. **Brand modules flow through.** As Constance, *Edit modules* on XYZ Private Label and enable Contacts. As John, switch to XYZ Private Label: Contacts appears under the Brand's name in the sidebar. Mike, who is Custom there, doesn't get it until John grants it.
+6. **Suspend vs end.** *Platform admin → Connections*: suspending ABC ↔ Acme removes Acme from everyone at ABC at once and keeps the assignments; resuming restores them. Ending removes the assignments; reconnecting starts with none.
+7. **Roles.** As John, on *Members*, demote a Brokerage Admin to Broker: you choose which Brands they keep. The last active admin can't be demoted, suspended or removed.
+8. **Brand side.** As Alice, *Brand access* shows Bob's Custom access; *Brokerages* lists ABC and XYZ and who from each works on Acme (read-only).
+9. **Support access.** As Constance, *Open as support* on any organization. The header shows *Support access · audited*, and everything done there is flagged in the audit log.
+10. **Self-service onboarding.** Sign out → *Create an account* with `you@acmefoods.com`. Any 6-digit code verifies the email. Discovery finds Acme Foods from the domain; request access, then approve it as Alice. The new member starts at Full.
+11. **A new organization.** Sign up with a free domain (for example `you@freshfields.com`), verify the email, and create the organization. Try the domain `conflicted.com` to see the domain-conflict path. The creator becomes its Brand Admin or Brokerage Admin automatically, then verifies the domain (simulated). The journey is Account → Verify email → Organization → Domain: there is no plan or payment step. The new organization has no modules until the Platform Admin enables some.
+12. **Invitations.** As John, *Members → Invite member* as a Broker with Brands ticked. Open it from *Administration → Invitations* to accept it: the Brands are assigned at Full if they are still connected. `lisa@abc-brokerage.com` is already waiting.
+13. **Platform administration.** The Platform Admin can also *Create organization* for a customer; it starts with no members and no modules (Duplicate Test Organization shows this). *Modules* is the catalog, with the actions each module supports. *Audit log → Reset demo data* restores the seed.
+14. **Custom roles.** As Constance, *Platform admin → Roles → New role*: pick Brand or Brokerage, tick its permissions, and choose whether it has full brand access. Every organization of that type can then give it to members. The four system roles can't be changed; a custom role can be edited at any time and deleted once nobody holds it.
 
 ## How the code is organized
 
 ```
 src/
   app/
-    (auth)/          sign in, sign up, onboarding, invitation links
+    (auth)/          sign in, sign up, email verification, discovery, invitation links
     (app)/           the authenticated dashboard shell
   components/
     ui/              shadcn/ui primitives
     common/          badges, avatars, empty/unauthorized states, guards
-    features/        invite dialog, domain verification, activity feed, plan and
-                     module pickers, onboarding steps
-    layout/          sidebar, organization switcher, profile menu, permission panel
+    features/        dialogs (invite, assign brands, connect, enabled modules,
+                     create organization), module picker, activity feed
+    layout/          sidebar, organization and brand switchers, profile menu,
+                     permission panel
   lib/
     mock/            seed data, the module catalog, and the in-memory store
                      (persisted to localStorage)
-    permissions/     the permission catalogue, roles, hasPermission(), and
-                     module entitlement and access (modules.ts)
+    permissions/     permissions.ts: the permission catalogue and the four system roles
+                     modules.ts:     the catalog and module entitlement
+                     access.ts:      the request-time resolver
     services/        the mock service layer
   types/             the domain model
 ```
 
 ### Replacing the mock backend
 
-`src/lib/services/*` is the seam. Each function is already async and shaped like an API call:
+`src/lib/services/*` is the seam. Each function is already async and shaped like an API call from section 9 of the design:
 
-```ts
-await inviteMember({ email, organizationId, roleId, invitedByUserId });
-await approveAccessRequest(requestId, actorUserId);
-await createOrganizationRelationship({ ... });
-```
+| Service | Endpoint it stands in for |
+|---|---|
+| `organization-service` | `/organizations` |
+| `connection-service` | `/brandconnections` |
+| `entitlement-service` | `/configurations/module-assignments/apply` |
+| `brand-access-service` | `/brandaccess` |
+| `membership-service`, `invitation-service`, `access-request-service` | `/members`, `/invitations` |
+| `role-service` | custom roles (Platform Admin) |
 
-They read and write through `src/lib/mock/store.ts`, the only module that knows state lives in memory and localStorage. Swapping these bodies for `fetch` calls should not require reshaping the UI.
+They read and write through `src/lib/mock/store.ts`, the only module that knows state lives in memory and localStorage.
 
-Authorization is resolved in one place, `hasPermission()` in `src/lib/permissions/permissions.ts`, always as *user → membership for this organization → role → permissions*. No screen decides access from a user-level role flag, which is the property the real backend should preserve.
+Access is resolved in one place, `resolveAccess()` in `src/lib/permissions/access.ts`, mirroring section 6.2:
 
-Module access adds two layers, both in `src/lib/permissions/modules.ts`:
+- **Membership:** user → active membership in an active organization → role → organization permissions.
+- **Enabled modules:** the organization's module assignments, with a sub-module counting only when its parent is enabled.
+- **Brands:** the organization itself for a Brand, or the actively connected Brands (connection active, Brand active) for a Brokerage.
+- **Available on a Brand:** the organization's own enabled modules, plus, for a Brokerage, the modules that Brand has enabled.
+- **Per Brand:**
+  - a role with full brand access gets every available module with every action it supports;
+  - everyone else needs a Brand Access row, which is Full (the same) or Custom (grants ∩ available).
+- **Platform Admin:** gets support access to any organization.
 
-- **Entitlement:** *organization → active subscription → plan → modules*. No active plan means no modules. A sub-module only counts when its parent module is in the plan.
-- **Access:** *user → membership → role*. A role with `module.full_access` (Organization Admin) gets every entitled module with every action; everyone else gets only the module grants stored on their membership, cleaned against the plan, so a member can never hold a module the organization hasn't subscribed to.
-
-The catalog is two levels deep (module → sub-module). Screens, tabs and reports below that, which caboodle.web doesn't gate on their own, are listed as a module's `features`. Catalog slugs the UI never checks are left out, and the same slug can exist on both sides as two different modules, so modules are always looked up by audience plus slug.
+`GET /me/access` would return the same shape. No screen decides access from a user-level flag or a role name.
 
 ## Scope
 
-Deliberately **not** implemented: real authentication, database, email (the verification code is simulated), DNS verification, or real payments (checkout validates the card's shape and charges nothing). Business modules (CRM, trade spend, product specs, retailers, ...) are single placeholder pages: they exist to show the plan and the member's actions being enforced, not the modules themselves.
+Deliberately **not** implemented:
+- real authentication, a database or email (the verification code is simulated);
+- DNS verification;
+- server-side enforcement, which is the backend's job (`[RequireModule]` / `[RequireOrgPermission]` in the design).
+
+Business modules (CRM, trade spend, product specs, ...) are single placeholder pages. They exist to show the person's actions on the active Brand being enforced, not the modules themselves.
 
 State lives in `localStorage`, so changes survive a refresh and are per-browser. Reset it from *Platform admin → Audit log → Reset demo data*, or by clearing site data.

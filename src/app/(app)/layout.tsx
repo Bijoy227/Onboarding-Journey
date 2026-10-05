@@ -2,10 +2,12 @@
 
 import { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { LifeBuoy } from "lucide-react";
 
 import { AppSidebar } from "@/components/layout/app-sidebar";
 import { PermissionPanel } from "@/components/layout/permission-panel";
 import { LoadingScreen } from "@/components/common/states";
+import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import {
   SidebarInset,
@@ -18,7 +20,7 @@ import { OrganizationBreadcrumb } from "@/components/layout/breadcrumb";
 
 export default function AppLayout({ children }: LayoutProps<"/">) {
   const { hydrated } = useDemo();
-  const { isSignedIn, user } = useSession();
+  const { isSignedIn, user, isSupport } = useSession();
   const router = useRouter();
   const pathname = usePathname();
   const emailVerified = Boolean(user?.emailVerifiedAt);
@@ -45,6 +47,16 @@ export default function AppLayout({ children }: LayoutProps<"/">) {
           <Separator orientation="vertical" className="mr-1 h-4" />
           <OrganizationBreadcrumb pathname={pathname} />
           <div className="ml-auto flex items-center gap-1">
+            {isSupport ? (
+              <Badge
+                variant="outline"
+                className="mr-1 border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-400"
+                title="The Platform Admin is inside this organization. Every change is written to the audit log."
+              >
+                <LifeBuoy className="size-3" />
+                Support access · audited
+              </Badge>
+            ) : null}
             <ThemeToggle />
           </div>
         </header>

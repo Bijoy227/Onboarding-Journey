@@ -24,7 +24,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAppState } from "@/lib/demo/demo-provider";
 import { relativeTime } from "@/lib/format";
-import { signIn } from "@/lib/services/auth-service";
+import { getAssignableBrandIds } from "@/lib/services/brand-access-service";
+import { signIn, switchOrganization } from "@/lib/services/auth-service";
 import {
   InvitationError,
   acceptInvitation,
@@ -35,7 +36,8 @@ import {
  * The simulated invitation link.
  *
  * Opening it stands in for clicking through from an email. Accepting creates
- * the membership, and signs the invitee in so the demo can continue as them.
+ * the membership and its Brand Access, and signs the invitee in so the demo
+ * can continue as them, inside the organization they just joined.
  */
 export default function InvitationPage({
   params,
@@ -92,12 +94,31 @@ export default function InvitationPage({
     return (
       <Fallback
         title={`This invitation was ${invitation.status}`}
-        description="Ask an organization administrator to send a new one."
+        description="Ask an admin of the organization to send a new one."
       />
     );
   }
 
   const external = isExternalEmail(invitation.email, organization.id);
+  const assignable = getAssignableBrandIds(state, organization.id);
+  const invitedBrands = (invitation.brandOrganizationIds ?? [])
+    .map((id) => state.organizations.find((org) => org.id === id))
+    .filter((org) => org !== undefined);
+  const accessSummary = role?.hasFullBrandAccess
+    ? organization.type === "brand"
+      ? `Every module ${organization.name} has enabled`
+      : `Every Brand connected to ${organization.name}`
+    : organization.type === "brand"
+      ? `Full access to ${organization.name}, unless an admin restricts it`
+      : invitedBrands.length === 0
+        ? "No Brands yet: an admin assigns them"
+        : invitedBrands
+            .map((brand) =>
+              assignable.has(brand.id)
+                ? `${brand.name} (Full)`
+                : `${brand.name} (no longer connected, skipped)`,
+            )
+            .join(", ");
 
   async function accept() {
     setPending(true);
@@ -105,6 +126,7 @@ export default function InvitationPage({
     try {
       await acceptInvitation(token, { name });
       await signIn(invitation!.email);
+      switchOrganization(invitation!.organizationId);
       toast.success("Welcome aboard", {
         description: `You're now a member of ${organization!.name}.`,
       });
@@ -153,6 +175,12 @@ export default function InvitationPage({
                 Invitation sent to
               </dt>
               <dd className="truncate text-sm">{invitation.email}</dd>
+            </div>
+            <div className="flex items-start justify-between gap-4 px-3 py-2.5">
+              <dt className="shrink-0 text-xs font-medium text-muted-foreground">
+                {organization.type === "brokerage" ? "Brands" : "Access"}
+              </dt>
+              <dd className="text-right text-sm">{accessSummary}</dd>
             </div>
           </dl>
 

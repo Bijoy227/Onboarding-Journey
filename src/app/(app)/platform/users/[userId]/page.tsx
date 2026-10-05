@@ -7,6 +7,7 @@ import { ArrowLeft } from "lucide-react";
 import { LinkButton } from "@/components/common/link-button";
 import { OrganizationAvatar, UserAvatar } from "@/components/common/avatars";
 import {
+  BrandAccessBadge,
   MembershipStatusBadge,
   OrganizationTypeBadge,
   RoleBadge,
@@ -23,7 +24,8 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { useAppState } from "@/lib/demo/demo-provider";
-import { formatDate } from "@/lib/format";
+import { formatDate, pluralize } from "@/lib/format";
+import { resolveMembershipBrands } from "@/lib/permissions/access";
 
 export default function PlatformUserDetailPage({
   params,
@@ -94,7 +96,8 @@ function UserDetail({ userId }: { userId: string }) {
           <CardTitle className="text-base">Memberships</CardTitle>
           <CardDescription>
             One identity can hold memberships in several organizations, with a
-            different role in each.
+            different role in each. They never merge: each has its own Brands
+            and its own module access.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -113,6 +116,7 @@ function UserDetail({ userId }: { userId: string }) {
                   (item) => item.id === membership.roleId,
                 );
                 if (!organization) return null;
+                const brands = resolveMembershipBrands(state, membership);
                 return (
                   <li
                     key={membership.id}
@@ -137,6 +141,26 @@ function UserDetail({ userId }: { userId: string }) {
                       <OrganizationTypeBadge type={organization.type} />
                       <RoleBadge name={role?.name ?? "—"} />
                       <MembershipStatusBadge status={membership.status} />
+                    </div>
+                    <div className="w-full space-y-1 border-t pt-2">
+                      {brands.length === 0 ? (
+                        <p className="text-xs text-muted-foreground">
+                          No Brands to work on.
+                        </p>
+                      ) : (
+                        brands.map((entry) => (
+                          <div
+                            key={entry.brand.id}
+                            className="flex flex-wrap items-center gap-2 text-xs"
+                          >
+                            <span className="font-medium">{entry.brand.name}</span>
+                            <BrandAccessBadge kind={entry.kind} />
+                            <span className="text-muted-foreground">
+                              {pluralize(Object.keys(entry.modules).length, "module")}
+                            </span>
+                          </div>
+                        ))
+                      )}
                     </div>
                   </li>
                 );

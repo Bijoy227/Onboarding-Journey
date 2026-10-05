@@ -1,26 +1,18 @@
-import { getMembership, getPermissions } from "@/lib/permissions/permissions";
 import type {
   AppState,
-  BillingCycle,
   ModuleAction,
   ModuleGrant,
   OrganizationType,
-  Plan,
   PlatformModule,
-  Subscription,
 } from "@/types";
 
 /**
- * Module entitlement and module access.
+ * The module catalog and module entitlement.
  *
- * Two questions, answered in two layers:
- *   1. What has the organization paid for?
- *      organization -> active subscription -> plan -> modules
- *   2. What may this member do with it?
- *      user -> membership -> role (module.full_access) or module grants
- *
- * A member can never be granted a module the plan does not include, and a
- * sub-module is only usable when its parent module is too.
+ * Entitlement is the ceiling: the Platform Admin enables modules per
+ * organization, and nobody inside the organization can go above it. What one
+ * person may do on one Brand is resolved on top of this, in
+ * `src/lib/permissions/access.ts`.
  */
 
 export const MODULE_ACTIONS: {
@@ -34,8 +26,13 @@ export const MODULE_ACTIONS: {
     description: "Open the module and read its data.",
   },
   { id: "create", label: "Create", description: "Add new records." },
-  { id: "edit", label: "Edit", description: "Change existing records." },
+  { id: "update", label: "Update", description: "Change existing records." },
   { id: "delete", label: "Delete", description: "Remove records." },
+  {
+    id: "import",
+    label: "Import",
+    description: "Bring records in from a file.",
+  },
   {
     id: "export",
     label: "Export",
@@ -47,14 +44,12 @@ export const ALL_MODULE_ACTIONS: ModuleAction[] = MODULE_ACTIONS.map(
   (action) => action.id,
 );
 
-/** Annual billing charges ten months: two months free. */
-export const ANNUAL_MONTHS_CHARGED = 10;
-
 export type ModuleNode = {
   module: PlatformModule;
   children: PlatformModule[];
 };
 
+/** What a person may do in each module on one Brand, keyed by module id. */
 export type ModuleAccess = Record<string, ModuleAction[]>;
 
 function bySortOrder(a: PlatformModule, b: PlatformModule): number {
@@ -113,105 +108,25 @@ export function normalizeModuleIds(
     .map((module) => module.id);
 }
 
-export function sumModulePrices(state: AppState, moduleIds: string[]): number {
-  const selected = new Set(moduleIds);
-  return state.modules
-    .filter((module) => selected.has(module.id))
-    .reduce((total, module) => total + module.monthlyPrice, 0);
-}
-
-/** What the plan's modules would cost bought one by one. */
-export function getPlanListPrice(state: AppState, plan: Plan): number {
-  return sumModulePrices(
-    state,
-    normalizeModuleIds(state, plan.audience, plan.moduleIds),
-  );
-}
-
-/** What the plan actually costs per month. */
-export function getPlanMonthlyPrice(state: AppState, plan: Plan): number {
-  return plan.fixedMonthlyPrice ?? getPlanListPrice(state, plan);
-}
-
-export function priceForCycle(monthly: number, cycle: BillingCycle): number {
-  return cycle === "annual" ? monthly * ANNUAL_MONTHS_CHARGED : monthly;
-}
-
-/** The standard and professional plans offered in onboarding. */
-export function getTierPlan(
-  state: AppState,
-  audience: OrganizationType,
-  tier: "standard" | "professional",
-): Plan | undefined {
-  return state.plans.find(
-    (plan) => plan.audience === audience && plan.tier === tier,
-  );
-}
-
-/** Plans that can be assigned to an organization of this type. */
-export function getAssignablePlans(
-  state: AppState,
-  audience: OrganizationType,
-  organizationId?: string,
-): Plan[] {
-  return state.plans.filter(
-    (plan) =>
-      plan.audience === audience &&
-      (!plan.organizationId || plan.organizationId === organizationId),
-  );
-}
-
-export function getActiveSubscription(
-  state: AppState,
-  organizationId: string | null | undefined,
-): Subscription | undefined {
-  if (!organizationId) return undefined;
-  return state.subscriptions.find(
-    (subscription) =>
-      subscription.organizationId === organizationId &&
-      subscription.status === "active",
-  );
-}
-
-/** A plan chosen during onboarding that has not been paid for yet. */
-export function getIncompleteSubscription(
-  state: AppState,
-  organizationId: string | null | undefined,
-): Subscription | undefined {
-  if (!organizationId) return undefined;
-  return state.subscriptions.find(
-    (subscription) =>
-      subscription.organizationId === organizationId &&
-      subscription.status === "incomplete",
-  );
-}
-
-export function getOrganizationPlan(
-  state: AppState,
-  organizationId: string | null | undefined,
-): Plan | undefined {
-  const subscription = getActiveSubscription(state, organizationId);
-  if (!subscription) return undefined;
-  return state.plans.find((plan) => plan.id === subscription.planId);
-}
-
 /**
- * The modules an organization is entitled to: exactly what its active plan
- * includes. No plan means no modules.
+ * The modules an organization has enabled: its module assignments for its own
+ * audience. A sub-module only counts when its parent is enabled too. No
+ * assignments means no modules (decision D4).
  */
-export function getEntitledModules(
+export function getEnabledModules(
   state: AppState,
   organizationId: string | null | undefined,
 ): PlatformModule[] {
   const organization = state.organizations.find(
     (org) => org.id === organizationId,
   );
-  const plan = getOrganizationPlan(state, organizationId);
-  if (!organization || !plan || plan.audience !== organization.type) return [];
+  if (!organization) return [];
 
-  const ids = new Set(
-    normalizeModuleIds(state, organization.type, plan.moduleIds),
-  );
+  const assigned = state.moduleAssignments
+    .filter((assignment) => assignment.organizationId === organization.id)
+    .map((assignment) => assignment.moduleId);
+  const ids = new Set(normalizeModuleIds(state, organization.type, assigned));
+
   return getCatalog(state, organization.type).filter((module) =>
     ids.has(module.id),
   );
@@ -225,8 +140,9 @@ export function normalizeActions(actions: ModuleAction[]): ModuleAction[] {
 }
 
 /**
- * Cleans a member's grants against what is available: grants for modules the
- * plan lacks, empty grants and sub-modules without a parent grant are dropped.
+ * Cleans grants against what is available: grants for modules the
+ * organization lacks, actions the module doesn't support, empty grants and
+ * sub-modules without a parent grant are dropped.
  */
 export function normalizeGrants(
   grants: ModuleGrant[],
@@ -235,10 +151,15 @@ export function normalizeGrants(
   const byId = new Map(available.map((module) => [module.id, module]));
   const cleaned = grants
     .filter((grant) => byId.has(grant.moduleId))
-    .map((grant) => ({
-      moduleId: grant.moduleId,
-      actions: normalizeActions(grant.actions),
-    }))
+    .map((grant) => {
+      const supported = byId.get(grant.moduleId)!.availableActions;
+      return {
+        moduleId: grant.moduleId,
+        actions: normalizeActions(grant.actions).filter((action) =>
+          supported.includes(action),
+        ),
+      };
+    })
     .filter((grant) => grant.actions.length > 0);
 
   const granted = new Set(cleaned.map((grant) => grant.moduleId));
@@ -249,48 +170,18 @@ export function normalizeGrants(
 }
 
 /**
- * What a user may do with each module in one organization, keyed by module id.
- * A module missing from the result is not usable at all.
+ * Where a module's screen lives. A Brokerage's own modules and a Brand's own
+ * modules sit at /modules/{slug}; a Brand module opened from a Brokerage sits
+ * at /modules/brand/{slug}, because the same slug (files, category-review)
+ * can exist in both catalogs.
  */
-export function getModuleAccess(
-  state: AppState,
-  userId: string | null | undefined,
-  organizationId: string | null | undefined,
-): ModuleAccess {
-  const membership = getMembership(state, userId, organizationId);
-  if (!membership) return {};
-
-  const entitled = getEntitledModules(state, organizationId);
-  const access: ModuleAccess = {};
-
-  if (
-    getPermissions(state, userId, organizationId).includes("module.full_access")
-  ) {
-    for (const entry of entitled) access[entry.id] = [...ALL_MODULE_ACTIONS];
-    return access;
-  }
-
-  for (const grant of normalizeGrants(
-    membership.moduleGrants ?? [],
-    entitled,
-  )) {
-    access[grant.moduleId] = grant.actions;
-  }
-  return access;
-}
-
-export function canUseModule(
-  state: AppState,
-  userId: string | null | undefined,
-  organizationId: string | null | undefined,
-  moduleId: string,
-  action: ModuleAction = "view",
-): boolean {
-  return (
-    getModuleAccess(state, userId, organizationId)[moduleId]?.includes(
-      action,
-    ) ?? false
-  );
+export function moduleHref(
+  module: PlatformModule,
+  workspaceType: OrganizationType | undefined,
+): string {
+  return module.audience === workspaceType || !workspaceType
+    ? `/modules/${module.slug}`
+    : `/modules/${module.audience}/${module.slug}`;
 }
 
 export function findModuleBySlug(
@@ -303,13 +194,14 @@ export function findModuleBySlug(
   );
 }
 
-/** Organizations currently on a plan. Used to warn before editing it. */
-export function getPlanSubscriberCount(
+/** Organizations that have this module enabled. Used to warn before editing it. */
+export function getModuleOrganizationCount(
   state: AppState,
-  planId: string,
+  moduleId: string,
 ): number {
-  return state.subscriptions.filter(
-    (subscription) =>
-      subscription.planId === planId && subscription.status === "active",
-  ).length;
+  return new Set(
+    state.moduleAssignments
+      .filter((assignment) => assignment.moduleId === moduleId)
+      .map((assignment) => assignment.organizationId),
+  ).size;
 }

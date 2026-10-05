@@ -1,12 +1,15 @@
 /**
- * Domain model for the Caboodle identity prototype.
+ * Domain model for the Caboodle access prototype (architecture v2).
  *
  * These types intentionally mirror the shape a real backend would expose, so the
  * mock service layer in `src/lib/services` can later be swapped for API calls
- * without reshaping the UI.
+ * without reshaping the UI. See docs/caboodle-access-architecture.md.
  *
  * The core model is:
- *   User -> Membership -> Organization -> Role -> Permissions
+ *   Platform Admin -> Organizations -> Brands -> Users -> Module Access -> Permissions
+ *
+ *   User -> Membership -> Organization -> Role -> organization permissions
+ *   Membership -> Brand Access (one per Brand) -> module grants
  */
 
 export type OrganizationType = "brand" | "brokerage";
@@ -46,11 +49,13 @@ export type OrganizationDomain = {
 /** Who is allowed to ask for a membership in an organization. */
 export type MembershipPolicy = "anyone" | "verified_domain" | "invite_only";
 
+/** Suspended blocks every member, and for a Brand every brokerage's access too. */
 export type OrganizationStatus = "active" | "suspended";
 
 export type Organization = {
   id: string;
   name: string;
+  /** Cannot change after creation. */
   type: OrganizationType;
   status: OrganizationStatus;
   membershipPolicy: MembershipPolicy;
@@ -60,10 +65,15 @@ export type Organization = {
   createdByUserId?: string;
 };
 
-export type MembershipStatus = "pending" | "active" | "suspended" | "removed";
+export type MembershipStatus = "active" | "suspended" | "removed";
 
-export type MembershipSource = "invitation" | "access_request" | "created";
+export type MembershipSource =
+  | "created"
+  | "invitation"
+  | "access_request"
+  | "platform_admin";
 
+/** A person belongs to an organization. The role says what they may administer. */
 export type Membership = {
   id: string;
   userId: string;
@@ -71,20 +81,48 @@ export type Membership = {
   roleId: string;
   status: MembershipStatus;
   source: MembershipSource;
-  /**
-   * Which subscribed modules this member may use, and what they may do in
-   * each. Ignored for roles that grant `module.full_access`.
-   */
-  moduleGrants?: ModuleGrant[];
   createdAt: string;
 };
 
-/** What a member may do inside one module. */
-export type ModuleAction = "view" | "create" | "edit" | "delete" | "export";
+/** What a person may do inside one module. Any action implies view. */
+export type ModuleAction =
+  | "view"
+  | "create"
+  | "update"
+  | "delete"
+  | "import"
+  | "export";
 
 export type ModuleGrant = {
   moduleId: string;
   actions: ModuleAction[];
+};
+
+/**
+ * `full` follows whatever the organization has enabled, including modules
+ * enabled later. `custom` is an explicit list that never grows on its own.
+ */
+export type AccessMode = "full" | "custom";
+
+/**
+ * One non-admin membership working on one Brand.
+ *
+ * In a Brand organization the row is created with the membership and always
+ * points at that Brand. In a Brokerage the admin creates one per assigned
+ * Brand, and only while an active connection exists. Admins have no rows:
+ * their access is derived from the role.
+ */
+export type BrandAccess = {
+  id: string;
+  membershipId: string;
+  brandOrganizationId: string;
+  accessMode: AccessMode;
+  /** Read only when `accessMode` is `custom`. A missing module means no access. */
+  grants: ModuleGrant[];
+  assignedByUserId?: string;
+  assignedAt: string;
+  /** Set when the connection ended. The row stays for history. */
+  deletedAt?: string;
 };
 
 /**
@@ -96,7 +134,7 @@ export type PlatformModule = {
   id: string;
   /** Brand and Brokerage organizations have different module catalogs. */
   audience: OrganizationType;
-  /** The slug caboodle.web checks. Unique within an audience, not across. */
+  /** The slug the API checks. Unique within an audience, not across. */
   slug: string;
   name: string;
   description: string;
@@ -108,82 +146,51 @@ export type PlatformModule = {
   /** Screens, tabs and reports inside it that are not gated on their own. */
   features: string[];
   /**
+   * The actions this module supports. A report that is view and export only
+   * never offers create, update or delete, and Full never grants them.
+   */
+  availableActions: ModuleAction[];
+  /**
    * Picture shown instead of the default icon. In the demo this is a small
    * data URL made in the browser; a real backend would store a file URL.
    */
   imageUrl?: string;
-  /** List price in USD per month. */
-  monthlyPrice: number;
   sortOrder: number;
   createdAt: string;
 };
 
-export type PlanTier = "standard" | "professional" | "custom";
-
-export type Plan = {
-  id: string;
-  name: string;
-  audience: OrganizationType;
-  tier: PlanTier;
-  description: string;
-  /** Modules and sub-modules. A sub-module only counts if its parent is here. */
-  moduleIds: string[];
-  /** A bundle price. When unset the plan costs the sum of its modules. */
-  fixedMonthlyPrice?: number;
-  /** Set when a custom plan was built for one organization only. */
-  organizationId?: string;
-  createdByUserId?: string;
-  createdAt: string;
-};
-
-export type BillingCycle = "monthly" | "annual";
-
-/** `incomplete` means a plan was chosen but payment has not gone through. */
-export type SubscriptionStatus = "incomplete" | "active" | "canceled";
-
-export type SubscriptionSource = "self_service" | "platform_admin";
-
-export type PaymentMethod = {
-  brand: string;
-  last4: string;
-  expMonth: number;
-  expYear: number;
-  holderName: string;
-};
-
-export type Subscription = {
+/**
+ * Module entitlement: the Platform Admin enabled this module for this
+ * organization. This is the ceiling nobody inside the organization can exceed.
+ */
+export type ModuleAssignment = {
   id: string;
   organizationId: string;
-  planId: string;
-  status: SubscriptionStatus;
-  billingCycle: BillingCycle;
-  source: SubscriptionSource;
-  paymentMethod?: PaymentMethod;
-  createdByUserId: string;
-  createdAt: string;
-  startedAt?: string;
-  currentPeriodEnd?: string;
-  canceledAt?: string;
-};
-
-export type Invoice = {
-  id: string;
-  number: string;
-  organizationId: string;
-  subscriptionId: string;
-  description: string;
-  amount: number;
-  status: "paid";
-  issuedAt: string;
+  moduleId: string;
+  assignedByUserId?: string;
+  assignedAt: string;
 };
 
 export type Role = {
   id: string;
+  /** Stable key, e.g. brand-admin. */
+  key: string;
   name: string;
   description: string;
-  /** When set, the role is only offered inside organizations of this type. */
-  organizationType?: OrganizationType;
+  /** The role is only offered inside organizations of this type. */
+  organizationType: OrganizationType;
+  /**
+   * Full access to every enabled module, with every action, on the
+   * organization's own Brand or on every actively connected Brand. Derived at
+   * request time, never stored per brand.
+   */
+  hasFullBrandAccess: boolean;
+  /** The four seeded roles. They can't be changed or deleted. */
+  isSystem: boolean;
   permissionIds: PermissionId[];
+  /** Custom roles only: who created the role, and when. */
+  createdByUserId?: string;
+  createdAt?: string;
 };
 
 export type Permission = {
@@ -193,22 +200,24 @@ export type Permission = {
   group: string;
 };
 
-export type RelationshipType =
-  | "brokerage_represents_brand"
-  | "brokerage_manages_brand";
+/**
+ * Suspended pauses access but keeps assignments. Ended removes assignments;
+ * reconnecting later starts with none.
+ */
+export type BrandConnectionStatus = "active" | "suspended" | "ended";
 
-export type RelationshipStatus = "pending" | "active" | "rejected" | "suspended";
-
-export type OrganizationRelationship = {
+/** A Brokerage works with a Brand. Only the Platform Admin writes it. */
+export type BrandConnection = {
   id: string;
-  sourceOrganizationId: string;
-  targetOrganizationId: string;
-  type: RelationshipType;
-  status: RelationshipStatus;
+  brokerageOrganizationId: string;
+  brandOrganizationId: string;
+  status: BrandConnectionStatus;
+  /** Metadata only. It does not scope data (decision D8). */
   regions?: string[];
-  requestedByUserId: string;
-  approvedByUserId?: string;
-  createdAt: string;
+  connectedByUserId: string;
+  connectedAt: string;
+  endedByUserId?: string;
+  endedAt?: string;
 };
 
 export type InvitationStatus = "pending" | "accepted" | "expired" | "revoked";
@@ -218,6 +227,11 @@ export type Invitation = {
   email: string;
   organizationId: string;
   roleId: string;
+  /**
+   * Brokerage invitations only: the Brands to assign on acceptance, each at
+   * Full. Checked against the connections active at acceptance time.
+   */
+  brandOrganizationIds?: string[];
   invitedByUserId: string;
   status: InvitationStatus;
   token: string;
@@ -247,33 +261,25 @@ export type AuditEvent = {
   description: string;
   actorUserId?: string;
   organizationId?: string;
+  /** The Platform Admin acted inside an organization through support access. */
+  isSupportAccess?: boolean;
   createdAt: string;
 };
 
-/** Every permission identifier understood by the prototype. */
+/** Every organization permission understood by the prototype. */
 export type PermissionId =
   | "organization.view"
   | "organization.update"
   | "member.view"
   | "member.invite"
-  | "member.update"
-  | "member.remove"
   | "member.approve"
+  | "member.update"
   | "member.suspend"
-  | "role.view"
-  | "role.assign"
+  | "member.remove"
   | "domain.view"
   | "domain.manage"
-  | "domain.verify"
-  | "relationship.view"
-  | "relationship.request"
-  | "relationship.approve"
-  | "relationship.reject"
-  | "relationship.manage"
-  | "billing.view"
-  | "billing.manage"
-  | "module.assign"
-  | "module.full_access";
+  | "connection.view"
+  | "access.manage";
 
 /** The full mock database. One object, persisted to localStorage. */
 export type AppState = {
@@ -282,18 +288,21 @@ export type AppState = {
   domains: OrganizationDomain[];
   memberships: Membership[];
   roles: Role[];
-  relationships: OrganizationRelationship[];
+  brandConnections: BrandConnection[];
+  brandAccess: BrandAccess[];
   invitations: Invitation[];
   accessRequests: AccessRequest[];
   auditEvents: AuditEvent[];
   modules: PlatformModule[];
-  plans: Plan[];
-  subscriptions: Subscription[];
-  invoices: Invoice[];
+  moduleAssignments: ModuleAssignment[];
 };
 
-/** The demo "session" — who is signed in and which org they are looking at. */
+/**
+ * The demo "session": who is signed in, which organization they act through
+ * (the OrganizationID header) and which Brand is active (the BrandID header).
+ */
 export type Session = {
   userId: string;
   organizationId: string | null;
+  brandId: string | null;
 };

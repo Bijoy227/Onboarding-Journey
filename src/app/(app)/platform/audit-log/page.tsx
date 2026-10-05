@@ -82,7 +82,8 @@ function AuditLogView() {
           <CardTitle className="text-base">Demo controls</CardTitle>
           <CardDescription>
             Restore the original demo organizations, users, memberships,
-            invitations and relationships. Useful between walkthroughs.
+            invitations, connections, enabled modules and brand access. Useful
+            between walkthroughs.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -99,7 +100,8 @@ function AuditLogView() {
             <AlertDialogTitle>Reset all demo changes?</AlertDialogTitle>
             <AlertDialogDescription>
               This will restore the original demo organizations, users,
-              memberships, invitations and relationships, and sign you out.
+              memberships, invitations, connections and brand access, and sign you
+              out.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

@@ -126,7 +126,7 @@ function DomainsView() {
 
                 {expanded === domain.id ? (
                   <div className="rounded-lg border bg-muted/30 p-4">
-                    {can("domain.verify") ? (
+                    {can("domain.manage") ? (
                       <DomainVerificationPanel
                         domain={domain}
                         organizationName={organization.name}
@@ -135,7 +135,7 @@ function DomainsView() {
                     ) : (
                       <Alert>
                         <AlertDescription>
-                          Only an Organization Admin can run domain
+                          Only an admin can run domain
                           verification.
                         </AlertDescription>
                       </Alert>

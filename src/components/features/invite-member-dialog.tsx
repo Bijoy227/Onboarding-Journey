@@ -5,6 +5,7 @@ import { Loader2, TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
 
 import { FieldSelect } from "@/components/common/field-select";
+import { BrandChecklist } from "@/components/features/brand-checklist";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
@@ -18,7 +19,11 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAppState, useSession } from "@/lib/demo/demo-provider";
-import { getAssignableRoles } from "@/lib/permissions/permissions";
+import { getReachableBrands } from "@/lib/permissions/access";
+import {
+  getAssignableRoles,
+  memberRoleId,
+} from "@/lib/permissions/permissions";
 import {
   InvitationError,
   inviteMember,
@@ -32,16 +37,28 @@ import type { Organization, Role, User } from "@/types";
  * An email outside the organization's verified domains is surfaced as
  * information, never as a blocker: explicit invitations are a legitimate way in
  * for consultants, agencies and other external collaborators.
+ *
+ * A Broker invitation can name connected Brands to assign on acceptance. The
+ * Platform Admin passes `organizationId` to invite an organization's first
+ * admin.
  */
 export function InviteMemberDialog({
   open,
   onOpenChange,
+  organizationId,
+  defaultRoleId,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  organizationId?: string;
+  defaultRoleId?: string;
 }) {
   const state = useAppState();
-  const { organization, user } = useSession();
+  const session = useSession();
+  const user = session.user;
+  const organization = organizationId
+    ? state.organizations.find((org) => org.id === organizationId)
+    : session.organization;
 
   if (!organization || !user) return null;
 
@@ -56,6 +73,7 @@ export function InviteMemberDialog({
             organization={organization}
             user={user}
             roles={roles}
+            defaultRoleId={defaultRoleId ?? memberRoleId(organization.type)}
             onDone={() => onOpenChange(false)}
           />
         ) : null}
@@ -68,20 +86,26 @@ function InviteForm({
   organization,
   user,
   roles,
+  defaultRoleId,
   onDone,
 }: {
   organization: Organization;
   user: User;
   roles: Role[];
+  defaultRoleId: string;
   onDone: () => void;
 }) {
+  const state = useAppState();
   const [email, setEmail] = useState("");
   const [roleId, setRoleId] = useState<string | null>(
-    () =>
-      roles.find((role) => role.name !== "Organization Admin")?.id ??
-      roles[0]?.id ??
-      null,
+    () => roles.find((role) => role.id === defaultRoleId)?.id ?? roles[0]?.id ?? null,
   );
+  const [brandIds, setBrandIds] = useState<string[]>([]);
+  const role = roles.find((item) => item.id === roleId);
+  const picksBrands =
+    organization.type === "brokerage" && role !== undefined && !role.hasFullBrandAccess;
+  const connected =
+    organization.type === "brokerage" ? getReachableBrands(state, organization) : [];
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
@@ -97,6 +121,7 @@ function InviteForm({
         email,
         organizationId: organization.id,
         roleId,
+        brandOrganizationIds: picksBrands ? brandIds : undefined,
         invitedByUserId: user.id,
       });
       toast.success("Invitation sent", {
@@ -155,10 +180,24 @@ function InviteForm({
             onChange={setRoleId}
             placeholder="Select a role"
           />
-          <p className="text-xs text-muted-foreground">
-            {roles.find((role) => role.id === roleId)?.description}
-          </p>
+          <p className="text-xs text-muted-foreground">{role?.description}</p>
         </div>
+
+        {picksBrands ? (
+          <div className="space-y-2">
+            <Label>Brands</Label>
+            <BrandChecklist
+              brands={connected}
+              value={brandIds}
+              onChange={setBrandIds}
+              disabled={pending}
+            />
+            <p className="text-xs text-muted-foreground">
+              Optional. Each Brand starts at Full access when they accept, as
+              long as it is still connected then. You can restrict it later.
+            </p>
+          </div>
+        ) : null}
 
         {external ? (
           <Alert>

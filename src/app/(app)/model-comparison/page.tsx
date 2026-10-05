@@ -65,12 +65,19 @@ export default function ModelComparisonPage() {
               <Arrow />
               <Node label="Role" />
               <Arrow />
-              <Node label="Permissions" />
+              <Node label="Organization permissions" />
+            </div>
+            <div className="space-y-1.5">
+              <Node label="Membership" muted />
+              <Arrow />
+              <Node label="Brand Access (one per Brand, Full or Custom)" />
+              <Arrow />
+              <Node label="Module actions" />
             </div>
             <div className="space-y-1.5">
               <Node label="Brand Organization" muted />
               <Arrow bidirectional />
-              <Node label="Brokerage Organization" muted />
+              <Node label="Brokerage Organization (connected by the Platform Admin)" muted />
             </div>
           </CardContent>
         </Card>
@@ -117,13 +124,15 @@ export default function ModelComparisonPage() {
               {[
                 "Multiple administrators per organization.",
                 "Multiple brokers inside one brokerage.",
-                "Multiple brokerages per brand.",
-                "Private and managed brands with no brand owner.",
+                "Multiple brokerages per brand, connected by the Platform Admin.",
+                "Private-label brands with no members of their own.",
+                "Modules enabled per organization, the ceiling for everyone in it.",
+                "Per-brand access: Full by default, or a custom list of modules and actions.",
                 "Organization discovery from a work email domain.",
                 "Domain verification as proof of ownership.",
                 "Self-service onboarding for customers.",
                 "Admin approval workflows for joining.",
-                "A clear, inspectable permission model.",
+                "One resolver that decides access on every request.",
                 "Platform administration separated from customer administration.",
               ].map((item) => (
                 <li key={item} className="flex gap-2 text-sm">
@@ -144,11 +153,11 @@ export default function ModelComparisonPage() {
         </CardHeader>
         <CardContent className="text-sm text-muted-foreground">
           <p>
-            Getting the identity foundation right first means plans, module
-            entitlements, billing, SSO, SCIM, custom roles and teams can all be
-            added later without redesigning who a customer is or how they get
-            access. None of those are built here — the point is that they would
-            not require starting over.
+            Getting the identity foundation right first means SSO, SCIM, custom
+            roles, teams and, should it ever come back, billing can all be added
+            later without redesigning who a customer is or how they get access.
+            None of those are built here: the point is that they would not
+            require starting over.
           </p>
         </CardContent>
       </Card>

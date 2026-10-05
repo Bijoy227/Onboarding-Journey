@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useDemo, useSession } from "@/lib/demo/demo-provider";
+import { ACCESS_KIND_LABEL } from "@/lib/permissions/access";
 import { MODULE_ACTIONS } from "@/lib/permissions/modules";
 import { PERMISSIONS } from "@/lib/permissions/permissions";
 import { cn } from "@/lib/utils";
@@ -16,8 +17,9 @@ import type { ModuleAction } from "@/types";
 const ACTION_LETTER: Record<ModuleAction, string> = {
   view: "V",
   create: "C",
-  edit: "E",
+  update: "U",
   delete: "D",
+  import: "I",
   export: "X",
 };
 
@@ -26,7 +28,7 @@ const ACTION_LETTER: Record<ModuleAction, string> = {
  *
  * Its whole job is to make the authorization chain legible while presenting:
  * you can point at it and say "same application, different membership,
- * different role, different permissions".
+ * different role, different Brand, different access".
  */
 export function PermissionPanel() {
   const { devMode, setDevMode } = useDemo();
@@ -36,8 +38,10 @@ export function PermissionPanel() {
     role,
     permissions,
     isPlatformAdmin,
-    plan,
-    entitledModules,
+    isSupport,
+    availableModules,
+    brands,
+    activeBrand,
     moduleAccess,
   } = useSession();
   const [collapsed, setCollapsed] = useState(false);
@@ -77,22 +81,34 @@ export function PermissionPanel() {
             <dl className="space-y-1.5 text-xs">
               <Row label="User" value={user.name} />
               <Row label="Organization" value={organization?.name ?? "—"} />
-              <Row label="Plan" value={plan?.name ?? "—"} />
               <Row
                 label="Role"
                 value={
-                  isPlatformAdmin && !role
-                    ? "Platform Admin (no membership)"
-                    : (role?.name ?? "No membership")
+                  isSupport
+                    ? "Platform Admin (support access)"
+                    : isPlatformAdmin && !role
+                      ? "Platform Admin (no membership)"
+                      : (role?.name ?? "No membership")
                 }
               />
+              <Row
+                label="Active brand"
+                value={
+                  activeBrand
+                    ? `${activeBrand.brand.name} · ${ACCESS_KIND_LABEL[activeBrand.kind]}`
+                    : "—"
+                }
+              />
+              {organization?.type === "brokerage" ? (
+                <Row label="Brands reachable" value={String(brands.length)} />
+              ) : null}
             </dl>
 
             <div className="space-y-1">
               <p className="text-xs font-medium text-muted-foreground">
-                Effective permissions
+                Organization permissions
               </p>
-              <ScrollArea className="h-48 rounded-lg border">
+              <ScrollArea className="h-40 rounded-lg border">
                 <ul className="divide-y">
                   {PERMISSIONS.map((permission) => {
                     const granted = permissions.includes(permission.id);
@@ -120,17 +136,18 @@ export function PermissionPanel() {
             {organization ? (
               <div className="space-y-1">
                 <p className="text-xs font-medium text-muted-foreground">
-                  Module access ({Object.keys(moduleAccess).length} of{" "}
-                  {entitledModules.length} in plan)
+                  Modules on {activeBrand?.brand.name ?? "no brand"} (
+                  {Object.keys(moduleAccess).length} of {availableModules.length}{" "}
+                  available)
                 </p>
                 <ScrollArea className="h-32 rounded-lg border">
-                  {entitledModules.length === 0 ? (
+                  {availableModules.length === 0 ? (
                     <p className="px-2.5 py-2 text-[11px] text-muted-foreground">
-                      No plan, so no modules.
+                      Nothing is enabled for this organization or Brand yet.
                     </p>
                   ) : (
                     <ul className="divide-y">
-                      {entitledModules.map((entry) => {
+                      {availableModules.map((entry) => {
                         const actions = moduleAccess[entry.id];
                         return (
                           <li
@@ -161,9 +178,11 @@ export function PermissionPanel() {
             ) : null}
 
             <p className="text-[11px] leading-relaxed text-muted-foreground">
-              Resolved as user → membership for this organization → role →
-              permissions. Modules add organization → plan, then role or module
-              grant → action (V C E D X = view, create, edit, delete, export).
+              Permissions: user → membership → role. Modules: what is available
+              on this brand (the organization&apos;s own modules, plus the
+              Brand&apos;s from a Brokerage) ∩ (admin role, or the Brand Access
+              for this brand: Full or Custom). V C U D I X = view, create, update,
+              delete, import, export.
             </p>
           </div>
         )}

@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/breadcrumb";
 import { useAppState, useSession } from "@/lib/demo/demo-provider";
 import { findModuleBySlug } from "@/lib/permissions/modules";
+import type { OrganizationType } from "@/types";
 
 /**
  * Resolves the current route back to its navigation group and item.
@@ -17,11 +18,13 @@ import { findModuleBySlug } from "@/lib/permissions/modules";
  * Matches the longest href, so /organization/members resolves to "Members"
  * rather than to its "/organization" parent.
  */
-function findNavLocation(pathname: string) {
+function findNavLocation(pathname: string, organizationType?: OrganizationType) {
   let best: { group?: string; item: string; length: number } | null = null;
 
   for (const group of NAV_GROUPS) {
     for (const item of group.items) {
+      if (item.organizationType && item.organizationType !== organizationType)
+        continue;
       const matches =
         pathname === item.href || pathname.startsWith(`${item.href}/`);
       if (!matches) continue;
@@ -37,13 +40,19 @@ function findNavLocation(pathname: string) {
 export function OrganizationBreadcrumb({ pathname }: { pathname: string }) {
   const state = useAppState();
   const { organization, isPlatformAdmin } = useSession();
-  const location = findNavLocation(pathname);
+  const location = findNavLocation(pathname, organization?.type);
 
   // Module pages are not in the static navigation: name them from the catalog.
-  const moduleSlug = pathname.match(/^\/modules\/([^/]+)/)?.[1];
+  // A Brand module opened from a Brokerage lives under /modules/brand/.
+  const brandModuleSlug = pathname.match(/^\/modules\/brand\/([^/]+)/)?.[1];
+  const moduleSlug = brandModuleSlug ?? pathname.match(/^\/modules\/([^/]+)/)?.[1];
   const currentModule =
     moduleSlug && organization
-      ? findModuleBySlug(state, organization.type, decodeURIComponent(moduleSlug))
+      ? findModuleBySlug(
+          state,
+          brandModuleSlug ? "brand" : organization.type,
+          decodeURIComponent(moduleSlug),
+        )
       : undefined;
 
   const context = location?.group === "Platform admin"

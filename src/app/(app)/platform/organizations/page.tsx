@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Building2, Search } from "lucide-react";
+import { Building2, Plus, Search } from "lucide-react";
 
 import { OrganizationAvatar } from "@/components/common/avatars";
 import {
@@ -13,6 +13,8 @@ import {
 import { FieldSelect } from "@/components/common/field-select";
 import { PlatformAdminGuard } from "@/components/common/permission-guard";
 import { EmptyState, PageHeader } from "@/components/common/states";
+import { CreateOrganizationDialog } from "@/components/features/create-organization-dialog";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
@@ -24,6 +26,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useAppState } from "@/lib/demo/demo-provider";
+import { getEnabledModules } from "@/lib/permissions/modules";
+import { getConnectionsForOrganization } from "@/lib/services/connection-service";
 
 export default function PlatformOrganizationsPage() {
   return (
@@ -39,6 +43,7 @@ function OrganizationsView() {
   const [type, setType] = useState("all");
   const [status, setStatus] = useState("all");
   const [verification, setVerification] = useState("all");
+  const [creating, setCreating] = useState(false);
 
   const rows = state.organizations
     .map((organization) => {
@@ -51,19 +56,13 @@ function OrganizationsView() {
           membership.organizationId === organization.id &&
           membership.status === "active",
       ).length;
-      const managedBy = state.relationships.find(
-        (relationship) =>
-          relationship.targetOrganizationId === organization.id &&
-          relationship.type === "brokerage_manages_brand" &&
-          relationship.status === "active",
-      );
-      const manager = managedBy
-        ? state.organizations.find(
-            (org) => org.id === managedBy.sourceOrganizationId,
-          )
-        : undefined;
+      const moduleCount = getEnabledModules(state, organization.id).length;
+      const connectionCount = getConnectionsForOrganization(
+        state,
+        organization.id,
+      ).filter((connection) => connection.status === "active").length;
 
-      return { organization, primary, memberCount, manager };
+      return { organization, primary, memberCount, moduleCount, connectionCount };
     })
     .filter(({ organization, primary }) => {
       if (query && !organization.name.toLowerCase().includes(query.toLowerCase()))
@@ -79,7 +78,13 @@ function OrganizationsView() {
     <>
       <PageHeader
         title="Organizations"
-        description="Every Brand and Brokerage on the platform. Customers create these themselves — this list is for oversight, not for data entry."
+        description="Every Brand and Brokerage on the platform. Customers create their own through self-service; you can also set one up here. Only the Platform Admin enables modules and connects Brands to Brokerages."
+        actions={
+          <Button size="sm" onClick={() => setCreating(true)}>
+            <Plus className="size-4" />
+            Create organization
+          </Button>
+        }
       />
 
       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
@@ -139,11 +144,17 @@ function OrganizationsView() {
                   <TableHead>Organization</TableHead>
                   <TableHead className="hidden md:table-cell">Domain</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead className="hidden text-right sm:table-cell">
+                    Modules
+                  </TableHead>
+                  <TableHead className="hidden text-right sm:table-cell">
+                    Connections
+                  </TableHead>
                   <TableHead className="text-right">Members</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {rows.map(({ organization, primary, memberCount, manager }) => (
+                {rows.map(({ organization, primary, memberCount, moduleCount, connectionCount }) => (
                   <TableRow key={organization.id}>
                     <TableCell>
                       <Link
@@ -181,13 +192,22 @@ function OrganizationsView() {
                     <TableCell>
                       <OrganizationStatusBadge status={organization.status} />
                     </TableCell>
+                    <TableCell className="hidden text-right sm:table-cell">
+                      <span
+                        className={
+                          moduleCount === 0
+                            ? "text-sm text-amber-700 dark:text-amber-400"
+                            : "text-sm"
+                        }
+                      >
+                        {moduleCount === 0 ? "None" : moduleCount}
+                      </span>
+                    </TableCell>
+                    <TableCell className="hidden text-right sm:table-cell">
+                      <span className="text-sm">{connectionCount}</span>
+                    </TableCell>
                     <TableCell className="text-right">
                       <span className="text-sm">{memberCount}</span>
-                      {manager ? (
-                        <p className="text-xs text-muted-foreground">
-                          Managed by {manager.name}
-                        </p>
-                      ) : null}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -196,6 +216,8 @@ function OrganizationsView() {
           </CardContent>
         </Card>
       )}
+
+      <CreateOrganizationDialog open={creating} onOpenChange={setCreating} />
     </>
   );
 }

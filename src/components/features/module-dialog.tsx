@@ -21,7 +21,11 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useAppState, useSession } from "@/lib/demo/demo-provider";
 import { ImageFileError, imageFileToThumbnail } from "@/lib/image";
-import { getCatalog } from "@/lib/permissions/modules";
+import {
+  ALL_MODULE_ACTIONS,
+  MODULE_ACTIONS,
+  getCatalog,
+} from "@/lib/permissions/modules";
 import {
   ModuleError,
   createModule,
@@ -29,7 +33,7 @@ import {
   updateModule,
 } from "@/lib/services/module-service";
 import { cn } from "@/lib/utils";
-import type { OrganizationType, PlatformModule } from "@/types";
+import type { ModuleAction, OrganizationType, PlatformModule } from "@/types";
 
 export type ModuleDialogTarget =
   | { kind: "create"; audience: OrganizationType; parentId?: string }
@@ -87,7 +91,9 @@ function ModuleForm({
   );
   const [group, setGroup] = useState(existing?.group ?? "");
   const [route, setRoute] = useState(existing?.route ?? "");
-  const [price, setPrice] = useState(String(existing?.monthlyPrice ?? ""));
+  const [actions, setActions] = useState<ModuleAction[]>(
+    existing?.availableActions ?? ALL_MODULE_ACTIONS,
+  );
   const [description, setDescription] = useState(existing?.description ?? "");
   const [features, setFeatures] = useState(
     (existing?.features ?? []).join("\n"),
@@ -107,7 +113,6 @@ function ModuleForm({
     setError(null);
     setPending(true);
 
-    const monthlyPrice = Number(price);
     const featureList = features.split("\n");
 
     try {
@@ -121,7 +126,7 @@ function ModuleForm({
             group,
             route,
             features: featureList,
-            monthlyPrice: price.trim() === "" ? Number.NaN : monthlyPrice,
+            availableActions: actions,
             imageUrl: imageUrl || null,
           },
           user.id,
@@ -138,13 +143,13 @@ function ModuleForm({
             group,
             route,
             features: featureList,
-            monthlyPrice: price.trim() === "" ? Number.NaN : monthlyPrice,
+            availableActions: actions,
             imageUrl: imageUrl || undefined,
           },
           user.id,
         );
         toast.success(isSub ? "Sub-module added" : "Module added", {
-          description: `${name} is now in the ${audience === "brand" ? "Brand" : "Brokerage"} catalog. Add it to a plan to make it available.`,
+          description: `${name} is now in the ${audience === "brand" ? "Brand" : "Brokerage"} catalog. Enable it for an organization to make it available.`,
         });
       }
       onDone();
@@ -239,32 +244,56 @@ function ModuleForm({
         </div>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div className="space-y-2">
-          <Label htmlFor="module-price">Price per month (USD)</Label>
-          <Input
-            id="module-price"
-            type="number"
-            min={0}
-            step="1"
-            inputMode="decimal"
-            value={price}
-            onChange={(event) => setPrice(event.target.value)}
-            placeholder="49"
-            required
-          />
+      <div className="space-y-2">
+        <Label htmlFor="module-group">
+          {isSub ? "Section" : "Menu group"}
+        </Label>
+        <Input
+          id="module-group"
+          value={group}
+          onChange={(event) => setGroup(event.target.value)}
+          placeholder={isSub ? "Enhanced Reporting" : "Management"}
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label>Available actions</Label>
+        <div className="flex flex-wrap gap-1" role="group" aria-label="Available actions">
+          {MODULE_ACTIONS.map((action) => {
+            const pressed = actions.includes(action.id);
+            // Every module can at least be opened.
+            const locked = action.id === "view";
+            return (
+              <button
+                key={action.id}
+                type="button"
+                aria-pressed={pressed}
+                disabled={locked || pending}
+                title={action.description}
+                onClick={() =>
+                  setActions((current) =>
+                    current.includes(action.id)
+                      ? current.filter((item) => item !== action.id)
+                      : [...current, action.id],
+                  )
+                }
+                className={cn(
+                  "rounded-md border px-2 py-0.5 text-xs font-medium transition-colors",
+                  pressed
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "bg-background text-muted-foreground hover:bg-accent",
+                  locked && "cursor-default",
+                )}
+              >
+                {action.label}
+              </button>
+            );
+          })}
         </div>
-        <div className="space-y-2">
-          <Label htmlFor="module-group">
-            {isSub ? "Section" : "Menu group"}
-          </Label>
-          <Input
-            id="module-group"
-            value={group}
-            onChange={(event) => setGroup(event.target.value)}
-            placeholder={isSub ? "Enhanced Reporting" : "Management"}
-          />
-        </div>
+        <p className="text-xs text-muted-foreground">
+          A report that is view and export only never offers create, update or
+          delete, and Full access never grants them.
+        </p>
       </div>
 
       <div className="space-y-2">

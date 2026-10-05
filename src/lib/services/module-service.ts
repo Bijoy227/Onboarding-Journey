@@ -1,12 +1,18 @@
 import { createId, delay, demoStore } from "@/lib/mock/store";
+import { normalizeActions } from "@/lib/permissions/modules";
 import { nameOf, recordEvent } from "@/lib/services/audit-service";
-import type { AppState, OrganizationType, PlatformModule } from "@/types";
+import type {
+  AppState,
+  ModuleAction,
+  OrganizationType,
+  PlatformModule,
+} from "@/types";
 
 /**
  * The platform module catalog.
  *
- * Only Platform Admins edit it. Plans are built from these entries, and a
- * member's module grants point at them, so deleting one cleans up both.
+ * Only Platform Admins edit it. Organizations' enabled modules and members'
+ * module grants point at these entries, so deleting one cleans up both.
  */
 
 export class ModuleError extends Error {}
@@ -20,7 +26,8 @@ export type ModuleInput = {
   group?: string;
   route?: string;
   features: string[];
-  monthlyPrice: number;
+  /** What the module supports. View is always included. */
+  availableActions: ModuleAction[];
   /** A data: or http(s) image URL. */
   imageUrl?: string;
 };
@@ -43,11 +50,8 @@ export function slugify(value: string): string {
     .replace(/^-+|-+$/g, "");
 }
 
-function validatePrice(price: number): number {
-  if (!Number.isFinite(price) || price < 0) {
-    throw new ModuleError("Enter a monthly price of 0 or more.");
-  }
-  return Math.round(price * 100) / 100;
+function validateActions(actions: ModuleAction[]): ModuleAction[] {
+  return normalizeActions(actions.length > 0 ? actions : ["view"]);
 }
 
 function validateSlug(
@@ -113,7 +117,7 @@ export async function createModule(
 
   const state = demoStore.getState();
   const slug = validateSlug(state, input.audience, input.slug || slugify(name));
-  const monthlyPrice = validatePrice(input.monthlyPrice);
+  const availableActions = validateActions(input.availableActions);
   const imageUrl = validateImageUrl(input.imageUrl);
 
   if (input.parentId) {
@@ -147,7 +151,7 @@ export async function createModule(
       group: input.group?.trim() || undefined,
       route: input.route?.trim() || undefined,
       features: cleanFeatures(input.features),
-      monthlyPrice,
+      availableActions,
       imageUrl,
       sortOrder:
         siblings.reduce((max, module) => Math.max(max, module.sortOrder), -1) +
@@ -202,8 +206,8 @@ export async function updateModule(
   if (changes.features !== undefined) {
     next.features = cleanFeatures(changes.features);
   }
-  if (changes.monthlyPrice !== undefined) {
-    next.monthlyPrice = validatePrice(changes.monthlyPrice);
+  if (changes.availableActions !== undefined) {
+    next.availableActions = validateActions(changes.availableActions);
   }
   if (changes.imageUrl !== undefined) {
     next.imageUrl = validateImageUrl(changes.imageUrl);
@@ -214,12 +218,9 @@ export async function updateModule(
       module.id === moduleId ? next : module,
     );
 
-    const priceChanged = next.monthlyPrice !== existing.monthlyPrice;
     recordEvent(draft, {
-      action: priceChanged ? "module.price_changed" : "module.updated",
-      description: priceChanged
-        ? `${nameOf(draft, actorUserId)} changed the price of ${next.name} from $${existing.monthlyPrice} to $${next.monthlyPrice} a month`
-        : `${nameOf(draft, actorUserId)} updated the module ${next.name}`,
+      action: "module.updated",
+      description: `${nameOf(draft, actorUserId)} updated the module ${next.name}`,
       actorUserId,
     });
 
@@ -228,8 +229,9 @@ export async function updateModule(
 }
 
 /**
- * Removes a module and its sub-modules from the catalog, from every plan and
- * from every member's grants. Returns how many catalog entries went.
+ * Removes a module and its sub-modules from the catalog, from every
+ * organization's enabled modules and from every member's grants. Returns how
+ * many catalog entries went.
  */
 export async function deleteModule(
   moduleId: string,
@@ -250,23 +252,16 @@ export async function deleteModule(
     );
 
     draft.modules = draft.modules.filter((module) => !removed.has(module.id));
-    draft.plans = draft.plans.map((plan) =>
-      plan.moduleIds.some((id) => removed.has(id))
-        ? {
-            ...plan,
-            moduleIds: plan.moduleIds.filter((id) => !removed.has(id)),
-          }
-        : plan,
+    draft.moduleAssignments = draft.moduleAssignments.filter(
+      (assignment) => !removed.has(assignment.moduleId),
     );
-    draft.memberships = draft.memberships.map((membership) =>
-      membership.moduleGrants?.some((grant) => removed.has(grant.moduleId))
+    draft.brandAccess = draft.brandAccess.map((row) =>
+      row.grants.some((grant) => removed.has(grant.moduleId))
         ? {
-            ...membership,
-            moduleGrants: membership.moduleGrants.filter(
-              (grant) => !removed.has(grant.moduleId),
-            ),
+            ...row,
+            grants: row.grants.filter((grant) => !removed.has(grant.moduleId)),
           }
-        : membership,
+        : row,
     );
 
     recordEvent(draft, {
@@ -285,7 +280,7 @@ export async function deleteModule(
 export function getModuleUsage(
   state: AppState,
   moduleId: string,
-): { plans: number; members: number; subModules: number } {
+): { organizations: number; grants: number; subModules: number } {
   const ids = new Set(
     state.modules
       .filter(
@@ -294,11 +289,14 @@ export function getModuleUsage(
       .map((module) => module.id),
   );
   return {
-    plans: state.plans.filter((plan) =>
-      plan.moduleIds.some((id) => ids.has(id)),
-    ).length,
-    members: state.memberships.filter((membership) =>
-      membership.moduleGrants?.some((grant) => ids.has(grant.moduleId)),
+    organizations: new Set(
+      state.moduleAssignments
+        .filter((assignment) => ids.has(assignment.moduleId))
+        .map((assignment) => assignment.organizationId),
+    ).size,
+    grants: state.brandAccess.filter(
+      (row) =>
+        !row.deletedAt && row.grants.some((grant) => ids.has(grant.moduleId)),
     ).length,
     subModules: ids.size - 1,
   };
