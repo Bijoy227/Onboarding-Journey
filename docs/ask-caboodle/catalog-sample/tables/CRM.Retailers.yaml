@@ -1,0 +1,31 @@
+table: CRM.Retailers
+tier: gold
+module: retailers
+scope: shared
+purpose: Retail chains / corporate parents (e.g. Kroger, Sprouts Farmers Market). Top of the retailer → banner → store hierarchy.
+grain: one row per retailer
+soft_delete: true
+
+columns:
+  - { name: ID,            type: uuid, meaning: Primary key. }
+  - { name: CorporateName, type: text, meaning: "The retailer's name as users say it. This is the name column — there is no \"Name\" column.", searchable: true }
+  - { name: ImageURL,      type: text, meaning: Logo for the UI. Never useful in answers. }
+  # CreatedBy … DeletedOn: audit columns, see glossary.conventions.audit_columns
+
+relationships:
+  - to: CRM.Banners
+    kind: logical_fk           # no FK constraint in the database
+    on: '"Banners"."RetailerID" = "Retailers"."ID"'
+    cardinality: one retailer → many banners
+    verified: null  # profiler: orphan rate of Banners.RetailerID
+
+rules:
+  - Distributor sales rows carry the retailer as TEXT ("DistributorSalesRecords"."RetailerName"), not an id. See join-paths.yaml → retailer_to_sales.
+
+aliases_source: DataHub.UnifiedEntityAlias (Approved, EntityType = Retailer) via UnifiedEntities.CrmRetailerId
+
+profile: { rows: null, null_rate_CorporateName: null }  # profiler
+
+provenance:
+  - caboodle/src/Modules/CRM/Modules.CRM.Domain/Retailer/Retailer.cs
+  - MainDbContextModelSnapshot.cs (Retailer block; indexes on CorporateName, Deleted)

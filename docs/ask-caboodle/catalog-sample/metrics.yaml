@@ -1,0 +1,56 @@
+# Every business figure → where it comes from, so answers match the app (design doc §6).
+# tier 1 = persisted rollup · tier 2 = canonical view in the "ask" schema (reconciliation-tested) · tier 3 = C# tool
+
+cases_shipped:
+  tier: raw
+  source: SUM("DataUpload"."DistributorSalesRecords"."CasesShipped")
+  matches_app: Distributor Sales Reports → Total Dollars & Cases tile
+  label_in_answers: "cases shipped (distributor → store)"
+
+sales_dollars:
+  tier: raw
+  source: SUM("DataUpload"."DistributorSalesRecords"."SalesDollars")
+  caveat: Distributor cost dollars, not retail dollars. The app's chain/city views round UP (CEIL); the product view doesn't.
+
+points_of_distribution:
+  tier: raw
+  definitions:   # the app uses different definitions per report — pick by question, and say which
+    by_product: COUNT(DISTINCT "CustomerName") per UPC                         # Sales by Product → "Stores"
+    by_chain:   per chain, SUM over UPCs of COUNT(DISTINCT "CustomerName")     # Sales by Chain → POD
+    by_store:   COUNT(DISTINCT "UPC") per store                                # Sales by Store → POD
+  open_question: Which one is "the" POD in business conversation? (owner)
+
+velocity_units_per_store_per_week:
+  tier: 2
+  source: ask.v_velocity_upc_month   # to be built; one row per brand × source × banner × UPC × month
+  definition: units ÷ distinct stores ÷ weeks in month (31-day 4.43, 30-day 4.29, Feb 4.0)
+  reconciles_with: Velocity Per Store report
+  known_app_issue: >
+    The promotion velocity endpoint counts the same month in different years once when summing
+    weeks (GetVelocityPerStoreReportForPromotionRequest.cs:140). The view must not inherit this;
+    the reconciliation test documents the difference.
+
+planned_promo_cases:
+  tier: 3
+  tool: get_promotion_performance(promoIds[], brandId, detail = "summary")
+  why: Calculator logic (SKU lifecycle, month splitting, overlaps, EDLP, fees) — never re-derive in SQL.
+  also_serves: [planned_non_promo_cases, planned_promo_revenue, tpr_spend, total_spend, tpr_percent]
+
+actual_vs_plan:
+  tier: 1
+  source: TradeSpend.BrandApprovedMonthlyReport
+  shape: one row per brand × Source × Distributor × Retailer × Banner × Product (text) × Year × Type, with January…December columns
+  type_enum:  # MonthlyReportDependentType
+    1: Planned Non-Promo Case
+    2: Planned Promo Case
+    3: Actual Case
+    4: Planned Non-Promo Revenue ($)
+    5: Planned Promo Revenue ($)
+    6: Actual Revenue ($)
+    7: Planned Case Total
+    8: Variance (%)
+    9: Planned Revenue Total ($)
+  source_enum: { 1: Planned, 2: Actual }   # MonthlyReportSource
+  caveats:
+    - Refreshed on demand, not live — report LastRefreshedAt with the answer.
+    - Actuals are matched to plans by banner and product NAME text; unmatched sales are not in it.

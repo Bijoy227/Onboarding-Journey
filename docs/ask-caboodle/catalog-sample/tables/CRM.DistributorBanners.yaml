@@ -1,0 +1,29 @@
+table: CRM.DistributorBanners
+tier: gold
+module: distributors
+scope: brand
+purpose: >
+  For a given brand, which distributor serves which banner, and the distributor's markup. The same
+  banner can be served by different distributors for different brands — so always filter BrandID.
+grain: one row per brand × banner × distributor
+soft_delete: true
+
+columns:
+  - { name: ID,                type: uuid, meaning: Primary key. }
+  - { name: BrandID,           type: uuid, meaning: The brand this relationship belongs to. Always filter. }
+  - { name: BannerID,          type: uuid, meaning: CRM.Banners.ID. }
+  - { name: DistributorID,     type: uuid, meaning: "CRM.Distributors.ID (KeHE, UNFI, or a regional sub-distributor)." }
+  - { name: DistributorMarkup, type: real, meaning: "Distributor markup % applied to the brand's price for this banner. A pricing input, not a sales figure." }
+
+relationships:
+  - { to: CRM.Banners,      kind: logical_fk, on: '"DistributorBanners"."BannerID" = "Banners"."ID"' }
+  - { to: CRM.Distributors, kind: logical_fk, on: '"DistributorBanners"."DistributorID" = "Distributors"."ID"' }
+
+rules:
+  - Never join this table without "BrandID" = <brand>; otherwise rows from other brands multiply results.
+
+indexes: [ [BrandID, BannerID, DistributorID] ]
+
+provenance:
+  - MainDbContextModelSnapshot.cs (DistributorBanner block)
+  - caboodle/src/Modules/TradeSpend/Modules.TradeSpend.Application/MonthlyReport/RefreshMonthlyReportRequest.cs:1443

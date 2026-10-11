@@ -1,0 +1,113 @@
+table: DataUpload.DistributorSalesRecords
+tier: gold
+module: distributor-sales-report
+scope: brand
+purpose: >
+  Actual monthly shipments of the brand's products from KeHE and UNFI distribution centers to
+  individual stores, normalized from the distributor report files the brand uploads (or the portal
+  sync pulls). The source of every "actual sales" figure in Caboodle.
+grain: one row per brand × distributor (Source) × store × distribution center × UPC × month
+soft_delete: true
+
+semantics:
+  - These are SHIPMENTS (distributor → store), not consumer purchases. Say "shipped".
+  - Monthly only. No weeks, no days. "ReportDate" is the 1st of the month.
+  - No promotion flag. Nothing here says whether a shipment was promotional.
+  - Only rows whose UPC exists in the brand's product catalog are kept; rows that failed retailer/store/UPC mapping are excluded, so totals can be lower than the raw distributor file.
+
+columns:
+  - { name: ID,                 type: uuid,      meaning: Primary key. }
+  - { name: BrandID,            type: uuid,      meaning: Owning brand. Always filter. }
+  - { name: BrandName,          type: text,      meaning: Brand name copied at import. Display only; filter on BrandID. }
+  - name: Source
+    type: integer
+    meaning: Which distributor report the row came from.
+    enum: { 1: UNFI, 2: KeHE }     # Provider enum; 3 = SPINS never appears in this table
+  - name: ReportDate
+    type: timestamp
+    meaning: First day of the month the shipments belong to (chosen at import). The only business date in this table.
+    usage: 'Filter half-open ranges: "ReportDate" >= ''2026-04-01'' AND "ReportDate" < ''2026-07-01''.'
+  - { name: RetailerName,       type: text,  meaning: "Chain name after mapping (KeHE \"Retailer\", UNFI \"Chain\"). TEXT, not an id.", searchable: true }
+  - { name: Banner,             type: text,  meaning: Banner resolved from the store list at import. TEXT; joins to CRM.Banners."BannerName" case-insensitively. }
+  - { name: CustomerName,       type: text,  meaning: "The STORE (ship-to customer), not a person. Shown as \"Store\" in the app." }
+  - { name: StoreListEntryId,   type: uuid?, meaning: Link to DataHub.StoreListEntries when the store was matched. Prefer it over CustomerName text for store identity when not null. }
+  - { name: AddressLine1,       type: text,  meaning: Store street address. }
+  - { name: AddressLine2,       type: text,  meaning: Store address line 2. }
+  - { name: City,               type: text,  meaning: Store city. }
+  - { name: State,              type: text,  meaning: Store state code. }
+  - { name: PostalCode,         type: text,  meaning: Store ZIP. }
+  - { name: Region,             type: text,  meaning: Distributor's territory (KeHE RetailerArea). TEXT; not CRM.Regions. }
+  - { name: Channel,            type: text,  meaning: "KeHE channel, e.g. \"Natural\". Often null for UNFI." }
+  - { name: DistributionCenter, type: text,  meaning: "Shipping warehouse name (\"DC\"/\"warehouse\"). TEXT; not linked to CRM.DistributionCenters." }
+  - { name: UPC,                type: text,  meaning: Product UPC as reported by the distributor. Products are grouped by UPC across all reports. }
+  - { name: ProductDescription, type: text,  meaning: Product name; overwritten with the catalog product name when the UPC mapped. }
+  - { name: Category,           type: text,  meaning: Product category (KeHE rows use the brand catalog's category). }
+  - { name: SubCategory,        type: text,  meaning: Product sub-category from the distributor report. }
+  - name: CasesShipped
+    type: numeric?
+    meaning: Cases shipped in the month.
+    caveat: For KeHE this is derived (units ÷ pack, rounded) — small rounding differences vs units are expected.
+  - { name: Units,        type: integer?, meaning: "Units (eaches) shipped. Raw for KeHE; may be null for some UNFI rows — use COALESCE(\"Units\", \"CasesShipped\" * \"Pack\")." }
+  - { name: Pack,         type: integer?, meaning: Units per case from the brand catalog. }
+  - { name: SalesDollars, type: numeric?, meaning: "Dollar value of the shipments at distributor cost (KeHE CurrentYearCost / UNFI Sales). Not retail (shelf) dollars." }
+  - { name: IsRetailerIgnored, type: boolean, meaning: Mapping flag set only when retailer mapping failed. The app's reports do not filter on it — don't either, to reconcile. }
+  - { name: IsCustomerIgnored, type: boolean, meaning: Same, for store mapping. }
+  - { name: IsUpcIgnored,      type: boolean, meaning: Same, for UPC mapping. }
+  - { name: RawRetailerValue,  type: text, meaning: Original retailer text before mapping. Diagnostics only. }
+  - { name: RawCustomerValue,  type: text, meaning: Original store text before mapping. Diagnostics only. }
+  - { name: RawUpcValue,       type: text, meaning: Original UPC before mapping. Diagnostics only. }
+  - { name: ResolutionNotes,   type: text, meaning: Mapping notes. Diagnostics only. }
+
+relationships:
+  - to: CRM.Banners
+    kind: text_join
+    on: 'LOWER(TRIM("Banners"."BannerName")) = LOWER(TRIM("DistributorSalesRecords"."Banner"))'
+    verified: null  # profiler: share of SalesDollars matched
+  - to: CRM.Retailers
+    kind: text_join
+    on: 'LOWER(TRIM("Retailers"."CorporateName")) = LOWER(TRIM("DistributorSalesRecords"."RetailerName"))'
+    verified: false  # mined assumption — import may store a distributor-side chain name; profiler to confirm
+  - to: DataHub.StoreListEntries
+    kind: logical_fk
+    on: '"DistributorSalesRecords"."StoreListEntryId" = "StoreListEntries"."ID"'
+    optional: true
+  - to: ProductSpecs.ProductSpecifications
+    kind: normalized_text_join
+    on: normalized UPC = normalized "UPCNumber" (same brand)
+    note: The import normalizes UPCs before matching (NormalizeUpc). Use the canonical view ask.v_product_upc — raw string equality misses rows.
+    verified: false  # view not built yet
+
+rules:
+  - Always "Deleted" = FALSE AND "BrandID" = <brand>.
+  - Never infer promo vs non-promo from this table → metrics.yaml (planned_promo_cases, actual_vs_plan).
+  - Velocity and POD have app-specific definitions → metrics.yaml. Don't improvise.
+  - For "stores carrying X" count DISTINCT "CustomerName" (matches the app's reports) and say it means stores that received shipments in the period.
+  - State the months covered — some brands upload late, so the latest month may be missing for one distributor.
+
+examples:   # verified question → SQL pairs; seed for few-shot retrieval
+  - question: "Total cases and dollars shipped by distributor last quarter"
+    sql: |
+      SELECT CASE dsr."Source" WHEN 1 THEN 'UNFI' WHEN 2 THEN 'KeHE' END AS distributor,
+             SUM(dsr."CasesShipped")       AS cases_shipped,
+             ROUND(SUM(dsr."SalesDollars")) AS sales_dollars
+      FROM "DataUpload"."DistributorSalesRecords" dsr
+      WHERE dsr."Deleted" = FALSE
+        AND dsr."BrandID" = @brand_id
+        AND dsr."ReportDate" >= @quarter_start AND dsr."ReportDate" < @quarter_end
+      GROUP BY dsr."Source"
+      ORDER BY cases_shipped DESC
+      LIMIT 10
+    verified_by: eval#014   # illustrative id
+
+profile:   # profiler fills from the prod restore
+  rows: null
+  report_date_min: null
+  report_date_max: null
+  brands_with_data: null
+  null_rate: { Units: null, StoreListEntryId: null, Banner: null }
+
+provenance:
+  - caboodle/src/Modules/DataUpload/Modules.DataUpload.Domain/DistributorSalesRecords/DistributorSalesRecord.cs
+  - caboodle/src/Modules/DataUpload/Modules.DataUpload.Application/Requests/DistributorSalesRecords/SyncDistributorSalesRecordsRequest.cs (UPC filter, units ÷ pack)
+  - docs/Distributor-Sales-Reports-Module.md §2 glossary, §5 report definitions
+  - caboodle/src/BuildingBlocks/Core/Shared/Enums/Enums.cs (Provider)

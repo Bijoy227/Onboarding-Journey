@@ -1,0 +1,67 @@
+table: TradeSpendSandbox.PromotionalEvents
+tier: gold
+module: trade-spend-sandbox
+scope: brand
+purpose: >
+  Planned promotion events inside a Sandbox promotion version: which product, at which banner, when,
+  with which allowances and assumed lift. These are PLANS and what-if scenarios. The brand-approved
+  copy lives in TradeSpend.TradeSpendPromoEvents.
+grain: one row per event (promotion version × banner × product × date range)
+soft_delete: true
+
+columns:
+  - { name: ID,          type: uuid, meaning: Primary key. }
+  - { name: BrandID,     type: uuid, meaning: Owning brand. Always filter. }
+  - { name: PromotionID, type: uuid, meaning: The promotion VERSION this event belongs to (TradeSpendSandbox.Promotions.ID). }
+  - { name: RetailerID,  type: uuid, meaning: CRM.Retailers.ID. }
+  - { name: BannerID,    type: uuid, meaning: CRM.Banners.ID. }
+  - { name: ProductID,   type: uuid, meaning: ProductSpecs.ProductSpecifications.ID. }
+  - { name: CategoryID,  type: uuid, meaning: ProductSpecs.Categories.ID. }
+  - { name: EventName,   type: text, meaning: User-given event name. searchable. }
+  - { name: StartDate,   type: timestamp, meaning: Event start (inclusive). }
+  - { name: EndDate,     type: timestamp, meaning: Event end (inclusive). }
+  - name: Month
+    type: integer
+    meaning: Calendar month the event is filed under (1–12). EDLP events use 0 = every month.
+  - name: PromotionType
+    type: integer?
+    enum: { 1: Regular (TPR), 2: EdlpOnly }
+    meaning: Null-type rows exist in old data; the calendar excludes them — exclude them too.
+  - name: Status
+    type: integer
+    enum: { 1: Active, 2: Cancelled }
+    meaning: Exclude Cancelled unless the question is about cancellations.
+  - { name: EventLift,       type: real,  meaning: "PLANNED lift % typed by the user. 0 for EDLP. Not a measurement." }
+  - { name: ActualLift,      type: real?, meaning: "Lift % typed in by a user after the event. Not computed from sales; often null." }
+  - { name: AvgWeeklySales,  type: real?, meaning: "User-entered baseline units per store per week used for projections." }
+  - { name: NumberOfStores,  type: integer, meaning: Stores the plan assumes will run the event. }
+  - { name: BannerAcv,       type: real,  meaning: "ACV % assumed for the banner (user-entered)." }
+  - { name: PerUnitPrice,    type: real,  meaning: Unit price taken from the price list when the event was planned. }
+  - { name: UnitSRP,         type: real?, meaning: Suggested retail price per unit for the event. }
+  - { name: PromotedUnitScanAllowance, type: real?, meaning: Scan allowance per unit. }
+  - { name: PromotedCaseAllowanceOI,   type: real?, meaning: Off-invoice allowance % per case. }
+  - { name: PromotedCaseAllowanceMCB,  type: real?, meaning: Manufacturer charge-back allowance % per case. }
+  - { name: EveryDayAllowance,         type: real?, meaning: EDLP allowance per unit. }
+  - { name: LumpSumProposed,           type: real?, meaning: Flat fee for the event (prorated by day when sliced by month). }
+  - { name: ScanPercentage,            type: real?, meaning: Share of volume expected to scan at promo. }
+  - { name: IsSubmitted,  type: boolean, meaning: Submitted to the retailer. }
+  - { name: SubmissionNo, type: text,    meaning: Retailer submission reference. }
+  - { name: Comments,     type: text,    meaning: Free text. }
+
+relationships:
+  - { to: TradeSpendSandbox.Promotions, kind: logical_fk, on: '"PromotionalEvents"."PromotionID" = "Promotions"."ID"' }
+  - { to: CRM.Banners,                  kind: logical_fk, on: '"PromotionalEvents"."BannerID" = "Banners"."ID"' }
+  - { to: CRM.Retailers,                kind: logical_fk, on: '"PromotionalEvents"."RetailerID" = "Retailers"."ID"' }
+  - { to: ProductSpecs.ProductSpecifications, kind: logical_fk, on: '"PromotionalEvents"."ProductID" = "ProductSpecifications"."ID"' }
+
+rules:
+  - NEVER compute promo cases, promo revenue, TPR spend, fees or lift projections from these columns in SQL. The calculator applies SKU lifecycle clamping, month-boundary splitting, overlap merging, EDLP branching and fee allocation. Call get_promotion_performance(promoIds, brandId).
+  - Versions — only events of a family's REPORTING version count in reports. See join-paths.yaml → reporting_version_events.
+  - SQL is fine for listing/counting events, dates, banners, products, status, and the user-entered plan fields (labelled as planned assumptions).
+  - There is no join from an event to its actual shipments. For plan vs actual use metrics.yaml → actual_vs_plan.
+
+provenance:
+  - caboodle/src/Modules/TradeSpendSandbox/Modules.TradeSpendSandbox.Domain/PromotionalEvent/PromotionalEvent.cs
+  - caboodle/src/Modules/Shared/Modules.Shared.Application/TradeSpendCalculation/SKULifecycleCalculationHelper.cs:147-171
+  - docs/TradeSpend-Sandbox-Promotion-Versioning-FE.md, docs/promotional-management-frontend-changes.md (EDLP Month = 0, null type)
+  - caboodle/src/BuildingBlocks/Core/Shared/Enums/Enums.cs (PromotionType, PromotionEventStatus)

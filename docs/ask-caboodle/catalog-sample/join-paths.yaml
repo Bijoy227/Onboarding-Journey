@@ -1,0 +1,45 @@
+# Multi-hop routes between business concepts. Returned by get_table_info when any table on the path is requested.
+
+sales_to_distributor:
+  question_shapes: ["sales by distributor entity (incl. sub-distributors)", "shipments for banners served by X"]
+  path: DataUpload.DistributorSalesRecords → CRM.Banners → CRM.DistributorBanners (brand) → CRM.Distributors
+  sql: |
+    FROM "DataUpload"."DistributorSalesRecords" dsr
+    JOIN "CRM"."Banners" b
+      ON b."Deleted" = FALSE AND LOWER(TRIM(b."BannerName")) = LOWER(TRIM(COALESCE(dsr."Banner", '')))
+    JOIN "CRM"."DistributorBanners" dbn
+      ON dbn."Deleted" = FALSE AND dbn."BrandID" = dsr."BrandID" AND dbn."BannerID" = b."ID"
+    JOIN "CRM"."Distributors" d
+      ON d."Deleted" = FALSE AND d."ID" = dbn."DistributorID"
+  failure_modes:
+    - Rows whose Banner text matches no CRM banner drop out (the monthly report has the same behaviour — that's why it reconciles).
+    - For plain "KeHE vs UNFI" questions use dsr."Source" instead; it needs no join and loses no rows.
+  provenance: RefreshMonthlyReportRequest.cs:1426-1460
+
+banner_to_retailer:
+  path: CRM.Banners → CRM.Retailers
+  sql: 'JOIN "CRM"."Retailers" r ON r."Deleted" = FALSE AND r."ID" = b."RetailerID"'
+
+reporting_version_events:
+  question_shapes: ["planned promotions", "how many events", "promotions at banner X"]
+  path: TradeSpendSandbox.PromotionFamilies.ReportingVersionID → TradeSpendSandbox.Promotions → TradeSpendSandbox.PromotionalEvents
+  sql: |
+    FROM "TradeSpendSandbox"."PromotionFamilies" f
+    JOIN "TradeSpendSandbox"."Promotions" p
+      ON p."Deleted" = FALSE AND p."ID" = f."ReportingVersionID"
+    JOIN "TradeSpendSandbox"."PromotionalEvents" e
+      ON e."Deleted" = FALSE AND e."PromotionID" = p."ID"
+    WHERE f."Deleted" = FALSE AND f."BrandID" = @brand_id
+      AND e."Status" = 1 AND e."PromotionType" IS NOT NULL
+  failure_modes:
+    - Joining all versions counts every event up to 5 times (a family has up to 5 versions).
+    - Families with ReportingVersionID null fall out — ask whether to use the latest version instead.
+  verified: false  # confirm with business: is ReportingVersionID the right default for "our plan"?
+
+actual_vs_plan:
+  question_shapes: ["did promotions beat plan", "planned vs actual cases", "variance by month"]
+  route: metric
+  note: >
+    There is no event-level join from plans to shipments. Use metrics.yaml → actual_vs_plan
+    (TradeSpend.BrandApprovedMonthlyReport), which the app already reconciles monthly per
+    distributor × retailer × banner × product.

@@ -1,0 +1,67 @@
+# Global catalog — rendered into the cached system prompt. Excerpt.
+catalog_version: 0.1.0
+
+conventions:
+  identifiers: >
+    All schema, table and column names are PascalCase and case-sensitive. Always double-quote them:
+    "DataUpload"."DistributorSalesRecords"."CasesShipped".
+  soft_delete: >
+    Almost every table has "Deleted" boolean. Always filter "Deleted" = FALSE on every table in the
+    query, including joined tables. Rows with Deleted = TRUE do not exist for the business.
+  audit_columns: >
+    CreatedBy, CreatedOn, LastModifiedBy, LastModifiedOn, DeletedBy, DeletedOn exist on most tables.
+    They record who/when edited the row in Caboodle — never use them as business dates
+    (use ReportDate, StartDate, EndDate, etc.).
+  ids: All "ID" and "*ID" columns are uuid. Never show raw ids to the user; show names.
+  brand_scope: >
+    Brand-owned tables carry "BrandID". Every query on them filters by the brand(s) in the question
+    (resolved via search_entity). Reference tables (retailers, banners, regions, distributors,
+    distribution centers, stores) are shared across brands.
+  money: Dollar amounts are USD, not cents. Round to whole dollars in answers unless asked.
+  limits: Always end ad-hoc queries with LIMIT (max 500). Aggregate in SQL; don't fetch raw rows to count them.
+
+glossary:
+  retailer: The chain or corporate parent (Kroger, Sprouts Farmers Market). Table CRM.Retailers, name column "CorporateName".
+  banner: >
+    A store-brand under a retailer (Kroger → Fred Meyer, Ralphs). Table CRM.Banners, name column
+    "BannerName". Promotions and distributor relationships are set per banner.
+  store: >
+    One physical ship-to location. In distributor sales data the store is "CustomerName" (not a
+    person). Master list: DataHub.StoreListEntries.
+  distributor: Wholesaler that ships the brand's product to stores — KeHE, UNFI (CRM.Distributors).
+  distribution_center: A distributor warehouse ("DC" / "warehouse"). CRM.DistributionCenters."Warehouse"; in sales rows "DistributionCenter" text.
+  case: A shipping unit containing "Pack" units (eaches).
+  pack: Units per case.
+  door: One store. "Door count" = number of stores in a banner (CRM.Banners."DoorCount").
+  pod: >
+    Points of distribution — how many store × product combinations carry the product. Several report
+    definitions exist; see metrics.yaml → points_of_distribution before computing it.
+  velocity: Units (or dollars) sold per store per week. Use the canonical view, never ad-hoc math (metrics.yaml).
+  void: A store that carried a product in some month and shows zero units later — a lost distribution point.
+  tpr: Temporary price reduction — a time-boxed promotion (PromotionType = 1 "Regular").
+  edlp: Everyday low price — an always-on allowance (PromotionType = 2 "EdlpOnly"); stored with Month = 0.
+  lift: >
+    % increase in weekly sales during a promotion vs baseline. In Caboodle lift is USER-ENTERED
+    on the plan (EventLift) and optionally typed in afterwards (ActualLift); it is not measured.
+  acv: All-commodity volume — % of a banner's stores/volume where the item is carried. User-entered per promotion (BannerAcv).
+  promo_vs_non_promo: >
+    Planned split of volume into promotional and baseline cases/revenue. These are MODELED figures
+    from the trade-spend calculator — never compute them in SQL (metrics.yaml).
+
+date_semantics:
+  today: Provided in the user message. Never assume.
+  calendar_months: Sales data is monthly; ReportDate is the first day of the month.
+  quarters: >
+    TBD by business (design doc Q2). Until decided: calendar quarters (Q1 = Jan–Mar) and say so in
+    the answer.
+  ytd: From Jan 1 of the current year through the latest month with data — state the last month included.
+  last_quarter: The most recent fully completed calendar quarter.
+
+data_semantics:
+  distributor_sales: >
+    DataUpload.DistributorSalesRecords are monthly SHIPMENTS from distributors to stores, uploaded by
+    the brand from KeHE / UNFI reports. They are not consumer (scan) sales. Say "shipped" in answers.
+  scan_data: SPINS tables (DataUpload) hold weekly retail scan data for brands that license it.
+  plans_vs_facts: >
+    Trade-spend tables hold PLANS (user-entered lifts, weekly sales, ACV). Distributor sales hold
+    FACTS. Never present a plan field as an actual.

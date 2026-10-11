@@ -1,0 +1,25 @@
+schema: DataUpload
+purpose: >
+  Data the brand uploads or syncs from external sources: distributor sales reports (KeHE, UNFI)
+  and SPINS retail scan data, plus the import-job bookkeeping.
+owning_modules: [distributor-sales-report, kehe, unfi, spins, data-upload-reporting]
+tables:
+  DistributorSalesRecords:
+    status: canonical
+    note: The ONLY table to query for distributor sales. Normalized, mapped, brand-scoped.
+  KeHeRecords:
+    status: never_query
+    note: Raw KeHE file rows before mapping. Unmapped and duplicated across re-uploads. Use DistributorSalesRecords.
+  UnfiRecords:
+    status: never_query
+    note: Raw UNFI file rows. Use DistributorSalesRecords.
+  KeHeMappedRecords:
+    status: never_query
+    note: Intermediate mapping stage. DistributorSalesRecords is rebuilt from it.
+  UNFIMappedRecords:
+    status: never_query
+    note: Intermediate mapping stage.
+  DataMappings:
+    status: to_verify
+    note: null  # mining agent: purpose not yet established
+  # … SpinsRecords, SPINSItemsRanking, SPINSStoresInsight omitted from this sample

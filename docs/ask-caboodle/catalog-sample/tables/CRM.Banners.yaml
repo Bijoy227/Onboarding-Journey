@@ -1,0 +1,46 @@
+table: CRM.Banners
+tier: gold
+module: retailers
+scope: shared
+purpose: >
+  Store brands under a retailer (Kroger → Fred Meyer, Ralphs). The level at which promotions are
+  planned and distributor relationships are set.
+grain: one row per banner
+soft_delete: true
+
+columns:
+  - { name: ID,         type: uuid,    meaning: Primary key. }
+  - { name: BannerName, type: text,    meaning: "Banner name. The name column (not \"Name\"). Distributor sales rows match on this TEXT.", searchable: true }
+  - { name: RetailerID, type: uuid,    meaning: Parent retailer. }
+  - { name: RegionID,   type: uuid?,   meaning: Optional region (CRM.Regions). }
+  - { name: DoorCount,  type: integer, meaning: "Number of stores (doors) in the banner, as maintained in CRM. Used to validate NumberOfStores on promotions; not derived from sales data." }
+
+relationships:
+  - to: CRM.Retailers
+    kind: logical_fk
+    on: '"Banners"."RetailerID" = "Retailers"."ID"'
+    cardinality: many banners → one retailer
+    verified: null  # profiler
+  - to: CRM.Regions
+    kind: logical_fk
+    on: '"Banners"."RegionID" = "Regions"."ID"'
+    optional: true
+    verified: null  # profiler
+  - to: CRM.DistributorBanners
+    kind: logical_fk
+    on: '"DistributorBanners"."BannerID" = "Banners"."ID"'
+    note: Which distributor serves this banner — per brand. See CRM.DistributorBanners.
+  - to: DataUpload.DistributorSalesRecords
+    kind: text_join
+    on: 'LOWER(TRIM("Banners"."BannerName")) = LOWER(TRIM("DistributorSalesRecords"."Banner"))'
+    note: The app's own join (monthly report). Sales rows whose banner text matches no CRM banner fall out.
+    verified: null  # profiler: % of sales dollars whose Banner text matches a CRM banner
+
+rules:
+  - '"DoorCount" is the CRM figure. For "how many stores bought X" use distinct stores in sales data instead, and say which one you used.'
+
+profile: { rows: null, banners_without_retailer: null }  # profiler
+
+provenance:
+  - caboodle/src/Modules/CRM/Modules.CRM.Domain/Banner/Banner.cs
+  - caboodle/src/Modules/TradeSpend/Modules.TradeSpend.Application/MonthlyReport/RefreshMonthlyReportRequest.cs:1443 (text join)

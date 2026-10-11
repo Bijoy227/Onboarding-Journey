@@ -1,0 +1,18 @@
+schema: CRM
+purpose: >
+  Shared industry reference data (retailers, banners, regions, distributors, distribution centers)
+  plus brand-scoped relationship data (which distributor serves which banner for a brand) and the
+  brand's sales CRM (contacts, pipelines).
+owning_modules: [retailers, regions, distributors, contacts, pipelines]
+tables:
+  Retailers:           { status: canonical, scope: shared }
+  Banners:             { status: canonical, scope: shared }
+  Regions:             { status: canonical, scope: shared }
+  Distributors:        { status: canonical, scope: shared }
+  DistributionCenters: { status: canonical, scope: shared }
+  DistributorBanners:  { status: canonical, scope: brand, note: "Brand-specific: which distributor serves a banner for this brand, and at what markup." }
+  Contacts:
+    status: canonical
+    scope: brand
+    note: PII columns (names, emails, phones) are NOT granted to askcaboodle_ro. Count and group only.
+  # … Pipelines, Activities, Plans omitted from this sample

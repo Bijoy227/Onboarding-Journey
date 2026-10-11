@@ -1,0 +1,26 @@
+# TABLE INDEX — generated from catalog/ v0.1.0. Call get_table_info([...]) for columns, joins, rules.
+# Format: schema.table [scope] — what one row is — purpose
+# (Excerpt: the real index has one line per granted table, ~70–80 lines.)
+
+CRM.Retailers [shared] — one retailer (chain) — names in "CorporateName"; parent of banners
+CRM.Banners [shared] — one banner under a retailer — names in "BannerName"; promotions and distributors are set per banner
+CRM.Regions [shared] — one region — names in "RegionName"
+CRM.Distributors [shared] — one distributor (KeHE, UNFI, sub-distributors via ParentID) — names in "DistributorName"
+CRM.DistributionCenters [shared] — one distributor warehouse — names in "Warehouse"
+CRM.DistributorBanners [brand] — brand × banner × distributor — who serves which banner for a brand
+CRM.Contacts [brand] — one CRM contact — counts only, no PII columns
+DataHub.StoreListEntries [shared] — one store location — "StoreName", RetailerId/BannerId, address, distributor customer number
+DataUpload.DistributorSalesRecords [brand] — store × DC × UPC × month — ACTUAL monthly shipments KeHE/UNFI → store; the only actual-sales table
+DataUpload.SpinsRecords [brand] — weekly retail scan data (brands licensing SPINS)
+ProductSpecs.ProductSpecifications [brand] — one product/SKU — "Name", "UPCNumber", distributor item codes
+ProductSpecs.Categories [brand] — one product category — "Name"
+TradeSpendSandbox.PromotionFamilies [brand] — one promotion family (≤5 versions) — ReportingVersionID marks the version reports use
+TradeSpendSandbox.Promotions [brand] — one promotion version
+TradeSpendSandbox.PromotionalEvents [brand] — one planned event (version × banner × product × dates) — PLANS; never compute promo $/cases in SQL
+TradeSpend.TradeSpendPromoEvents [brand] — brand-approved events — PLANS; never compute promo $/cases in SQL
+TradeSpend.BrandApprovedMonthlyReport [brand] — planned vs actual cases/revenue by month — use for plan-vs-actual questions
+…
+
+# TOOLS FOR FIGURES THAT MUST MATCH THE APP
+# get_promotion_performance — planned promo/non-promo cases & revenue, TPR spend, fees (calculator logic)
+# Never re-derive these in SQL.
