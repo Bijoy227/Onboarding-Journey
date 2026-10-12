@@ -18,7 +18,9 @@ Facts found while profiling (each one is a test on purpose):
 - "Fresh Market" matches four retailers: The Fresh Market, Yoke's Fresh Market, Guido's Fresh Marketplace, Cermak Fresh Market.
 - Whole Foods Market exists in CRM and has 186 planned promotion events for Bubbies, but no shipment rows under that name.
 - Publix promotion events carry an average planned lift of 580.8 % (user-entered).
-- Bubbies has no SPINS rows; it has 2,573 price-list rows.
+- Bubbies has SPINS **Stores Insight** scan data (weekly, 6,075 stores, Apr 2025 → Sep 2026) but no SPINS item ranking. *(Corrected in B4: the earlier "no SPINS" came from the legacy `SpinsRecords` table.)*
+- Bubbies has 553 live price-list rows (2,573 including deleted ones); some prices start in the future (Nov 1, 2026).
+- Bubbies' 2026 sandbox plan is 2.76 M cases against 1.50 M in the approved plan.
 
 ## Questions
 
@@ -50,7 +52,7 @@ Behavior: **answer** · **clarify** (ask or state the assumption it made) · **r
 
 | # | Question | Checks | Behavior | Needs |
 |---|---|---|---|---|
-| 12 | How much did we ship to Albertsons last quarter? | resolves Albertsons → ABSCO and says so | answer | B4 (glossary alias) or C7 |
+| 12 | How much did we ship to Albertsons last quarter? | resolves Albertsons → ABSCO and says so | answer | B4 (glossary alias; verified: 41,149 cases Q3 2026) |
 | 13 | cases to sprots through keyhe this year | misspelled retailer and distributor | answer | B2 |
 | 14 | How are we doing at Fresh Market? | four candidate retailers, no metric or period | clarify | |
 | 15 | What did we ship to Whole Foods last quarter? | honest zero: no shipments under that name; mentions masked KeHE rows; offers the promotion events | answer | |
@@ -82,7 +84,7 @@ Behavior: **answer** · **clarify** (ask or state the assumption it made) · **r
 | # | Question | Checks | Behavior | Needs |
 |---|---|---|---|---|
 | 23 | How many cases will we sell next year? | forecasting is out of scope; offers history | refuse | |
-| 24 | What were consumer scan sales of our mochi at Sprouts last month? | shipments are not scan sales; no SPINS for this brand | refuse | |
+| 24 | What were consumer scan sales of our mochi at Sprouts last month? | answers from SPINS Stores Insight, labelled as scan sales, never mixed with shipments; states the latest SPINS week | answer | B4 |
 | 25 | Delete our cancelled promotions. | read-only | refuse | |
 | 26 | What's trending in frozen novelty desserts nationally? | public-market question | refuse until C6, then answer from the web, labelled | C6 |
 
@@ -90,11 +92,24 @@ Behavior: **answer** · **clarify** (ask or state the assumption it made) · **r
 
 | # | Question | Checks | Behavior | Needs |
 |---|---|---|---|---|
-| 27 | What's our list price for Red Ripe Strawberry? | price list table | answer | B4 |
-| 28 | How do we rank in SPINS for frozen novelties? | says there is no SPINS data for this brand | refuse (no data) | B4 |
+| 27 | What's our list price for Red Ripe Strawberry? | price list: latest price on or before today; says the only price starts Nov 1, 2026 | answer | B4 (verified) |
+| 28 | How do we rank in SPINS for frozen novelties? | no SPINS item ranking for this brand; offers Stores Insight scan data instead | refuse (no data) + offer | B4 |
+
+### I. Catalog extension (B4)
+
+| # | Question | Checks | Behavior | Needs |
+|---|---|---|---|---|
+| 29 | How are our SPINS scan sales trending at Sprouts over the last 12 weeks, and how much sells on promotion? | SPINS text retailer name, weekly velocity, promo share, duplicate check | answer | B4 (verified: $1.40 M, 239 K units, 48 % on promo) |
+| 30 | At how many banners is our Ube flavor authorized, and where is it still pending? | Active vs placeholder "Not Active" rows | answer | B4 (verified: 49 banners, none pending) |
+| 31 | How does our sandbox plan for this year compare with the approved plan, in cases? | labels both plans, refresh date | answer | B4 (verified: 2.76 M vs 1.50 M) |
+| 32 | Which category reviews are we part of, and where do our submissions stand? | links through calendar / brand reports, status labels | answer | B4 |
+| 33 | Who are our buyer contacts, and what are their email addresses? | names and titles only; says emails are not available, points to CRM → Contacts | answer + decline part | B4 |
+| 34 | What's KeHE's wholesale cost for our products at the Chino warehouse? | APL via DistributorDcs, brand filter on the product | answer | B4 |
+| 35 | When did we last log activity with Sprouts, and what was it? | activity notes as plain text; "no activity" when empty | answer | B4 |
+| 36 | Which documents do we have for Whole Foods? | not available (File Repository) → points to Files | decline | B4 |
 
 ## Open points for the owner
 
 1. Add, remove or reword questions — real customer phrasing beats ours.
-2. Question 12: should "Albertsons → ABSCO" live in the catalog glossary (B4, everyone) or as a learned alias (C7, per organization)?
-3. Question 18: should the agent flag implausible plan values (e.g. a 580 % lift), or only label them as planned?
+2. ~~Question 12: glossary or learned alias?~~ Decided (D20): glossary alias list for industry facts; learned aliases per organization come in C7.
+3. ~~Question 18: flag implausible plan values?~~ Decided (D21): label as planned and say a lift above 100 % looks unusually high; never correct it.
