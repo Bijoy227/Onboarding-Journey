@@ -77,3 +77,21 @@ Ask Caboodle will add (in its own migrations, local DB first):
 ## 7. FYI — removed endpoints
 
 The old `IntelligenceChatController` (`/api/v1/intelligencechat/*`) and its line in `bare-endpoints-baseline.txt` are gone. The new endpoint is `POST /api/v1/askcaboodle/ask` (admin-only for now). The web FE's `ask-caboodle` page will be rebuilt against it.
+
+---
+
+## Review of the answers — 2026-10-12
+
+Branch `feature/CS-1770-iam-service-broker-workspace` @ `3ebc295e` (9 commits on top of `cba9c60d`, no migrations), merged into `feature/ask-caboodle` as `b30b387c`. Merged solution: build 0 errors, 6,051 tests green, Ask Caboodle DB tests and the promotion reconciliation green, no pending model changes.
+
+| # | Question | Status | What the code does |
+|---|---|---|---|
+| 1 | Brokers seeing a connected brand's distributor sales | **Answered (differently than asked)** | No separate broker modules. On a connected brand a brokerage now holds its own broker modules **plus every module the brand has switched on** (`AccessContextBuilder`, BROKER-BRAND-ACCESS-D1/D5), and a brand-only rule such as `[RequireModule(DistributorSalesReport, null, …)]` admits a brokerage member who was granted that module for the brand. So brokers see distributor sales, KeHE, UNFI and SPINS of connected brands exactly as granted — the owner's rule, with no broker-specific slugs. |
+| 2 | Brands viewing brokerage-owned records | **Answered** | Handler-level scopes: `CategoryReviewArea` (a brand page shows the brand's own reviews plus the catalog reviews of the brokerages it may see, read-only; a brokerage sees only its own), `BrandReportScope` (a brand sees every brokerage's reports about it; a brokerage only its own), `AccessContext.ViewerBrokerageId` for Market Overview (null for brands = all brokerages' rows about the brand). Category Review endpoints are migrated: `bare-endpoints-baseline.txt` went from 105 to 4 lines (only the retailer promo-rule endpoints remain). |
+| 3 | Ask Caboodle catalog entries | **Partly** | Broker audience: `ask-caboodle` node added to `BrokerRoots` ✓. **Not done:** Brand-audience `OptionalDataSource` deps on `distributor-sales-report`, `spins`, `kehe`, `unfi`, `monthly-report`, and any `OptionalDataSource` deps for the broker `ask-caboodle` node. Ask Caboodle can add these lines itself at G1 (only Ask Caboodle entries). |
+| 4 | `IAccessContext` contract | **Answered (stable)** | All members Ask Caboodle uses still exist. New and useful: `BrandsInScope(slug, action)` (selected brand, else every brand with the module), `ViewerBrokerageId`, `OwnsBrokerageRecord`, `DemandAnyModuleAsync` / `DemandCatalogModuleAsync`. `CrossBrand` checks the selected brand when one is sent, for both organization types. **Still open:** no "all brands" helper for platform admins (`Brands` stays empty, `CanUseBrand` true) — Ask Caboodle will treat a platform admin as unrestricted at G3. |
+| 5 | Read-only role / RLS | **Not answered in code** (infrastructure question) | No objection visible; `CREATEROLE` on staging/production still to confirm with devops before deploying (D5). |
+| 6 | Branch and migrations | **Answered** | Work moved to `feature/CS-1770-iam-service-broker-workspace`; no migrations added (snapshot untouched); Organization solution-folder GUID unchanged. Remaining: the 4 retailer promo-rule endpoints; date for `develop` not stated. |
+| 7 | Removed endpoints | **Conflict, resolved** | The branch still migrated the legacy `IntelligenceChatController` and chat handlers to the access engine and added tests for them. Ask Caboodle removed that code in 1a, so the merge keeps it removed (his legacy tests dropped, his duplicate `Intelligence.Application.Test` solution entry dropped). |
+
+**Bonus that helps Ask Caboodle:** `TradeSpendDTOBuilder.GetTradeSpendPromoDTO` and `PromotionDTOBuilder.GetPromotionDTO` now take the brand id directly ("promotion re-pricing on the engine brand"). Ask Caboodle's promotion tool now passes the brand id and its `BrandScopedCurrentUser` adapter is gone; reconciliation with the screens still exact.
