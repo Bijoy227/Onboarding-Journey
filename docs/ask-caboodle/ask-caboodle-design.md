@@ -326,8 +326,8 @@ Modules/Intelligence/
 │    Entities/                            live entity registry + search
 │    Catalog/                             SchemaCatalog + embedded YAML (tables/, glossary, join paths, metrics)
 │    Configuration/IntelligenceOptions    section "IntelligenceSettings"
-└─ Modules.Intelligence.Domain/           (1b, to be re-added) AskSession, AskMessage, AskToolCall, AskFeedback,
-                                          PinnedReport, Prompt, PromptShare, EntityAlias : AuditableEntity
+└─ Modules.Intelligence.Domain/           AskSession, AskMessage, AskToolCall, AskFeedback (re-added in B3);
+                                          later PinnedReport, Prompt, PromptShare, EntityAlias : AuditableEntity
 Hosts/API/Controllers/Modules/Intelligence/AskCaboodleController.cs   POST /api/v1/askcaboodle/ask (SSE)
 ```
 
@@ -338,7 +338,7 @@ Wiring: sln, API.csproj, Modules.Shared.Infrastructure reference, ModuleStartup 
 | Endpoint | Purpose |
 |---|---|
 | `POST ask` (SSE) | `{question, sessionId?, promptId?}` → event stream (§9.4) |
-| `GET sessions`, `GET sessions/{id}` | history |
+| `GET sessions`, `GET sessions/{id}`, `DELETE sessions/{id}` | history (B3) |
 | `POST feedback` | thumbs + optional note |
 | `GET/POST/PUT/DELETE prompts`, `POST prompts/{id}/share` | gallery |
 | `GET/POST/DELETE pins`, `GET pins/{id}/render` | pinned reports (render = re-execute → StructuredReport) |
