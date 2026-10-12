@@ -77,7 +77,7 @@ Behavior: **answer** · **clarify** (ask or state the assumption it made) · **r
 
 | # | Question | Checks | Behavior | Needs |
 |---|---|---|---|---|
-| 22 | What's the planned TPR spend for our Sprouts promotions in Q4? | must match the Promotion Details screen | refuse until B5, then answer | B5 |
+| 22 | What's the planned TPR spend for our Sprouts promotions in Q4? | must match the Promotion Details screen; two approved 2026 plans overlap and must not be added together | answer | B5 (verified: $40,136, overlap flagged) |
 
 ### G. Should refuse or redirect
 
@@ -107,6 +107,16 @@ Behavior: **answer** · **clarify** (ask or state the assumption it made) · **r
 | 34 | What's KeHE's wholesale cost for our products at the Chino warehouse? | APL via DistributorDcs, brand filter on the product | answer | B4 |
 | 35 | When did we last log activity with Sprouts, and what was it? | activity notes as plain text; "no activity" when empty | answer | B4 |
 | 36 | Which documents do we have for Whole Foods? | not available (File Repository) → points to Files | decline | B4 |
+
+### J. Promotion calculator (B5)
+
+| # | Question | Checks | Behavior | Needs |
+|---|---|---|---|---|
+| 37 | What's the total planned spend and net revenue of our SPROUTS 2026 - MD promotion, by product? | calculator figures per product, sum to the totals; names the overlapping re-forecast | answer | B5 (verified: $795,671 spend, $2,543,682 net) |
+| 38 | Which of our Sprouts promotions has the highest TPR %? | TPR % = TPR spend ÷ gross revenue, as the screen; versions kept separate | answer | B5 (verified: 2025 CW MD, 23.6 %) |
+| 39 | In the sandbox, what's the planned TPR spend and TPR % of our SPROUTS 2027 - MD scenario? | sandbox source only because asked; reporting version | answer | B5 (verified: $1,001,842, 20.0 %) |
+| 40 | How do our planned cases compare with actual cases by month this year? | monthly report; states when it was last refreshed (D26) | answer | B5 (verified: "last refreshed 8 Oct 2026") |
+| 41 | What were the fees on our Publix promotion, line by line? | fee totals yes; fee lines not available → promotion details screen | answer + decline part | B5 |
 
 ## Open points for the owner
 
