@@ -138,6 +138,7 @@ Baseline breakdown (one 4-call question, $0.123): uncached input $0.062 (history
 | — | Long sessions: use server-side context editing / compaction (append-only compatible) instead of trimming history | none | B3 note | avoids cache + thinking breakage |
 
 Target after B1 + B7 (owner decides at the B7 gate): **≤ $0.05 per typical question at equal eval score**; pinned-report views $0.
+**Met in B7b (2026-10-14):** Sonnet 5.5 medium averages $0.040 per answer on the golden set at Opus-level quality (Opus 5.5 medium: $0.112).
 
 ---
 
@@ -290,8 +291,32 @@ Target after B1 + B7 (owner decides at the B7 gate): **≤ $0.05 per typical que
 - Note: switching model starts fresh conversations (thinking blocks are model-bound) — fine because sessions are per question flow.
 - **Done when:** decision recorded here + config updated.
 
+### B7b — Sonnet readiness
+- Added by the owner on 2026-10-13 after B7: fix the causes of Sonnet's repeat errors, then compare again (D41–D45).
+- **As built:**
+  - **Name search:**
+    - promotions show their active event count, first and last event dates and retailers;
+    - approved promotions rank above sandbox families on equal scores;
+    - strong matches of every type come before weak ones, and within each the types take turns, so stores can't crowd promotions out of the 10-line list;
+    - the search says how many matches it cut, and that the rest must be listed before answering or asking.
+  - **Calculator tool:** a definitions line (net = total revenue − total spend). It accepts a one-word choice sent as a list or as JSON text.
+  - **Glossary (always in the prompt):** store key, de-duplicated store counts of every row (as in the app), net revenue, choosing promotions by event dates (default: the one covering today), period comparisons with COALESCE, "carry" with no period = latest month, last-quarter example, voids.
+  - **Prompt:** "most months" is a figure and is computed in SQL.
+  - **Table details:** each table's rules render before its columns.
+    - New examples: a cross-distributor store count, voids, and every approved promotion at a retailer with its dates.
+    - The Monthly Report has a caveat that its actuals can differ from shipments.
+    - The KeHE fractional-cases note is corrected.
+  - **Model:** the default is `claude-sonnet-5-5` with Sonnet 5.5's prices, and Development and Staging settings are changed to match.
+  - **Harness:** the claims check sees the name-search output the agent saw. Its row note says "only the first 40 are included here".
+- **Results** (BE `docs/AskCaboodle-Eval/2026-10-14-b7b-sonnet-readiness.md`):
+  - Opus 5.5 medium 41/45 ($0.112, 26 s); Sonnet 5.5 medium 39/45 ($0.040, 14 s); Sonnet 5.5 high 38/45 ($0.049, 17 s).
+  - Re-checks: three Sonnet failures were noise. Two were fixed and verified on both models (Q06 period comparison, Q09 store count). Q03 fails on both models.
+  - On confirmed results Sonnet medium matches or beats Opus in every group, so the app switched to it (D45).
+- **Data issues found:** DI8–DI10 in `ask-caboodle-data-issues.md`.
+
 ### B8 — Guardrails
 - Per-user daily question cap (`IntelligenceSettings:DailyQuestionLimit`), one concurrent question per session (already gated), per-org monthly budget hook (log + warn), cost per turn persisted (B3). Rate-limit → friendly `error` event.
+- From B7b: the cost estimate uses five price settings whose defaults are now Sonnet 5.5's. Take the prices from the configured model (a price table like the eval's `ModelPrice`), so a model change can't silently misprice answers or budgets. A refusal fallback answered by another model is priced at the main model's rates today.
 - **Done when:** caps enforced with tests.
 
 ---
@@ -474,6 +499,11 @@ Owner answers recorded 2026-10-11.
 | D38 | B6.1: product matching | **Approved:** a name ending with the term scores like a prefix match, plus the several-products rule |
 | D39 | B6.1: other brands' data | **Owner rule:** in a brand environment Ask Caboodle never offers or uses another brand's data; cross-brand questions (e.g. a broker in the broker workspace) follow the user's permissions. Prompt rule now; enforced by IAM and the database rules at GA (G3/G4) |
 | D40 | B6.1 + B7 budget | **Approved:** ≈ $14 in total (client-paid, cannot grow): no automatic re-runs; B6.1 ≈ $6.80 (spent $7.37); B7 = Sonnet 5.5 medium + Haiku 5.5 medium ≈ $5.20, the rest for re-checking cases that differ |
+| D41 | B7b: models in scope | **Owner (2026-10-13):** the final choice is Sonnet 5.5 or Opus 5.5; Haiku 5.5 is out. No per-question routing or two-model setup for now. |
+| D42 | B7b: paid gate | **Approved:** a 4-case Sonnet check, full runs of Sonnet 5.5 medium, Opus 5.5 medium (same prompt, for a fair comparison) and Sonnet 5.5 high (always run, at the owner's request), then re-checks. Spent $14.14 in total (§8). |
+| D43 | B7b: claims check model | **Kept:** Opus 5.5 at low effort, so reports stay comparable. |
+| D44 | B7b: catalog review | **Owner:** make the catalog clearer where it helps the model reason. Done as sharper rules and worked examples, not longer text. |
+| D45 | D8 outcome | **Owner (2026-10-14):** the app runs on **Sonnet 5.5 at medium effort** (default model and its prices changed). Sonnet high is not used. |
 
 ### 7.1 Demo track — dropped 2026-10-12 (D3), kept for history
 
@@ -506,8 +536,9 @@ After the demo: B5, B7, B8, C2, C4–C8, G1–G8, A1–A3.
 | B6 | done | `9f825cce` | 2026-10-13. Owner accepted run 1 with its review as the B6 baseline (2026-10-13); the clean measured baseline comes from the first full run after B6.1. Golden set and harness as in §3 B6 "As built".<br>**Tests:** Intelligence 246 (65 new); solution 6,116 green across 16 projects; build 0 errors, no new warnings; all 45 references match on `caboodle_dev`.<br>**Paid runs (D36), $7.03 in total** (the cap was $7; one re-run cost more than its reserve):<ul><li>**Harness check:** 3 cases, $0.39. It showed two over-strict checks (Q22's "never show $80,271", and data-source caveats read as claims), which were fixed.</li><li>**Baseline (Opus 5.5, medium):** 45 cases, $6.64. Measured 30/45 (67 %), 84 % on rule checks only; about $0.10 and 26 s per question, 5 steps, 89 % of input read from the cache. Report: BE `docs/AskCaboodle-Eval/2026-10-13-claude-opus-5-5-medium.md`.</li></ul>**Review:** 7 failures came from the eval (Q05, Q11, Q15, Q16, Q26, Q28, Q35) and were fixed. After the review, 37/45 pass, 7 fail and Q19 is unclear. Five agent errors share one habit: stating a pattern ("steadily", "every month", "smallest") without checking every row (Q06, Q10, Q13, Q21, Q31). Q14 invented a chain, and Q27 picked the wrong product. |
 | B6.1 | done | `cf0dab78` | 2026-10-13. Owner accepted the run as the B7 baseline, even though the promotions group dropped (judged as noise plus data issue DI2). Details in §3 B6.1.<br>**Tests:** solution 6,120 green (Intelligence 250); build 0 errors, no new warnings; free DB tests green (20).<br>**Paid runs, $7.37:** 9-case check $1.40; full run $5.97.<br>**Full run:** 37/44 (84 %); every rule check passed; 6 agent errors and 1 failure caused by data issue DI2.<br>**Money left for B7:** ≈ $6.60. |
 | B7 | done | `2903dce3` | 2026-10-13. The app stays on Opus 5.5 medium (no setting change); the owner wants lower cost, so B7b works on Sonnet first. Sonnet 5.5 medium 35/45 and Haiku 5.5 medium 33/45, against the Opus baseline 37/44. A Sonnet re-check confirmed real drops in Distribution and Calculator. Recommendation: keep Opus 5.5 medium. Spent $4.83; about $1.80 of the testing budget is left. |
-| B7b | next | | Sonnet readiness (proposed in [`ask-caboodle-next-session.md`](ask-caboodle-next-session.md)). Free code fixes for Sonnet's repeat errors (calculator labels, promotion dates and source in search results, always-on rules for store key, net revenue and promotion listing). Then a paid gate of about $9–10: Sonnet 5.5 high and Opus 5.5 medium, both with the fixes. Post the plan first. **Money:** the client added $70 on 2026-10-13, so about $71.80 is available. Estimate to finish everything: $125–200. |
-| B8 … A3 | todo | | |
+| B7b | done | `d7e48370` | 2026-10-14. **The app now runs on Sonnet 5.5 medium** (D45). Details in §3 B7b; report BE `docs/AskCaboodle-Eval/2026-10-14-b7b-sonnet-readiness.md`.<br>**Full runs, same prompt:** Opus 5.5 medium 41/45 ($0.112, 26 s); Sonnet 5.5 medium 39/45 ($0.040, 14 s); Sonnet 5.5 high 38/45 ($0.049, 17 s). Re-checks showed three Sonnet failures were noise; Q06 and Q09 were fixed and verified on both models; Q03 fails on both.<br>**Tests:** solution 6,129 green (Intelligence 259, coverage 96.3 % unit-only); build 0 errors, no warnings in changed files; DB tests 21 green.<br>**Spent:** $14.14, so about $57.65 is left.<br>**Data issues:** DI8–DI10 added. |
+| B8 | next | | Guardrails (§3 B8), including model-based prices for the cost estimate (B7b note). Post the plan first. |
+| C1 … A3 | todo | | |
 
 ## 9. Data Ask Caboodle does not read (skipped on purpose)
 
