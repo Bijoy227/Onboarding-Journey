@@ -30,7 +30,7 @@ Out of scope: forecasting and promotion insight (design §13.2) — not now.
 | Item | Value |
 |---|---|
 | BE repo | `D:\Fork\Caboodle BE Repository\caboodle.backend` (.NET 6, C# 10, Postgres, EF Core 6, MediatR, Hangfire) |
-| Branch | `feature/ask-caboodle` — local only, not pushed |
+| Branch | `feature/ask-caboodle` — pushed once, at B2 (`origin/feature/ask-caboodle` = `940365b8`); every later commit is local only. Don't push unless the owner asks. |
 | Base | `origin/feature/CS-1770-iam-service-product-spec` @ `cba9c60d` (CS-1770 IAM foundation + latest `develop` + the IAM module work); since 2026-10-12 also `origin/feature/CS-1770-iam-service-broker-workspace` @ `3ebc295e` merged in (`b30b387c`) — the junior's finished IAM work. Merge from that branch from now on. |
 | Phase 1a commit | `b2b9996a` "Update - Ask Caboodle phase 1a - agent loop with schema catalog, read-only SQL and entity search in the Intelligence module, legacy pipeline and tables removed" |
 | Stashes (backups, drop when owner agrees) | `stash@{0}` Intelligence work before alignment · `stash@{1}` old separate-module version on `feature/ask-caboodle-phase1` |
@@ -84,6 +84,14 @@ export ASK_CABOODLE_LIVE_TEST=1 ANTHROPIC_API_KEY=… ASK_CABOODLE_BRAND_ID=0303
 dotnet test caboodle/tests/Intelligence.Application.Test/Intelligence.Application.Test.csproj \
   --filter "FullyQualifiedName~AnswersAQuestionEndToEnd" --logger "console;verbosity=detailed"
 rm -rf caboodle/tests/*/TestResults   # coverage artifacts are not gitignored
+
+# Golden eval (B6) — see BE docs/AskCaboodle-Eval/README.md
+# Free: every reference still returns its recorded values (needs ASK_CABOODLE_CONNECTION_STRING)
+dotnet test caboodle/tests/Intelligence.Application.Test/Intelligence.Application.Test.csproj \n  --filter "FullyQualifiedName~GoldenReferenceTests" --logger "console;verbosity=detailed"
+# Paid (≈ $6 per full run on Opus 5.5 — approval per run): writes docs/AskCaboodle-Eval/<date>-<model>-<effort>.md/.json
+export ASK_CABOODLE_EVAL=1 ASK_CABOODLE_READONLY_CONNECTION_STRING=… ANTHROPIC_API_KEY=… ASK_CABOODLE_EVAL_BUDGET_USD=7
+#   optional: ASK_CABOODLE_EVAL_CASES=Q01,calculator  ASK_CABOODLE_EVAL_MODEL=…  ASK_CABOODLE_EVAL_EFFORT=…
+dotnet test caboodle/tests/Intelligence.Application.Test/Intelligence.Application.Test.csproj \n  --filter "FullyQualifiedName~GoldenEvalTests" --logger "console;verbosity=detailed"
 
 # EF migrations (always --context MainDbContext; ALWAYS build first, never use --no-build with remove)
 # SAFETY: without ASPNETCORE_ENVIRONMENT=Development, dotnet ef loads appsettings.Production.json (prod RDS).
@@ -235,6 +243,26 @@ Target after B1 + B7 (owner decides at the B7 gate): **≤ $0.05 per typical que
 - Harness (opt-in like the live test): runs every case, deterministic scoring (numbers present within tolerance, behavior matches), records steps, latency, tokens, cost; writes `docs/ask-caboodle/eval-results/<date>-<config>.md`.
 - Cost per full run ≈ 30 × $0.08–0.12 ≈ $3 on Opus — **approval per run**.
 - **Done when:** baseline report committed (current config).
+- **Owner decisions 2026-10-13:** D30–D36 (§7) approved as recommended — 45 cases in 7 groups, today fixed at 2026-10-12, a claims check by a fixed judge model, one run per case with failed cases re-run once (flaky), reports in the BE repo `docs/AskCaboodle-Eval/`, $7 cap for the harness check plus the baseline.
+- **As built (test project only; no app code changed):**
+  - **Question file:** `Eval/golden.yaml`, 45 cases in 7 groups, asked as of 2026-10-12, for Bubbies and David. Each case has:
+    - a reference: SQL returning one row, or promotion sets passed through `PromotionCalculator`;
+    - rule checks: numbers within 1 % in the answer or a shown table, mentions, tables read, tools used or not used, SQL not attempted;
+    - notes for the claims check;
+    - the values recorded when it was written.
+  - **Harness:** `GoldenEvalTests`, opt-in with `ASK_CABOODLE_EVAL=1` and a required `ASK_CABOODLE_EVAL_BUDGET_USD` cap.
+    - It sets up the agent the way the live smoke test does, on the read-only login, with today pinned.
+    - The first case runs alone (it writes the prompt cache), then 4 run at a time.
+    - A case starts only when the money spent plus $0.30 reserved for each case in flight stays under the cap; otherwise it waits for those cases, or is skipped.
+    - Failed cases are re-run once (flaky). Nothing is written to the database.
+  - **Claims check:** Opus 5.5 at low effort, through a `report_claims` tool. It sees the case notes, the reference, every query and entity-search result the agent got, the tables it showed, and the answer. It lists claims the data contradicts, figures nothing supports, and claims the notes call wrong. It ignores data-source caveats and figures cited only to explain what wasn't done.
+  - **Prices:** a price table per model (Opus, Sonnet and Haiku 5.5, checked 2026-10-13), so B7 needs no harness change.
+  - **Reports:** BE `docs/AskCaboodle-Eval/` (with a README): Markdown, plus JSON without query rows (~0.6 MB per run).
+  - **Free tests:** `GoldenReferenceTests` (every reference still returns its recorded values) and 65 unit tests (question-file validation, number reading, every check, claims evidence and parsing, runner budget, waiting and re-runs, report, live adapter with a scripted model).
+- **Data findings (B6):**
+  - **KeHE January–May 2025:** Bubbies' rows hold units in `CasesShipped` (1.1–1.5 units per case, against 8.0 from June 2025). 2025 and all-time case totals are inflated.
+  - **Approved monthly report:** a retailer's actuals repeat under each of its banner names (Sprouts × 3). Summed actuals are far above shipments: January 2026 shows 108,282 against 41,986 shipped.
+  - **B4's list-price check:** it answered about the Mini Mochi item, not the main Red Ripe Strawberry 8-pack ($3.96 per unit / $31.68 per case since December 2024).
 
 ### B7 — Model / effort tuning (cost L6, L7) — eval-gated
 - Run the eval matrix (owner approves budget, ≈ $8–12 total): Opus 5.5 {medium, low}, Sonnet 5.5 {high, medium}, optionally Haiku 5.5 {medium}.
@@ -415,6 +443,13 @@ Owner answers recorded 2026-10-11.
 | D27 | B5: overlapping approved promotions | **Approved:** report them separately with a warning; never add them silently |
 | D28 | B5: limit on promotions per call | **Owner asked why. Answer:** there is no technical need. Measured: 73 promotions in 0.7 s, 3,031 events in 27 ms. Built with no limit on what is calculated; the model sees the 25 largest plus totals (tokens), and a 90 s budget is the safety net. |
 | D29 | B5: paid check | **Approved and run:** $0.60 for 6 questions (§8) |
+| D30 | B6: which cases | **Approved (2026-10-13):** all 41 questions with Q40 merged into Q20, Q1/Q4/Q8 again for David, and 2 follow-up (two-turn) cases — 45 cases. Q26 expects a redirect until C6. |
+| D31 | B6: "today" in eval runs | **Approved:** fixed at 2026-10-12 (the date of the question set and its verified figures); moved together with re-recorded values when the dev data is refreshed |
+| D32 | B6: narrative claims | **Approved:** a claims check per case — a fixed judge model (Opus 5.5, low effort) gets the question, reference rows and answer and lists contradicted claims; a contradicted claim fails the case; the report shows pass rates with and without it |
+| D33 | B6: run-to-run noise | **Approved:** one run per case; failed cases re-run once and marked flaky if they pass; the pass rate counts first runs only |
+| D34 | B6/B7: gate groups | **Approved:** 7 groups of ≥ 4 cases (sales and trends, distribution, names and ambiguity, promotions and plan vs actual, calculator, refuse or redirect, other data sources) |
+| D35 | B6: where reports live | **Approved:** BE repo `docs/AskCaboodle-Eval/` (Markdown + JSON), one-line summary in §8 here |
+| D36 | B6: paid runs | **Approved and run:** ≈ $0.40 harness check + ≈ $6 baseline, spending cap $7 (owner: $21 available for testing). Spent $7.03: check $0.39, baseline $6.64 (one re-run cost $0.12 more than its reserve). |
 
 ### 7.1 Demo track — dropped 2026-10-12 (D3), kept for history
 
@@ -444,10 +479,13 @@ After the demo: B5, B7, B8, C2, C4–C8, G1–G8, A1–A3.
 | B4 | done | `91e66816` | 2026-10-12.<br>**Catalog:** 16 → 37 tables. Migration `20261012084457_AddAskCaboodleCatalogGrants` is applied on local `caboodle_dev`: it grants the new tables, adds column grants on Contacts and BrandReports, revokes `CRM.DistributionCenters` and moves the trigram index to `DistributorDcs`. Details in §3 B4 "As built".<br>**Tests:** Intelligence 160, coverage 95.3 % unit-only / 98.5 % with DB. Solution 5,285 green. Build has 0 errors and no new warnings. All 44 catalog examples run as `askcaboodle_app`.<br>**Paid check (D22), $0.60 total**, Opus 5.5, brand Bubbies, one fresh conversation each. Every number below was checked against direct SQL.<ul><li>**List price:** "no KeHE price in effect yet; $3.96/unit, $39.60/case from Nov 1, 2026". $0.1129, 4 calls, 14 s; first of the hour, prefix written.</li><li>**SPINS at Sprouts, 12 weeks:** $1.40 M, 239 K units, 48 % of units on promotion. Duplicates were checked and the data was labelled as scan sales. $0.1009, 5 calls, 34 s.</li><li>**Ube authorization:** 49 banners for the main SKU, none pending; placeholder rows were explained. $0.0823.</li><li>**Sandbox vs approved 2026:** 2,761,800 vs 1,496,729 cases, with the refresh date. $0.1080.</li><li>**Category reviews:** one linked review, INFRA, still "Not Started". $0.0819.</li><li>**Buyer contacts and emails:** names and titles only; said emails are not available and pointed to CRM → Contacts. $0.0481.</li><li>**"Albertsons" last quarter:** searched ABSCO directly from the alias list; 41,149 cases, $1.304 M, 1,589 stores. $0.0614.</li></ul>**Cost note:** the system prompt grew with the index and glossary. The first question of the hour cost $0.113 (B2: $0.0998); the later questions averaged $0.080. |
 | B5 | done | `32e4569d` | 2026-10-12.<br>**Built:** the `get_promotion_performance` tool (approved and sandbox) on the screens' calculator; details in §3 B5 "As built".<br>**Tests:** reconciliation equal to the screens, approved 3 promotions (year and Q4) and sandbox 5 versions. Intelligence 182 tests, coverage 96.2 % unit-only / 98.8 % with DB. Solution 5,307 green; build 0 errors, no new warnings.<br>**Paid check (D29), $0.60, 6 questions**, Opus 5.5, Bubbies. Every figure matched the reconciliation run.<ul><li>**Q22, Q4 Sprouts TPR spend:** $40,136. Both identical 2026 plans were flagged and not doubled, and it asked which plan is current. $0.1511, first of the hour.</li><li>**Spend and net by product, SPROUTS 2026 - MD:** $795,671 spend, $2,543,682 net. The first run showed per-product lines were missing revenue and net; fixed, and the re-run answered all 12 products, summing to the totals. $0.0829 + $0.0859.</li><li>**Highest TPR % at Sprouts:** 2025 CW MD, 23.6% (21.7%, 20.3% for the two 2026 versions, kept separate). $0.0805.</li><li>**Sandbox SPROUTS 2027 - MD:** $1,001,842 TPR spend, 20.0%. It used the reporting version and labelled the figures what-if. $0.0538.</li><li>**Planned vs actual by month (D26):** stated "last refreshed 8 Oct 2026, parts older". It also spotted that the report's Jul–Sep actuals are stale against shipments and suggested a refresh. $0.1437.</li></ul>**Also added during the check:** the month-filter EDLP note (the agent found it in Q22; it is now always stated by the tool). |
 | IAM merge | done | `b30b387c` | 2026-10-12. Merged `feature/CS-1770-iam-service-broker-workspace` @ `3ebc295e` (9 commits, no migrations).<br>**Conflicts:** the legacy Intelligence chat code stays removed; the junior's tests for it and his duplicate `Intelligence.Application.Test` solution entry were dropped; we took his `bare-endpoints-baseline.txt` (4 lines left).<br>**Adaptation:** the calculator builders now take a brand id, so `PromotionCalculator` passes it and `BrandScopedCurrentUser` is removed.<br>**Results:** build 0 errors; 6,051 tests green across 16 projects; Ask Caboodle DB tests and the promotion reconciliation with the access-engine screens green; no pending model changes (an empty throwaway migration was generated, then deleted).<br>**Review of the IAM answers:** `ask-caboodle-questions-for-iam.md`, "Review of the answers". |
-| B6 | next | | Golden eval set + harness: start by posting the B6 plan and open decisions (§0); the question set (`ask-caboodle-question-set.md`) is the seed. |
+| B6 | done | `9f825cce` | 2026-10-13. Owner accepted run 1 with its review as the B6 baseline (2026-10-13); the clean measured baseline comes from the first full run after B6.1. Golden set and harness as in §3 B6 "As built".<br>**Tests:** Intelligence 246 (65 new); solution 6,116 green across 16 projects; build 0 errors, no new warnings; all 45 references match on `caboodle_dev`.<br>**Paid runs (D36), $7.03 in total** (the cap was $7; one re-run cost more than its reserve):<ul><li>**Harness check:** 3 cases, $0.39. It showed two over-strict checks (Q22's "never show $80,271", and data-source caveats read as claims), which were fixed.</li><li>**Baseline (Opus 5.5, medium):** 45 cases, $6.64. Measured 30/45 (67 %), 84 % on rule checks only; about $0.10 and 26 s per question, 5 steps, 89 % of input read from the cache. Report: BE `docs/AskCaboodle-Eval/2026-10-13-claude-opus-5-5-medium.md`.</li></ul>**Review:** 7 failures came from the eval (Q05, Q11, Q15, Q16, Q26, Q28, Q35) and were fixed. After the review, 37/45 pass, 7 fail and Q19 is unclear. Five agent errors share one habit: stating a pattern ("steadily", "every month", "smallest") without checking every row (Q06, Q10, Q13, Q21, Q31). Q14 invented a chain, and Q27 picked the wrong product. |
+| B6.1 | next | | Answer accuracy before B7 (owner, 2026-10-13): fix the agent errors B6 found (patterns stated without checking every row, invented names, wrong product match). Post the plan and open decisions first (§0). Budget: about $14 left for B6.1 + B7, all testing money the client provides. |
 | B7 … A3 | todo | | |
 
 ## 9. Data Ask Caboodle does not read (skipped on purpose)
+
+Data *problems* found along the way (wrong or duplicated rows in Caboodle's own data) are tracked separately in [`ask-caboodle-data-issues.md`](ask-caboodle-data-issues.md).
 
 Kept up to date in every package that changes the catalog or the grants. The agent sees a short version of 9.1 in its system prompt (glossary `not_available`). When asked about that data, it says the data exists in Caboodle, names the screen to use, and never answers from another table.
 

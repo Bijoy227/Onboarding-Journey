@@ -1,6 +1,6 @@
 # Ask Caboodle — Question Set (draft for review)
 
-Status: draft 2026-10-12 · owner reviews · feeds B4 (catalog priorities) and B6 (golden eval)
+Status: 2026-10-13 · seeded the B6 golden eval. The eval cases, with reference SQL and checks, now live in the BE repo at `caboodle/tests/Intelligence.Application.Test/Eval/golden.yaml`, which is the source of truth from B6 on.
 
 Questions a CPG brand user (sales lead, account manager, trade marketing) would ask, written against the data that really exists on local `caboodle_dev`. In B6 each question gets a reference SQL, the expected numbers with a tolerance, and the expected behavior; then it becomes a case in `golden.yaml`.
 
@@ -11,7 +11,7 @@ Questions a CPG brand user (sales lead, account manager, trade marketing) would 
 | Brand | Bubbies Ice Cream (`0303a5ee-9913-47ef-ba6d-cdea180a723f`) — mochi ice cream, most data of any brand |
 | Shipments | KeHE and UNFI, 2025-01 → 2026-09 (latest month: September 2026) |
 | Today | the run date goes in the user message; "last month", "Q3", "this year" resolve from it |
-| Second brand | David (`93c88f8e-5b4a-48cf-a220-219bac8a7a6c`) — rerun questions 1, 4 and 8 to avoid tuning to one brand |
+| Second brand | David (`93c88f8e-5b4a-48cf-a220-219bac8a7a6c`) — rerun questions 1, 4 and 8 to avoid tuning to one brand. David's shipments run January → August 2026 only, so these three also test the data lag (no September yet, no 2025 to compare with). |
 
 Facts found while profiling (each one is a test on purpose):
 - "Albertsons" does not exist by that name: sales and CRM both call it `ABSCO`.
@@ -92,7 +92,7 @@ Behavior: **answer** · **clarify** (ask or state the assumption it made) · **r
 
 | # | Question | Checks | Behavior | Needs |
 |---|---|---|---|---|
-| 27 | What's our list price for Red Ripe Strawberry? | price list: latest price on or before today; says the only price starts Nov 1, 2026 | answer | B4 (verified) |
+| 27 | What's our list price for Red Ripe Strawberry? | price list: latest price on or before today. **Corrected in B6:** the main product ("Bubbies Mochi Ice Cream - Red Ripe Strawberry") lists at $3.96/unit, $31.68/case since Dec 2024; only the separate "Mini Mochi (15 pc)" item starts Nov 1, 2026. The B4 check answered about the Mini Mochi item only. | answer | B4 |
 | 28 | How do we rank in SPINS for frozen novelties? | no SPINS item ranking for this brand; offers Stores Insight scan data instead | refuse (no data) + offer | B4 |
 
 ### I. Catalog extension (B4)
@@ -115,7 +115,7 @@ Behavior: **answer** · **clarify** (ask or state the assumption it made) · **r
 | 37 | What's the total planned spend and net revenue of our SPROUTS 2026 - MD promotion, by product? | calculator figures per product, sum to the totals; names the overlapping re-forecast | answer | B5 (verified: $795,671 spend, $2,543,682 net) |
 | 38 | Which of our Sprouts promotions has the highest TPR %? | TPR % = TPR spend ÷ gross revenue, as the screen; versions kept separate | answer | B5 (verified: 2025 CW MD, 23.6 %) |
 | 39 | In the sandbox, what's the planned TPR spend and TPR % of our SPROUTS 2027 - MD scenario? | sandbox source only because asked; reporting version | answer | B5 (verified: $1,001,842, 20.0 %) |
-| 40 | How do our planned cases compare with actual cases by month this year? | monthly report; states when it was last refreshed (D26) | answer | B5 (verified: "last refreshed 8 Oct 2026") |
+| 40 | How do our planned cases compare with actual cases by month this year? | monthly report; states when it was last refreshed (D26). **Merged into question 20 in the golden eval (D30).** | answer | B5 (verified: "last refreshed 8 Oct 2026") |
 | 41 | What were the fees on our Publix promotion, line by line? | fee totals yes; fee lines not available → promotion details screen | answer + decline part | B5 |
 
 ## Open points for the owner
