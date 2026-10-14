@@ -482,15 +482,130 @@ Decisions D46–D58 (owner, 2026-10-14). The original scope was: a per-user dail
   - **Build:** 0 errors, no warnings in changed files.
 - **Docs:** BE `docs/AskCaboodle-FE.md`, "Usage and limits" section: every endpoint, the fields, who sees what, the periods and the purge caveat (D63).
 
+### B9 — Catalog completion (after C0)
+Decisions D75 and D77 (owner, 2026-10-15). Adds the useful business data that is still missing, without loosening security (§9).
+1. **Promotion fee lines, through the calculator.**
+   - `get_promotion_performance` gains a fee-line breakdown, for approved and sandbox promotions. Each fee shows:
+     - its name and type (lump sum, coupon or Prime);
+     - the banners, products and events it applies to;
+     - its coupon dates;
+     - its amount, as the calculator computes it.
+   - The fee tables (`TradeSpend.BrandApprovedPromotionFees`, `TradeSpendSandbox.PromotionFees`) stay calculator-only, with no SQL grant, so the figures still match the Promotion Details screens.
+   - Before building, check where the app works out each fee's amount. Use that same code, never a new formula.
+   - Remove the glossary's `not_available.promotion_fee_lines`.
+2. **Three CRM tables:**
+   - `CRM.DistributorRetailers`: which distributor serves which retailer for a brand, with `DistributorMarkup` (brand-scoped);
+   - `CRM.DistributorBrands`: brand ↔ distributor, with the parent distributor;
+   - `CRM.RetailerRegions`: retailer ↔ region ↔ banner.
+
+   Each one gets a catalog entry with module tags (D17), rules and a worked example. The grants go in one migration on local `caboodle_dev`.
+3. **Optional, decided when B9 starts:** `DataHub.DistributorUpcMappings` (distributor items ↔ products, with match status), granted without `ResolutionNotes` and `ResolvedBy`.
+4. **§9:** update every row this package changes.
+5. **Tests (free):**
+   - the grant-vs-catalog test;
+   - every new catalog example runs as `askcaboodle_app`;
+   - the drift test;
+   - the fee lines add up to the fee totals on the Promotion Details screen (a reconciliation, as in B5).
+6. **Eval:** 3–4 new cases: fees by type, a distributor's markup, the banners in a region, the distributors that carry the brand.
+7. **Paid:** a targeted check of the new cases plus 4 regression cases, about $0.60 on Sonnet 5.5 medium, approved first. A full eval (≈ $2.60) only if results differ.
+
+### B10 — Platform Admin knowledge (after B9)
+Decisions D72–D75 (owner, 2026-10-15). Platform admins can ask about the whole system except credentials. Organization users stay on their IAM access (G3–G5).
+1. **A second read-only login.** The group role `askcaboodle_admin_ro` (NOLOGIN) and the login `askcaboodle_admin_app`, created by the owner or ops as in B2, with `default_transaction_read_only` and `statement_timeout` on the login. The connection string goes in the user environment variable `IntelligenceSettings__AdminReadOnlyConnectionString`, never in git.
+2. **What it can read:** everything `askcaboodle_ro` reads, plus:
+   - **Organization:** organizations, memberships, roles and permissions, brand connections and access, access requests, domains, and invitations without the token hash;
+   - **Identity:** users without any credential column, roles, user roles, the user hierarchy, and invited users without the verification code;
+   - **Configuration:** modules, module assignments and their history, dependencies, setting definitions and values;
+   - **Auditing:** audit events and trails. First check that trails never hold credential values;
+   - **Email:** the logs' metadata only (template, status, dates), with no addresses or message bodies (D74), plus the template names;
+   - **DataLifecycle:** the purge runs and settings;
+   - **Brand links:** `Brand.BrandBrokers`, `Brand.BrandSubUsers`;
+   - **Data pipeline:** DataHub import, sync, mapping and data-quality tables, and the raw distributor files (§9.1).
+3. **Never granted:**
+   - credentials: `Identity.UserTokens`, `UserLogins`, `UserClaims`, `VerificationCodes`; the password hash, security and concurrency stamps, refresh tokens and email codes in `Identity.Users`; invitation and share-link tokens; `DataHub.ThirdPartyCredentials`;
+   - the `Intelligence` schema (other users' questions, D73);
+   - `hangfire` and `public`.
+4. **Personal data (D72):** user and contact email addresses and phone numbers stay ungranted until the data-handling statement (G8) and Constance's agreement. Names are fine. The gateway's `[email]` / `[phone]` masking stays as a second guard.
+5. **The login follows the role.** The gateway uses the admin login when `IsPlatformAdmin` is true (the same rule as dollars); everyone else keeps `askcaboodle_ro`. The SQL guard keeps blocking the security schemas on the standard login. On the admin login the grants are the boundary, and the guard still blocks `Intelligence`, `hangfire`, `public` and the credential tables.
+6. **Catalog:** the new entries carry `audience: platform-admin`. A platform admin's system prompt is the shared prompt plus an admin index appended at the end, so the shared prefix stays cached. D39 still holds.
+7. **Tests (free):**
+   - a credentials test that scans `information_schema` for secret-like columns (password, hash, token, secret, stamp, code, credential) and fails if either role is granted one;
+   - the grant-vs-catalog test for both roles;
+   - DB tests: the admin login reads an admin table and is refused the password hash (42501), and the standard login is refused the admin tables;
+   - an organization user never gets the admin index.
+8. **Eval:** 4–6 platform-admin cases:
+   - which organizations have Ask Caboodle switched on;
+   - who invited a user;
+   - the imports that failed this week;
+   - the brokers connected to a brand;
+   - the recent module-setting changes.
+9. **Paid:** about $0.60–1.00, approved first.
+10. **Can be split when it starts:** B10a (IAM, organizations, modules, settings, audit) and B10b (the pipeline: imports, syncs, data-quality issues, raw files).
+11. **FE:** no change. Platform admins simply get wider answers (§10.8).
+
 ---
 
 ## 4. Phase 1c — Experience layer (still admin-only)
+
+Since the FE review (2026-10-15, D69–D71), C0 comes first: the FE team builds against it, and pins (C3) depend on it. The order is now **C0 → B9 → B10 → C1 → … → C9** (D77). §10 collects what the FE needs from every package.
+
+### C0 — Answer contract (next; before C1)
+**Why:** the FE renders every answer from one fixed set of pieces, so the design never depends on the question. Pins (C3) re-run the same data block later on fresh data, so everything in it is a rule that the server applies again on every run, never a value the model typed.
+
+1. **Frame.** `present_answer` gains `kind`:
+   - `answer`: a normal answer;
+   - `clarify`: the user must choose;
+   - `cannot_answer`: the data can't answer it.
+
+   The FE treats an unknown kind as `answer`, so the list can grow later.
+2. **Pieces.** All optional except the text:
+
+   | Piece | Holds | Who computes it |
+   |---|---|---|
+   | `headline` | A label, plus a rule: `resultId`, `column`, and `total`, `first`, `max` or `min` | The server computes and formats the value. The model never types the figure, and the label has no figures or dates. |
+   | `notes` | At most one each of `scope`, `period` and `source`. `needed` and `available` only for `cannot_answer`. Short sentences. | The model. `source` names screens and reports ("Monthly Report", "KeHE distributor sales"), never schema names. |
+   | `options` | `clarify` only: 2–5 choices, each a `label` and a `detail`. Choosing one sends the label as the next question in the same session. | The model |
+   | `data` | Today's block (`resultId`, `title`, rows, columns) plus: `view` (the default: `table`, `bar`, `line` or `pie`); `x`, `y[]`; `series` (a column that splits rows into lines or colours); `formats` (`count`, `number`, `usd`, `percent`, `date` or `text` per column); `totalColumns[]`; `highlights` (column + `max`/`min` + `best`/`worst`); `chartable` | The server sums `totals` and finds the highlighted rows on every run. When `chartable` is false the FE hides the Table/Chart switch. |
+   | `text` | The markdown answer, as today | The model |
+   | `suggestions` | As today | The model |
+
+3. **Screen order, fixed:** headline → notes → text → data → options → suggestions → actions.
+4. **Results the agent can show:** `present_answer` already accepts a `run_sql` result or a calculator (`get_promotion_performance`) result. Both can be pinned in C3.
+5. **History:**
+   - The pieces are saved with the message (migration on local `caboodle_dev`), and `GET sessions/{id}` returns them.
+   - Older messages without pieces still render as text plus data.
+6. **Feedback:** `POST feedback` gains an optional `reason`: wrong number, wrong entity, missing context, or other. This is an open enum starting at 5.
+7. **Prompt:** tool description and system-prompt rules for the pieces. The prompt stays shared by every brand (D39).
+8. **Tests (free):**
+   - each piece's validation;
+   - the server-computed headline, totals and highlights;
+   - a re-run with different rows moves the highlight;
+   - history round trip, old messages, and the feedback reason.
+9. **Cost and paid check:**
+   - The extra output is about 100–200 tokens, so roughly +5 % per answer (≈ $0.035 → ≈ $0.037).
+   - Paid: a 4-case check, about $0.25, then a full Sonnet 5.5 medium eval, about $2.60, each with the owner's approval.
+   - The eval also checks: the right `kind` for the refuse/redirect and names-and-ambiguity cases, headlines present where a single figure answers the question, and no change in pass rate.
+10. **Docs:** BE `docs/AskCaboodle-FE.md`, and §10 here.
+11. **Guard for "how does the app work" questions (D78):**
+    - **No made-up steps.** The agent never describes app steps unless a guide entry gives them (C9). Until then it says it can't explain the steps yet, and names the screen when the catalog knows it.
+    - **Users' words.** Answers about concepts and relationships use screen and business terms, never schema names.
+    - **2–3 eval cases:** "How do I create a sandbox promotion?", "What is a promotion family?", "How do banners relate to stores?".
+
+**Decisions to post with the plan:** the headline rules; whether `source` is always required; how the pieces are stored (one JSON column or several); whether the clarify options also appear as suggestions; the feedback reason values.
 
 ### C1 — Token streaming
 - `AnthropicConversation.SendStreamingAsync` using `client.Beta.Messages.CreateStreaming`: accumulate content blocks (text deltas, thinking deltas + signature deltas, tool_use input JSON deltas, server-tool blocks), rebuild the assistant message for the append-only history, stream **text deltas** to the sink as `text-delta` events; final `text` event keeps the full markdown for clients that don't stream.
 - Optional: `thinking.display: "updates"` (beta `thinking-display-updates-2026-08-18`) → short progress notes as `progress` events.
 - Tests: stubbed SSE HTTP responses (text-only turn, tool-use turn, thinking with signature).
 - FE contract update.
+- **Run trace (FE review, 2026-10-15).**
+  - **Live events** for the trace drawer:
+    - a step starting (number and label), plus a "thinking" state between steps;
+    - each tool call starting and finishing: `callId`, step, tool, a summary, duration, ok or error, row count, and the detail.
+  - **Parallel calls** share a step. A failed `run_sql` followed by a retry is marked as a self-correction.
+  - **The step meters** need the limits, so the `session` or `done` event carries `maxSteps` (12) and `wallClockSeconds` (180).
+  - **Past answers:** `GET sessions/{id}/messages/{messageId}/trace`, rebuilt from `AskToolCalls` and the stored transcript.
+  - **Who sees the detail:** an open decision (§7.2). The recommendation: organization users get labels, tools, timings, row counts and matched names, while SQL, tables and columns, catalog notes and Postgres errors are for platform admins only. Today `done.queries` (raw SQL) goes to everyone; fix it here once decided.
 
 ### C2 — Suggested questions (empty state)
 - `GET suggestions` → curated starters (static YAML per org type, later from the gallery/eval set). Zero LLM cost.
@@ -501,9 +616,26 @@ Decisions D46–D58 (owner, 2026-10-14). The original scope was: a per-user dail
 - Endpoints: `POST pins` (from a `data` result id — server keeps the SQL; re-validated by `SqlGuard`), `GET pins`, `GET pins/{id}/render` (re-executes SQL with the current period; **no LLM call**), `DELETE pins/{id}`.
 - Hangfire recurring job (registrar pattern) re-validates all pins nightly; failures flag `broken`.
 - Web-research and analysis answers are not pinnable.
+- **From the FE review (2026-10-15):**
+  - **Store the tool plan, not only SQL.** That is the tool name plus its arguments: `run_sql` with its period parameters, or `get_promotion_performance` with its period. A calculator pin re-runs the calculator, so its figures still match the screens. (The artifact pins a promotions answer.)
+  - **Store C0's data-block rules and headline rule.** `render` returns the same data block as a live answer, plus the headline value and `periodResolved` ("last full quarter → Q3 2026"), so the FE reuses one component.
+  - **Pin card:** title, period token and its resolution, source, status (`ok` / `broken` with a reason), pinned by and on, last refreshed. "Re-ask to repair" is an FE action that starts a new question from the pin's question.
+  - **Open (§7.2):**
+    - one list of period tokens (the artifact has last full quarter, YTD, last 90 days and fixed; this plan has last full month, last full quarter, YTD, last 12 months and custom);
+    - the KPI delta against the previous period ("+6.1 pts vs Q2"), which runs the plan a second time;
+    - whether pins are personal or can be shared.
+  - Render uses the viewer's access (G3/G4).
 
 ### C4 — Prompt gallery
 - `Prompt { OwnerId, OrganizationId, Visibility (private | organization | shared), Title, Text, VariablesJson }`, `PromptShare { PromptId, UserId }`; CRUD + share endpoints; variables (`{brand}`, `{period}`) resolved via entity search / period tokens; seeded starter prompts per org type (from eval-verified questions).
+- **From the FE review (2026-10-15):**
+  - **Tabs:** Organization, Mine, Shared with me.
+  - **Variables:** each can carry preset choices and a default, or be free text.
+  - **Run counts.**
+  - **"Verified":** an organization prompt with a passing eval case.
+  - **Sharing:** with people in the same organization, through IAM members.
+  - **Saved-prompts picker:** the composer's `/` picker lists the starters (C2) and the prompts in one call.
+  - **Open (§7.2):** prompts shared with the organization wait for review ("Pending admin review"). Who reviews them, the organization admin or the Platform Admin?
 
 ### C5 — Verified examples (few-shot) and short-circuit
 - `VerifiedExample { NormalizedQuestion, Sql/ToolPlanJson, CatalogVersion, Source (thumbs-up | eval), BrandScope }`; entries only from thumbs-up (B3) or eval passes (B6).
@@ -522,6 +654,32 @@ Decisions D46–D58 (owner, 2026-10-14). The original scope was: a per-user dail
 
 ### C8 — Cost & quality dashboard data
 - Admin endpoints aggregating audit tables: questions/day, cost per question (p50/p95), steps, cache-hit ratio, thumbs ratio, error/refusal rate, latest eval pass rate, top failing questions.
+- **From the FE review (2026-10-15), the "Flight recorder" screen** (platform admins only):
+  - **Figures:** cost per question (average and by day), steps per question, latency p50/p95, the cache-read share, the thumbs-up rate, the eval pass rate and its date, and refusals correct. Few-shot hit and short-circuit rates come after C5.
+  - **Eval results in the database:** today they are only report files in BE `docs/AskCaboodle-Eval/`. The harness, or an import, must write each run's result, with its date and prompt/catalog version, to a table the API reads.
+  - **Open (§7.2):** a thumbs-down triage list (question, reason, fix note, open/fixed), where the Platform Admin records each fix.
+
+### C9 — Caboodle guide (concepts and relationships; how-to steps later)
+Decision D76 (owner, 2026-10-15). Answers questions about how Caboodle works: what a term or entity means, and how things connect.
+1. **Content:** short entries in the BE repo, embedded like the catalog. Three types:
+   - **concepts:** the term, what it means, an example, related terms;
+   - **relationships:** how entities connect, in users' words ("a retailer has banners, and each banner has stores");
+   - **tasks:** the steps, the screen and who may do it. This is the second part of the package (step 7).
+2. **Sources, never invented:**
+   - Caboodle's user-documentation GitHub repo; the owner gives access when available;
+   - the catalog (definitions, join paths);
+   - the app's own rules (validators, calculator formulas).
+3. **Review:** Claude drafts the entries; Constance (the client) reviews and approves each batch before it ships. The review format is decided when C9 starts.
+4. **Audience:** every entry is tagged for everyone, organization admins or platform admins. For example, module settings and support access are for platform admins only.
+5. **How the agent uses it:**
+   - a `search_guide` tool searches the entries, so the system prompt stays small;
+   - answers use the C0 contract, with the `source` note "Caboodle guide";
+   - a question that mixes a concept and data uses both.
+6. **Access-aware:** for a task the user isn't allowed to do, the answer says who can do it (G3).
+7. **How-to steps:** the same package's second part, after the FE rework, because the screens are changing. Later and optional: "Open screen" links, added to C0 as a new optional piece.
+8. **Eval:** a "Concepts" group of 5–8 cases. The claims check also flags invented steps or terms.
+9. **Paid:** about $0.30–0.50, approved first.
+10. **Drift:** entries are re-checked whenever the catalog or the screens change.
 
 ---
 
@@ -623,7 +781,7 @@ Owner answers recorded 2026-10-11.
 | # | Decision | Outcome |
 |---|---|---|
 | D1 | Commit message format | **Approved:** `Update - Ask Caboodle <package> - …`, one line, no ticket |
-| D2 | Execution order | **Approved:** B0→B8, C1→C8, G1→G8, A1→A3; FE in parallel once the mockup is ready. |
+| D2 | Execution order | **Approved:** B0→B8, C1→C8, G1→G8, A1→A3; FE in parallel once the mockup is ready. *Updated by D70 and D77 (2026-10-15): C0 → B9 → B10 → C1 → … → C9.* |
 | D3 | Demo timing | **Dropped (owner, 2026-10-12):** no demo track — every package done properly, in D2 order. §7.1 is kept for history only. |
 | D4 | Approval for paid runs | **Approved:** eval baseline ≈ $3; B7 matrix ≈ $8–12 |
 | D5 | DB role / extension / indexes | **Local only for now:** the B2 migration runs on local `caboodle_dev`. `CREATEROLE` on staging/production is only needed when the branch is deployed — check with devops then. |
@@ -691,6 +849,16 @@ Owner answers recorded 2026-10-11.
 | D66 | B8b: users and a stopped month | **Approved:** the user endpoint says the month is stopped and when it renews, with no % and no $. |
 | D67 | B8b: platform settings limits | **Approved:** the same ranges as the module settings. Daily limit required, 0–100,000 (no "no limit", D46). Budget required, $1–$100,000. 1–5 distinct thresholds from 1 to 100 %. Up to 20 valid emails. Changes go into the existing audit trail. |
 | D68 | B8b: support questions | **Approved:** they appear under "Platform admins" in the Platform Admin's report, never in the organization's view (D56). |
+| D69 | FE design input | **Owner (2026-10-15):** the Workbench artifact (§10.2) sets the functionality: screens, actions and the data shown. It does not set the look; the FE team owns the theme and is reworking it. The artifact predates D50: organization users see no model or $, and Platform Admin settings live on a separate module-settings page. |
+| D70 | Answer contract and order | **Approved (2026-10-15):** every answer uses one fixed set of pieces (C0). Pins re-run the same data block, so its totals, highlights and headline are rules the server applies again on every run. C0 comes before C1, so the order is C0 → C8. |
+| D71 | Backend vs FE | **Approved (2026-10-15):** the split in §10.3. Any number shown as a fact comes from the backend; the FE only draws visual aids from the rows it has. |
+| D72 | B10: personal data for platform admins | **Agreed (2026-10-15):** user and contact email addresses and phone numbers wait for the data-handling statement (G8) and Constance's agreement. Names are fine now. The `[email]` / `[phone]` masking stays. |
+| D73 | B10: other users' questions | **Agreed:** platform admins don't read other users' Ask Caboodle questions or transcripts. The B8b usage report gives the counts. |
+| D74 | B10: email logs | **Agreed:** the metadata only (template, status, dates), with no addresses or message bodies. |
+| D75 | Who can ask about what | **Owner:** platform admins can ask about the whole system except credentials (B10). Organization users and organization admins only about what their IAM access allows (G3–G5). Organization admins seeing their own organization's admin data (members, roles, invitations) is an optional later package (§7.2). |
+| D76 | Caboodle guide | **Owner:** C9 covers concepts and relationships first, with how-to steps after the FE rework. Sources: Caboodle's user-documentation GitHub repo (access to come), the catalog and the app's rules. Constance reviews and approves the content. |
+| D77 | Order and B9 contents | **Owner:** C0 → B9 → B10 → C1 → … → C9. B9 adds the promotion fee lines through the calculator, plus `CRM.DistributorRetailers`, `DistributorBrands` and `RetailerRegions`, without loosening security. |
+| D78 | No invented app steps | **Agreed:** until the guide exists, the agent never writes app steps and points to the screen instead (C0, item 11). |
 
 ### 7.1 Demo track — dropped 2026-10-12 (D3), kept for history
 
@@ -707,6 +875,25 @@ Goal: a convincing, reliable admin demo on real data. Order by demo value, each 
 9. FE (owner's mockup) — needs the API from 3, 4, 7.
 
 After the demo: B5, B7, B8, C2, C4–C8, G1–G8, A1–A3.
+
+### 7.2 Open decisions (from 2026-10-15)
+
+Each one is posted with its package, and gets a D number once decided.
+
+| Open point | Package | Recommendation so far |
+|---|---|---|
+| C0's own decisions: headline rules, `source` required, storage, options as suggestions, feedback reasons | C0 | Post with C0's plan |
+| How much of the run trace organization users see; `done.queries` (raw SQL) goes to everyone today | C1 (before G2) | Organization users get labels, tools, timings, row counts and matched names. SQL, tables, columns, catalog notes and Postgres errors are for platform admins only. |
+| One list of period tokens for pins | C3 (also C0's `period` note) | Merge the two lists; owner picks |
+| KPI delta against the previous period on a pin | C3 | Optional; costs a second run of the plan, no AI call |
+| Personal or shareable pins | C3 | — |
+| Who reviews prompts shared with an organization | C4 | — |
+| Thumbs-down triage list in the Flight recorder | C8 | — |
+| Where the organization admin's usage page and the "questions left today" indicator sit | FE (§10.9) | FE team |
+| Grant `DataHub.DistributorUpcMappings` (without notes and "resolved by") | B9 | Owner decides when B9 starts |
+| Split B10 into B10a (IAM, organizations, modules, settings, audit) and B10b (data pipeline) | B10 | Decide when B10 starts |
+| Organization admins asking about their own organization's members, roles and invitations | Later (after GA) | Optional; scoped to their organization and their IAM permissions |
+| Access to the user-documentation repo, and the review format for Constance | C9 | Owner provides access; the format is agreed when C9 starts |
 
 ## 8. Progress log
 
@@ -726,35 +913,165 @@ After the demo: B5, B7, B8, C2, C4–C8, G1–G8, A1–A3.
 | B7b | done | `d7e48370` | 2026-10-14. **The app now runs on Sonnet 5.5 medium** (D45). Details in §3 B7b; report BE `docs/AskCaboodle-Eval/2026-10-14-b7b-sonnet-readiness.md`.<br>**Full runs, same prompt:** Opus 5.5 medium 41/45 ($0.112, 26 s); Sonnet 5.5 medium 39/45 ($0.040, 14 s); Sonnet 5.5 high 38/45 ($0.049, 17 s). Re-checks showed three Sonnet failures were noise; Q06 and Q09 were fixed and verified on both models; Q03 fails on both.<br>**Tests:** solution 6,129 green (Intelligence 259, coverage 96.3 % unit-only); build 0 errors, no warnings in changed files; DB tests 21 green.<br>**Spent:** $14.14, so about $57.65 is left.<br>**Data issues:** DI8–DI10 added. |
 | B8 | done | `02a256b6` | 2026-10-14: plan and decisions D46–D58 approved (§3 B8, §7). The junior's branch with the Platform-Admin-only flag is merged (`4d0830e6`); build 0 errors, 6,594 tests green, snapshot consistent, and the 4 IAM migrations applied on local `caboodle_dev`. The open points are resolved: shared pool, default 100.<br>**Built** as in §3 B8 "B8 as built": migration `AddAskCaboodleGuardrails` applied locally; Intelligence 301 tests, DB tests 22 green.<br>**Paid smoke, about $0.075 in total:**<ul><li>**Run 1 (about $0.04):** it wrote the 1-hour prompt cache, then failed on the real `usage.iterations` shape. Fixed and unit-tested.</li><li>**Run 2 ($0.0337, passed):** 4 calls, 11.5 s, Sonnet 5.5 medium.<ul><li>Every real response carries `iterations: [{ type: "message", model: null, … }]` with the same tokens as the top-level usage, which confirms the fix.</li><li>Priced per attempt and priced from the summed usage, the cost is the same ($0.0337).</li><li>`done` showed 5 tool calls and tokens in / out / total of 58,768 / 1,065 / 59,833.</li><li>The answer's monthly figures were right and add up to 92,376, but the stated total was **93,376**. That is the known hand-added-total weakness; B8 doesn't change the prompt.</li></ul></li></ul> | Found while preparing: Sonnet 5.5 cache reads cost $0.10, not $0.20, so B7b's Sonnet cost per answer was about $0.035 (medium), not $0.040. |
 | B8b | done | `b2f00e22` | 2026-10-14: plan and decisions D59–D68 approved (§3 B8, §7). The IAM branch is unchanged since `b5adb1a1`. Built as in §3 B8 "B8b as built": 5 endpoints in two controllers, no migration; solution 6,690 green, Intelligence 353, coverage 96.9 %, DB tests 23 green. No paid run (no model calls), so $0 spent. |
-| C1 | next | | Token streaming. Post the plan first. |
-| C2 … A3 | todo | | |
+| FE review | done | — (docs) | 2026-10-15: the owner's Workbench artifact was reviewed for functionality only (D69). The answer contract became package C0, which comes first (D70). C1, C3, C4 and C8 gained the FE's needs, the backend/FE split is D71, the open points are in §7.2, and §10 collects the FE notes. |
+| Plan update | done | — (docs) | 2026-10-15: B9 (catalog completion), B10 (Platform Admin knowledge) and C9 (Caboodle guide) added, plus the C0 guard for app questions. §9 gained a "Plan" column. Decisions D72–D78. |
+| C0 | next | | Answer contract. Post the plan first. |
+| B9 | todo | | Catalog completion: fee lines through the calculator, and three CRM tables. |
+| B10 | todo | | Platform Admin knowledge: everything except credentials (D72–D75). |
+| C1 … C8 | todo | | C1 now includes the run-trace events. |
+| C9 | todo | | Caboodle guide. Needs the documentation repo and Constance's review. |
+| G1 … A3 | todo | | |
 
-## 9. Data Ask Caboodle does not read (skipped on purpose)
+## 9. Data Ask Caboodle does not read
 
 Data *problems* found along the way (wrong or duplicated rows in Caboodle's own data) are tracked separately in [`ask-caboodle-data-issues.md`](ask-caboodle-data-issues.md).
+
+**How to read this section.** Ask Caboodle reads only what the catalog describes and what its read-only database login is granted. Everything else is listed here, so nothing is left out by accident:
+- **9.1 Excluded on purpose:** each row is a decision with a reason. The "Plan" column says when, or whether, that changes.
+- **9.2 Not included yet:** business tables nobody has needed so far. The "Plan" column says whether a package adds them.
+
+**Adding a table is deliberate work in a package,** with the owner's go-ahead. It needs:
+- a catalog entry: meaning, columns, joins, a worked example;
+- a grant in a migration;
+- the drift and grant tests;
+- an eval case or two;
+- sometimes a tool, when the app itself calculates the figure.
+
+Nothing is added automatically.
+
+"Plan" values:
+- **B9**, **B10** or **G3**: scheduled in that package;
+- **on request**: added when a real question needs it;
+- **G8**: after the data-handling statement;
+- **never**.
 
 Kept up to date in every package that changes the catalog or the grants. The agent sees a short version of 9.1 in its system prompt (glossary `not_available`). When asked about that data, it says the data exists in Caboodle, names the screen to use, and never answers from another table.
 
 ### 9.1 Excluded on purpose (decided)
 
-| Data | Where it lives | Why skipped | How it is enforced | Revisit |
+| Data | Where it lives | Why skipped | How it is enforced | Plan |
 |---|---|---|---|---|
-| Contact email, phone, notes | `CRM.Contacts` `Email`, `PhoneNumber`, `ContactNotes` | Personal data would be sent to the Claude API (D23). Notes are skipped too because some hold emails. | Column grant: `askcaboodle_ro` can read only ID, BrandID, names, title, company and Deleted | GA, with the customer data-handling statement (G8, design Q8) |
-| Emails and phone numbers typed into notes | any text column (activity notes, comments, brand-report notes) | Same reason (D23 applied to free text) | Gateway replaces them with `[email]` / `[phone]` before the model or the screen sees them | GA (same) |
-| Brokerage-internal Brand Report notes | `Broker.BrandReports.InternalNotes` | Brokerage-only working notes; brands get only the shared ones (D18) | Column grant | G3/G4, only if a broker-only audience needs them |
-| Individual promotion fee lines | `TradeSpend.BrandApprovedPromotionFees`, `TradeSpendSandbox.PromotionFees` | Calculator inputs. Fee and spend **totals** are available since B5 through `get_promotion_performance` (the app's calculator); the line details (fee names, types, coupon / Prime settings) are not. | Not granted; the tool reads them through the app's calculator only | If users ask for fee line details |
-| Raw distributor files | `DataUpload.KeHeRecords`, `UnfiRecords`, `KeHeMappedRecords`, `UNFIMappedRecords`, `DataMappings` | Already normalized into `DistributorSalesRecords`; raw-only fields (KeHE prior-year quantity, UNFI published wholesale) are rarely asked | Not granted | When a real question needs a raw-only field |
-| Legacy SPINS format | `DataUpload.SpinsRecords` | Superseded by Stores Insight and Item Ranking; only DataHub cleanup still references it | Not granted | No |
-| Banner activity types | `CRM.BannerActivityTypes`, `BannerActivities.BannerActivityTypeID` | Never populated or read by the app | Not catalogued | If the app starts recording types |
-| Documents | `FileRepository.*` | Files, not data | Not granted | No |
-| Users, roles, access, audit, email, jobs | `Identity`, `Organization`, `Auditing`, `Email`, `Configuration`, `DataLifecycle`, `Intelligence`, `hangfire`, `public` schemas; `Brand.BrandBrokers`, `Brand.BrandSubUsers` | Security and IAM data; the agent's own transcripts | Not granted; the SQL guard rejects these schemas outright | Never |
+| Contact email, phone, notes | `CRM.Contacts` `Email`, `PhoneNumber`, `ContactNotes` | Personal data would be sent to the Claude API (D23). Notes are skipped too because some hold emails. | Column grant: `askcaboodle_ro` can read only ID, BrandID, names, title, company and Deleted | **G8**, with the data-handling statement and Constance's agreement; for platform admins too (D72) |
+| Emails and phone numbers typed into notes | Any text column (activity notes, comments, brand-report notes) | Same reason (D23 applied to free text) | The gateway replaces them with `[email]` / `[phone]` before the model or the screen sees them | **G8**, as above |
+| Brokerage-internal Brand Report notes | `Broker.BrandReports.InternalNotes` | Brokerage-only working notes; brands get only the shared ones (D18) | Column grant | **G3/G4**, only if a broker-only audience needs them |
+| Individual promotion fee lines | `TradeSpend.BrandApprovedPromotionFees`, `TradeSpendSandbox.PromotionFees` | Calculator inputs. Fee and spend **totals** have been available since B5 through `get_promotion_performance`; the lines (fee names, types, coupon / Prime settings) were not. | Not granted; read only through the app's calculator | **B9:** the fee lines through the calculator, still with no SQL grant (D77) |
+| Raw distributor files | `DataUpload.KeHeRecords`, `UnfiRecords`, `KeHeMappedRecords`, `UNFIMappedRecords`, `DataMappings` | Already normalized into `DistributorSalesRecords`. The raw-only fields (KeHE prior-year quantity, UNFI published wholesale) are rarely asked about. | Not granted | **B10b** for platform admins; **on request** for everyone else |
+| Legacy SPINS format | `DataUpload.SpinsRecords` | Superseded by Stores Insight and Item Ranking; only DataHub cleanup still references it | Not granted | **Never** |
+| Banner activity types | `CRM.BannerActivityTypes`, `BannerActivities.BannerActivityTypeID` | Never populated or read by the app | Not catalogued | **On request**, if the app starts recording types |
+| Documents | `FileRepository.*` | Files, not data | Not granted | **Never** |
+| Credentials | `Identity.UserTokens`, `UserLogins`, `UserClaims`, `VerificationCodes`; the password hash, stamps, refresh tokens and email codes in `Identity.Users`; invitation and share-link tokens; `DataHub.ThirdPartyCredentials` | Secrets | Granted to neither login. From B10, a test fails if a secret-like column is ever granted. | **Never** |
+| Users, organizations, roles, access, modules and settings, audit, email logs, purge runs | The `Identity` (minus credentials), `Organization`, `Configuration`, `Auditing`, `Email` and `DataLifecycle` schemas; `Brand.BrandBrokers`, `Brand.BrandSubUsers` | Security and IAM data | The SQL guard rejects these schemas on the standard login | **B10, for platform admins only** (D75): no credentials, no personal contact data before G8 (D72), email-log metadata only (D74). **Never** for organization users. |
+| Ask Caboodle's own records | The `Intelligence` schema | Other users' questions and transcripts | Not granted; the guard rejects the schema | **Never** (D73). Usage counts come from the B8b report. |
+| Background jobs and system tables | `hangfire`, `public` | Infrastructure | The guard rejects these schemas | **Never** |
 
-### 9.2 Not yet included (business data, candidates for later packages)
+### 9.2 Not included yet (business data)
 
-| Tables | What they hold | Note |
+| Tables | What they hold | Plan |
 |---|---|---|
-| `CRM.DistributorRetailers`, `CRM.DistributorBrands`, `CRM.RetailerRegions` | Which distributor serves which retailer for a brand (with distributor markup %), brand ↔ distributor links, retailer ↔ region links | Add when a question needs them; the existing `DistributorBanners` covers banner-level routing |
-| `Broker.PromoTabs`, `PromoTabColumns`, `PromoTabRows`, `PromoTabCells` | A brokerage's own Promo Tabs spreadsheets | Brokerage-level data, so broker audience only; GA (G3) |
-| `Broker.CategoryReviewCalenderDateAssignments`, `BrandReportStatusSettings`, `BrandReportEmailLogs`, `CategoryReviewEmailLoggers` | Calendar date assignments, status settings, notification email logs | Low question value |
-| `CRM.PipelineActivityFiles` | Attachments on pipeline activities | Files |
-| `DataHub` import, mapping and cleanup tables (`ImportJobs`, `ExportJobs`, `Unmapped*`, `MappingSuggestions`, `StoreMergeHistories`, `ThirdPartyCredentials`, …) | Import pipeline internals | `ThirdPartyCredentials` must never be granted. `UnifiedEntities` / `UnifiedEntityAliases` are read only by entity search (approved aliases). |
+| `CRM.DistributorRetailers`, `CRM.DistributorBrands`, `CRM.RetailerRegions` | Which distributor serves which retailer for a brand (with the distributor markup %), brand ↔ distributor links, and retailer ↔ region ↔ banner links | **B9** (D77) |
+| `DataHub.DistributorUpcMappings` | Distributor items ↔ Caboodle products, with match status | **B9, optional** (§7.2), without `ResolutionNotes` and `ResolvedBy` |
+| `Broker.PromoTabs`, `PromoTabColumns`, `PromoTabRows`, `PromoTabCells` | A brokerage's own Promo Tabs spreadsheets | **G3**, broker audience only, with each brokerage seeing only its own |
+| `Broker.CategoryReviewCalenderDateAssignments`, `BrandReportStatusSettings` | Calendar date assignments and status settings | **On request** (low question value) |
+| `Broker.BrandReportEmailLogs`, `CategoryReviewEmailLoggers` | Notification email logs | **B10**, metadata only, for platform admins (D74) |
+| `CRM.PipelineActivityFiles` | Attachments on pipeline activities | **Never** (files) |
+| `CRM.DistributionCenters` | Warehouse names | **Never:** replaced by `CRM.DistributorDcs` (the grant was revoked in B4) |
+| The DataHub import, sync, mapping and data-quality tables: `ImportJobs`, `ExportJobs`, `DataSyncRuns`, `MappingSuggestions`, `Unmapped*`, `StoreListIssues`, `StoreMergeHistories`, `StoreCleanupChangeLogs`, `DistributorCustomerLinks`, `AddressReferences`, `AliasAuditTrail`, `AliasMatchAttempts`, `BrandDataCleanupJobs`, `UnmappedRecordResolutionAudits` | The import pipeline's internals | **B10b**, for platform admins only. `UnifiedEntities` and `UnifiedEntityAliases` are already read by the name search (approved aliases only). |
+
+## 10. Frontend (collected for the final FE document)
+
+### 10.1 What this section is
+This section collects, package by package, what the FE needs: the screens, the behaviour, who sees what, and the states to design. The API contract itself stays in BE `docs/AskCaboodle-FE.md`, which is updated with every package. When the packages are done, this section and that contract together become the full FE document.
+
+Every package that changes something the user sees adds its line to §10.8.
+
+### 10.2 Design input
+- **The owner's Workbench artifact:** https://claude.ai/artifact/RYGD6o4mxRvnRBQq1XX6A5. It sets the functionality (D69): screens, actions and the data shown.
+- **The look is the FE team's.** They are reworking the theme. The API never sends colours, fonts or layout.
+- **Out of date in the artifact:**
+  - The model chip ("claude-sonnet-5 · effort low") and the trace's Cost and Model rows are for platform admins only. The app runs Sonnet 5.5 at medium effort.
+  - The step meters show 8 steps and 90 s; the app allows 12 steps and 180 s.
+  - The Stop note says "Partial results were not saved". In fact the question is saved as cancelled and counts toward today's limit.
+  - Answer text is full markdown, not the artifact's subset, so it needs a safe markdown renderer.
+  - The Platform Admin's settings are on a separate module-settings page.
+
+### 10.3 Backend vs FE (D71)
+| Backend | FE |
+|---|---|
+| Runs the agent, tools and SQL; returns typed rows | Every visual: layout, theme, fonts, colours, icons |
+| Picks the frame (`answer` / `clarify` / `cannot_answer`), the notes, the options and the suggestions; writes the text (C0) | Renders the markdown, streamed word by word from C1 on |
+| Data block: default view, axes, series, formats, totals, best/worst rules (C0) | Draws the table and the charts, and the Table/Chart switch, from the same rows, with no extra call |
+| Computes every figure shown as a fact: headline, totals | Only visual aids from the rows it has: bar lengths, share of the rows shown, change between two series |
+| Who sees what: $, model and SQL only for platform admins | Shows only what arrives; a missing field hides its element; admin-only screens are hidden by role |
+| Limits and error codes | One message or design per error code (§10.6) |
+| Stores history and pins; re-runs pins; nightly check; resolves period tokens | The pin dialog (title, period choice), the pins page, Re-run and Open |
+| Trace data: live events, plus an endpoint for past answers (C1) | The trace drawer, the run chip, the step meters |
+| Feedback storage, with a reason (C0) | Thumbs, reason chips, note box, Copy, Stop |
+
+### 10.4 Screens and who sees them
+| Screen | Who | API |
+|---|---|---|
+| Ask: conversation, composer, history rail | Everyone who can ask | `ask`, `sessions`, `feedback` (B3); answer pieces (C0); streaming (C1) |
+| Run trace drawer | Everyone; the detail depends on role (§7.2) | C1 |
+| Empty state with starters | Everyone | `GET suggestions` (C2) |
+| Prompt gallery and the `/` picker | Everyone | C4 |
+| Pinned reports | Everyone | C3 |
+| "Questions left today" indicator | Everyone | `done.questionsLeftToday` (B8), `GET askcaboodle/usage` (B8b) |
+| Organization usage (by member, % of the allowance from 50 %) | Organization admins | `GET askcaboodle/organization-usage` (B8b) |
+| Platform settings, usage report, budgets | Platform admins (separate settings page) | `askcaboodleadmin/*` (B8b) and `modulesettings` |
+| Flight recorder | Platform admins | C8 |
+| Scope chip ("Northpoint · 4 connected brands") | Everyone | IAM `GET me/access` |
+
+### 10.5 How an answer renders (C0)
+- **The frame comes from `kind`:** `answer`, `clarify` (option cards) or `cannot_answer` (the "not answerable" box with "needed" and "available"). Treat an unknown kind as `answer`.
+- **The order is fixed:** headline → notes → text → data → options → suggestions → actions. A piece that is missing is simply not shown.
+- **One component everywhere:** the data block is the same in a live answer, a reopened session and a pin render.
+- **Clarify choices:** choosing an option sends its label as the next question in the same session.
+- **App questions** ("what is a promotion family?", "how do banners relate to stores?"): these are normal answers. Their `source` note is "Caboodle guide" once C9 ships.
+
+### 10.6 States to design
+- **Error codes:**
+
+  | Code | Meaning |
+  |---|---|
+  | `daily_limit` | Shows `resetsAt` |
+  | `monthly_limit` | Shows `resetsAt`; never an amount |
+  | `busy` | This conversation is still answering, or 2 questions are already running |
+  | `rate_limited` / `service_busy` | Try again in a minute |
+  | `timed_out` | Ask a narrower question |
+  | `unavailable`, `refused`, `failed` | — |
+
+- **Statuses in history:** `step-limit`, `cancelled` (stopped), `timed-out` and the other statuses from BE `docs/AskCaboodle-FE.md`.
+- **Data:** truncated data ("showing the first 500 rows") and a result that can't be charted (no Table/Chart switch).
+- **Progress:** progress labels during a run, the stopped state, the chosen option after a clarify, and feedback sent.
+- **Usage:** the stopped month ("used this month's allowance, renews on …"), and the organization admin's "X % used" from 50 %.
+
+### 10.7 Role rules for the FE
+- **Organization users never see dollars or the model.** The API already leaves them out; the FE must not show empty slots for them.
+- **Admin-only screens** (Flight recorder, the Platform Admin's settings, usage and budgets) are hidden unless the user is a platform admin.
+- **No extra FE checks for what users may ask about.** The backend decides what each role can read (D75): platform admins can ask about the whole system except credentials, and everyone else only about what their access allows. The FE shows the answers as usual.
+- **The run trace's SQL and schema detail:** decided in C1 (§7.2).
+
+### 10.8 FE impact by package
+| Package | What the FE gets or must handle |
+|---|---|
+| B3 | Saved sessions, history, feedback; the `session` event |
+| B5 | Calculator progress labels ("Calculating 2 approved promotions"); promotion tables |
+| B8 | `error.code`, `resetsAt`, `questionsLeftToday` in `done`; tokens for everyone, while $ and the model are for platform admins only (`done` and history) |
+| B8b | `GET askcaboodle/usage`, `GET askcaboodle/organization-usage`, `askcaboodleadmin/settings`, `usage`, `budgets` |
+| B9 | Fee lines in promotion answers (one row per fee: name, type, where it applies, amount); markup, region and distributor answers. No new FE pieces. |
+| B10 | No FE change; platform admins get wider answers (organizations, users, modules, imports) |
+| C0 | The answer pieces, the data block rules, the feedback reason |
+| C1 | Streamed text, live trace events, the trace endpoint, the step limits |
+| C2 | Starters for the empty state |
+| C3 | Pins: create, list, render, delete; broken pins |
+| C4 | Prompt gallery and the `/` picker |
+| C6 | Web sources (`sources` event, `sourceType`) |
+| C7 | "Remember this name for your organization?" after a clarify |
+| C8 | Flight recorder data |
+| C9 | Guide answers: normal answers with the `source` note "Caboodle guide". Later, optional "Open screen" links (an additive C0 piece). Until then (D78), app questions get "can't explain the steps yet", plus the screen to use. |
+| G2–G3 | Organization users can ask; brand and broker scope; the `BrandID` header, and cross-brand use for brokers |
+
+### 10.9 Open FE questions (for the FE team)
+- Where the organization admin's usage page and the "questions left today" indicator sit.
+- How a broker's cross-brand scope is shown and switched (G3).
+- The phone layout: the artifact has a top bar and a drawer for narrow screens.

@@ -1,10 +1,10 @@
 # Ask Caboodle — Handoff for the next session
 
-Written 2026-10-14, at the end of the session that built B8b. Read this first, then §0, §3 B8 ("B8b as built"), §4 C1 and §8 of [`ask-caboodle-be-implementation-plan.md`](ask-caboodle-be-implementation-plan.md).
+Written 2026-10-15, after B8b and the FE review. Read this first, then §0, §3 (B9, B10), §4 (C0, C1, C9), §7 (D69–D78 and §7.2), §8, §9 and §10 of [`ask-caboodle-be-implementation-plan.md`](ask-caboodle-be-implementation-plan.md).
 
 ## Starter prompt
 
-> Read `docs/ask-caboodle/ask-caboodle-next-session.md`, then §0, §3 B8 ("B8b as built"), §4 C1, §7 (D59–D68) and §8 of `docs/ask-caboodle/ask-caboodle-be-implementation-plan.md` in `D:\Fork\Onboarding-Journey`. The backend is `D:\Fork\Caboodle BE Repository\caboodle.backend`, branch `feature/ask-caboodle` (B8b committed at `b2f00e22`). Start with package C1 (token streaming): post its plan and open decisions first, then wait for my go-ahead.
+> Read `docs/ask-caboodle/ask-caboodle-next-session.md`, then §0, §3 (B9, B10), §4 (C0, C1, C9), §7 (D69–D78 and §7.2), §8, §9 and §10 of `docs/ask-caboodle/ask-caboodle-be-implementation-plan.md` in `D:\Fork\Onboarding-Journey`. The backend is `D:\Fork\Caboodle BE Repository\caboodle.backend`, branch `feature/ask-caboodle` (B8b committed at `b2f00e22`). Start with package C0 (answer contract): post its plan and open decisions first, then wait for my go-ahead.
 
 ## Where things stand
 
@@ -69,14 +69,66 @@ Three points to remember:
 - **Deleted sessions count in the reports** until the soft-delete purge removes them (D63).
 - **One rule for the allowance:** `AskAllowance` (left today, stopped, %) is shared by the ask check and the endpoints.
 
-## Next package: C1 — token streaming (post the plan first)
+## Done: FE review (2026-10-15, docs only)
 
-From plan §4 C1:
+The owner's Workbench artifact was reviewed. It sets the functionality, not the look (D69); the FE team owns the theme. The results are in the plan:
+- **C0, the answer contract, is the new first package of 1c** (D70).
+- **C1, C3, C4 and C8** gained what the FE needs.
+- **The backend/FE split** is D71 (§10.3).
+- **The open points** are in §7.2.
+- **§10 collects the FE notes** for the final FE document. Add a line to §10.8 in every package that changes something the user sees.
+
+Two findings to remember:
+- **`done.queries` (raw SQL) goes to everyone today.** Decide in C1, before G2.
+- **Pins must re-run the tool call (SQL or calculator), not only SQL** (C3).
+
+## Done: plan update (2026-10-15, docs only)
+
+Decisions D72–D78:
+- **The order** is now C0 → B9 → B10 → C1 → … → C9.
+- **B9, catalog completion:** the promotion fee lines through the calculator (still no SQL grant), plus `CRM.DistributorRetailers`, `DistributorBrands` and `RetailerRegions`. `DataHub.DistributorUpcMappings` is optional, decided when B9 starts.
+- **B10, Platform Admin knowledge:** platform admins can ask about everything except credentials, through a second read-only login with its own grants.
+  - Personal email and phone data waits for G8 and Constance's agreement (D72).
+  - No other users' questions (D73).
+  - Email logs: metadata only (D74).
+  - Organization users stay on their IAM access (G3–G5).
+- **C9, Caboodle guide:**
+  - concepts and relationships first, with how-to steps after the FE rework;
+  - sources: the user-documentation GitHub repo (the owner gives access when possible), the catalog and the app's rules;
+  - **Constance reviews and approves the content.**
+- **C0 item 11 (D78):** until the guide exists, the agent never writes app steps; it points to the screen instead.
+- **§9 rework:** it now explains its two lists, carries a "Plan" column on every row, and lists the tables that were missing.
+
+## Next package: C0 — answer contract (post the plan first)
+
+From plan §4 C0:
+- **`present_answer` gains:**
+  - `kind`: `answer`, `clarify` or `cannot_answer`;
+  - a `headline` rule (column + total/first/max/min), whose value the server computes;
+  - `notes`: scope, period and source, or needed/available;
+  - clarify `options`;
+  - data-block rules: default view, axes, series, formats, total columns, best/worst highlights, chartable.
+- **Saved with the message;** returned by `GET sessions/{id}`.
+- **Feedback** gains a `reason`.
+- **Decisions to post:** see C0's list in the plan.
+- **Cost:** about +5 % per answer.
+- **Paid checks:** a 4-case check (≈ $0.25), then a full Sonnet 5.5 medium eval (≈ $2.60), each approved first.
+
+C0 also includes the guard for app questions (item 11). After C0 come B9 and B10 (plan §3), then C1.
+
+## After B10: C1 — token streaming and the run trace
+
+From plan §4 C1 (the run-trace part was added by the FE review):
 - `AnthropicConversation.SendStreamingAsync` with the SDK's streaming call. It collects the content blocks (text, thinking with signatures, tool-use input JSON, server-tool blocks) and rebuilds the assistant message for the history.
 - `text-delta` events go to the sink. The final `text` event keeps the full markdown.
 - Optional: thinking `display: "updates"` (a beta) as `progress` notes.
 - Tests on stubbed SSE responses: a text-only turn, a tool-use turn, and thinking with a signature.
 - Update BE `docs/AskCaboodle-FE.md`.
+- **The run trace:**
+  - live step and tool-call events;
+  - `GET sessions/{id}/messages/{messageId}/trace` for past answers;
+  - `maxSteps` and `wallClockSeconds` for the meters;
+  - the role filter for SQL and schema detail.
 
 Load the `claude-api` skill before touching the SDK code; don't work from memory.
 
@@ -88,9 +140,9 @@ Load the `claude-api` skill before touching the SDK code; don't work from memory
 
 **Paid check:** probably one smoke question on Sonnet 5.5 medium, about $0.05, to confirm a real stream. State the cost and wait for approval.
 
-After C1 the order is C2–C8, G1–G8 and A1–A3 (A only if the demand gate says so). In GA, G1 finishes the `ask-caboodle` module's dependencies and G2 switches the endpoint to IAM's module guard: only then can organization users ask.
+After C1 the order is C2–C9, G1–G8 and A1–A3 (A only if the demand gate says so). In GA, G1 finishes the `ask-caboodle` module's dependencies and G2 switches the endpoint to IAM's module guard: only then can organization users ask.
 
-The frontend follows when the owner's mockup is ready.
+The FE team is reworking the theme. Plan §10 collects what the FE needs, for the final FE document.
 
 ## Working agreement (owner)
 
