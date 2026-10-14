@@ -450,6 +450,38 @@ Decisions D46–D58 (owner, 2026-10-14). The original scope was: a per-user dail
   - Build has 0 errors and no new warnings in changed files.
 - **Docs:** BE `docs/AskCaboodle-FE.md` covers the new `done` and `error` fields, the error codes, the statuses, the limits and the settings.
 
+**B8b decisions:** D59–D68 (§7), approved by the owner on 2026-10-14. The IAM branch had no new commits since `b5adb1a1` (fetched 2026-10-14), so there was nothing to merge.
+
+**B8b as built (2026-10-14, commit `b2f00e22`):**
+- **Endpoints:**
+
+  | Route | Guard | Returns |
+  |---|---|---|
+  | `GET askcaboodle/usage` | the ask permission (module guard in G2) | Questions left today and the daily limit (the organization's pool, or a platform admin's own); whether the month is stopped and when it renews; your own totals in the pool you use now. `costUsd` for platform admins only. |
+  | `GET askcaboodle/organization-usage` | IAM `organization.update` | The pool, used and left today, the % from 50 %, stopped and renews on, totals and one row per member (name, email). No $ or model fields at all. |
+  | `GET`/`PUT askcaboodleadmin/settings` | the admin permission + `IsPlatformAdmin` | The platform settings. Both values are required; the ranges match the module settings; thresholds are stored in order, emails without repeats. |
+  | `GET askcaboodleadmin/usage` | the admin permission + `IsPlatformAdmin` | `groupBy` organization, user or day, with an optional `organizationId`; questions, tool calls, tokens with the cache detail, and $. |
+  | `GET askcaboodleadmin/budgets` | the admin permission + `IsPlatformAdmin` | This month: the platform line, and each organization with questions this month (%, threshold reached, stop, stopped, pool, today). |
+
+- **Code** (all in `Usage/` unless noted):
+  - **`AskAllowance`:** left today, stopped, % (rounded down) and the % shown from 50 %. It holds the one rule for these figures.
+  - **`AskUsageGuard`:** `CheckAsync` keeps its order and skips reads it doesn't need; the new `GetAllowanceAsync` reads the same limits and counts for the endpoints.
+  - **`AskBudgetMonitor`:** its new `HighestReached` serves the budget status, and `HighestCrossed` now uses it.
+  - **`AskUsageReportStore`:** one SQL query per call (Dapper). The tool calls are counted in a per-message subquery on `IX_AskToolCalls_MessageID`. Users are joined on `Identity.Users` (a text id), organizations on `Organization.Organizations`.
+  - **`AskUsagePeriod`:** the dates and their validator, shared by the three requests.
+  - **`AskPlatformAdmin`:** reads `IsPlatformAdmin` through `GetUserAccessAsync`, so it never needs an organization header.
+  - **The six requests and `DTOs/AskUsageDtos.cs`:**
+    - two actions added to `AskCaboodleController`;
+    - a new `AskCaboodleAdminController`;
+    - organization limits read through the junior's cached `IModuleSettings`.
+- **No migration:** B8's indexes cover the reads per organization and per user. The report across all organizations reads by date without an index, which is fine at today's volume.
+- **Tests:**
+  - **Totals:** solution 6,690 green across 16 projects; Intelligence 353 (52 new); coverage 96.9 % unit-only.
+  - **New files:** every new usage file is at 96–100 %.
+  - **DB tests:** 23 green. The new one reads every grouping on real SQL; its data covers a deleted session, a failure with cost 0, a support-access question, a question two days earlier, and one existing user and organization for the names.
+  - **Build:** 0 errors, no warnings in changed files.
+- **Docs:** BE `docs/AskCaboodle-FE.md`, "Usage and limits" section: every endpoint, the fields, who sees what, the periods and the purge caveat (D63).
+
 ---
 
 ## 4. Phase 1c — Experience layer (still admin-only)
@@ -506,7 +538,8 @@ Prerequisites already met: IAM foundation + module work on the branch base; stag
   - **Broker deps change shape:** brokers now inherit their connected brands' modules (BROKER-BRAND-ACCESS-D1). So the broker deps only need the broker-only modules (market-overview, category-review, brand-report, distributor-apl, retail-apl).
 
 ### G2 — Endpoint guard switch
-- Replace the phase-1 `MustHavePermission` with `[RequireModule(ModuleSlugs.AskCaboodle, ModuleSlugs.AskCaboodle, ModuleActions.View, CrossBrand = true)]` on every action; owner checks on sessions/pins/prompts (`DemandBrandAsync`, owner id).
+- Replace the phase-1 `MustHavePermission` with `[RequireModule(ModuleSlugs.AskCaboodle, ModuleSlugs.AskCaboodle, ModuleActions.View, CrossBrand = true)]` on every action of `AskCaboodleController`; owner checks on sessions/pins/prompts (`DemandBrandAsync`, owner id).
+- **Leave two guards unchanged (D59):** `organization-usage` stays on IAM's `organization.update`. `AskCaboodleAdminController` stays on the admin permission plus `IsPlatformAdmin`.
 - API.Test reflection test stays green.
 
 ### G3 — Agent access context
@@ -648,6 +681,16 @@ Owner answers recorded 2026-10-11.
 | D56 | B8: platform admins inside an organization | **Owner:** their questions count against their own daily limit and the platform total, never the organization's pool or budget |
 | D57 | B8: brokers | **Owner:** a broker's questions use the brokerage's pool and budget, also in a connected brand's environment |
 | D58 | B8: order | **Owner:** merge the junior's branch once the flag is in, then B8, then B8b. The package order stays B → C → GA. |
+| D59 | B8b: routes | **Approved (2026-10-14):** `GET usage` and `GET organization-usage` (hyphenated, like the 243 other multi-word routes) on `AskCaboodleController`. The Platform Admin's `GET`/`PUT settings`, `GET usage` and `GET budgets` go in a new `AskCaboodleAdminController`. G2 switches only `AskCaboodleController` and leaves `organization-usage` on `organization.update`. |
+| D60 | B8b: guards | **Approved:** the Platform Admin endpoints use the admin permission and also require `IsPlatformAdmin`, because a custom Identity role can carry "Run Intelligence Tools" while dollars follow the Identity Admin role, as in `done`. Otherwise `403`. The org endpoint uses IAM `organization.update` and returns "Select an organization." when none is picked, like the junior's `my-organization`. The user endpoint uses the ask guard, which moves to the module guard in G2. |
+| D61 | B8b: periods | **Approved:** `from`/`to` as UTC dates, both included, at most 366 days, `to` ≥ `from`. The default is this month so far; with only `to`, that month up to `to`. |
+| D62 | B8b: who's who for org admins | **Approved:** name and email (org admins already see them in IAM's members list). Former members still appear. |
+| D63 | B8b: deleted sessions | **Approved:** their questions count, as for the limits. Caveat, documented: the soft-delete purge removes them after its retention (default 30 days). If exact yearly totals are needed, a daily rollup table can come with C8. |
+| D64 | B8b: what counts in reports | **Approved:** the limits' rule: questions that used the model (cost > 0). Running questions count in "left today" but not in the reports. |
+| D65 | B8b: the "X %" figure | **Approved:** a whole %, rounded down. The 50 % cut-off is fixed, not tied to the editable thresholds. Above 100 % shows the real figure. |
+| D66 | B8b: users and a stopped month | **Approved:** the user endpoint says the month is stopped and when it renews, with no % and no $. |
+| D67 | B8b: platform settings limits | **Approved:** the same ranges as the module settings. Daily limit required, 0–100,000 (no "no limit", D46). Budget required, $1–$100,000. 1–5 distinct thresholds from 1 to 100 %. Up to 20 valid emails. Changes go into the existing audit trail. |
+| D68 | B8b: support questions | **Approved:** they appear under "Platform admins" in the Platform Admin's report, never in the organization's view (D56). |
 
 ### 7.1 Demo track — dropped 2026-10-12 (D3), kept for history
 
@@ -682,8 +725,9 @@ After the demo: B5, B7, B8, C2, C4–C8, G1–G8, A1–A3.
 | B7 | done | `2903dce3` | 2026-10-13. The app stays on Opus 5.5 medium (no setting change); the owner wants lower cost, so B7b works on Sonnet first. Sonnet 5.5 medium 35/45 and Haiku 5.5 medium 33/45, against the Opus baseline 37/44. A Sonnet re-check confirmed real drops in Distribution and Calculator. Recommendation: keep Opus 5.5 medium. Spent $4.83; about $1.80 of the testing budget is left. |
 | B7b | done | `d7e48370` | 2026-10-14. **The app now runs on Sonnet 5.5 medium** (D45). Details in §3 B7b; report BE `docs/AskCaboodle-Eval/2026-10-14-b7b-sonnet-readiness.md`.<br>**Full runs, same prompt:** Opus 5.5 medium 41/45 ($0.112, 26 s); Sonnet 5.5 medium 39/45 ($0.040, 14 s); Sonnet 5.5 high 38/45 ($0.049, 17 s). Re-checks showed three Sonnet failures were noise; Q06 and Q09 were fixed and verified on both models; Q03 fails on both.<br>**Tests:** solution 6,129 green (Intelligence 259, coverage 96.3 % unit-only); build 0 errors, no warnings in changed files; DB tests 21 green.<br>**Spent:** $14.14, so about $57.65 is left.<br>**Data issues:** DI8–DI10 added. |
 | B8 | done | `02a256b6` | 2026-10-14: plan and decisions D46–D58 approved (§3 B8, §7). The junior's branch with the Platform-Admin-only flag is merged (`4d0830e6`); build 0 errors, 6,594 tests green, snapshot consistent, and the 4 IAM migrations applied on local `caboodle_dev`. The open points are resolved: shared pool, default 100.<br>**Built** as in §3 B8 "B8 as built": migration `AddAskCaboodleGuardrails` applied locally; Intelligence 301 tests, DB tests 22 green.<br>**Paid smoke, about $0.075 in total:**<ul><li>**Run 1 (about $0.04):** it wrote the 1-hour prompt cache, then failed on the real `usage.iterations` shape. Fixed and unit-tested.</li><li>**Run 2 ($0.0337, passed):** 4 calls, 11.5 s, Sonnet 5.5 medium.<ul><li>Every real response carries `iterations: [{ type: "message", model: null, … }]` with the same tokens as the top-level usage, which confirms the fix.</li><li>Priced per attempt and priced from the summed usage, the cost is the same ($0.0337).</li><li>`done` showed 5 tool calls and tokens in / out / total of 58,768 / 1,065 / 59,833.</li><li>The answer's monthly figures were right and add up to 92,376, but the stated total was **93,376**. That is the known hand-added-total weakness; B8 doesn't change the prompt.</li></ul></li></ul> | Found while preparing: Sonnet 5.5 cache reads cost $0.10, not $0.20, so B7b's Sonnet cost per answer was about $0.035 (medium), not $0.040. |
-| B8b | next | | Settings and usage data for the Platform Admin, organization admins and users (§3 B8). Post the plan first. |
-| C1 … A3 | todo | | |
+| B8b | done | `b2f00e22` | 2026-10-14: plan and decisions D59–D68 approved (§3 B8, §7). The IAM branch is unchanged since `b5adb1a1`. Built as in §3 B8 "B8b as built": 5 endpoints in two controllers, no migration; solution 6,690 green, Intelligence 353, coverage 96.9 %, DB tests 23 green. No paid run (no model calls), so $0 spent. |
+| C1 | next | | Token streaming. Post the plan first. |
+| C2 … A3 | todo | | |
 
 ## 9. Data Ask Caboodle does not read (skipped on purpose)
 
