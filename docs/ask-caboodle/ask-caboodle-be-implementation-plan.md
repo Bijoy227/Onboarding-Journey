@@ -315,9 +315,140 @@ Target after B1 + B7 (owner decides at the B7 gate): **≤ $0.05 per typical que
 - **Data issues found:** DI8–DI10 in `ask-caboodle-data-issues.md`.
 
 ### B8 — Guardrails
-- Per-user daily question cap (`IntelligenceSettings:DailyQuestionLimit`), one concurrent question per session (already gated), per-org monthly budget hook (log + warn), cost per turn persisted (B3). Rate-limit → friendly `error` event.
-- From B7b: the cost estimate uses five price settings whose defaults are now Sonnet 5.5's. Take the prices from the configured model (a price table like the eval's `ModelPrice`), so a model change can't silently misprice answers or budgets. A refusal fallback answered by another model is priced at the main model's rates today.
-- **Done when:** caps enforced with tests.
+Decisions D46–D58 (owner, 2026-10-14). The original scope was: a per-user daily cap, one question at a time per session, a per-organization budget hook, cost per turn, and friendly rate-limit errors. The owner widened it to organization limits that the Platform Admin manages, and split it into B8 (engine) and B8b (settings and usage data).
+
+**Starts after the merge.** The junior is adding a "Platform Admin only" flag to module settings, so a setting can be hidden from organization admins. When the owner says it's done:
+1. Fetch `origin/feature/CS-1770-iam-service-broker-workspace` again, re-check what's new, and merge it as its own commit, before B8.
+   - At `ca7919d4` (2026-10-14) the only conflict was `MainDbContext.cs`, where both sides add one line; keep `ConfigureAskCaboodle(...)` and `ConfigureModuleSettings(...)`.
+   - The 3 new migrations (2026-10-13) apply after ours. The only change to a table Ask Caboodle reads is an index on `TradeSpend.TradeSpendPromos`. The calculator builders and the Ask Caboodle code are untouched.
+2. Build, run the full tests, and check the snapshot: generate a throwaway migration, confirm it's empty, delete it.
+3. Apply the new migrations on local `caboodle_dev`, then the owner reviews.
+4. Commit as `Update - Ask Caboodle - merge feature/CS-1770-iam-service-broker-workspace (…)`.
+
+**B8 — engine**
+1. **Prices by model (D54).**
+   - `Llm/ModelPrices.cs` holds the table below (USD per million tokens, checked on the pricing page on 2026-10-14):
+
+     | Model | Input | 5-min write | 1-hour write | Cache read | Output |
+     |---|---|---|---|---|---|
+     | `claude-opus-5-5` | 4 | 5 | 8 | 0.20 | 20 |
+     | `claude-sonnet-5-5` | 2 | 2.50 | 4 | **0.10** | 10 |
+     | `claude-haiku-5-5`, prompt ≤ 100K | 0.10 | 0.125 | 0.20 | 0.01 | 0.50 |
+     | `claude-haiku-5-5`, prompt > 100K | 0.50 | 0.625 | 1 | 0.05 | 2.50 |
+     | `claude-sonnet-5` (Sonnet 5.5's fallback) | 2 | 2.50 | 4 | 0.20 | 10 |
+     | `claude-opus-5`, `claude-opus-4-8` (Opus fallbacks) | 5 | 6.25 | 10 | 0.50 | 25 |
+
+   - **Sonnet 5.5 cache reads are $0.10, not $0.20.** Cache reads on Opus 5.5 and Sonnet 5.5 cost 0.05× input. The app default and the eval's `ModelPrice` used $0.20 from B7b on, so every Sonnet estimate was high:
+     - B7b Sonnet medium: $0.040 per answer, about $0.035 corrected;
+     - B7b Sonnet high: $0.049, about $0.042 corrected.
+   - Usage comes from `usage.iterations`. Each attempt, including a declined attempt before a fallback, carries its own model. If the list is missing, the code uses top-level `usage` with `response.model`.
+   - Tokens are added up per model and the formula is applied once per model. Haiku's price card is chosen per call, by prompt length (input + cache read + cache write).
+   - The five `*PricePerMillionTokens` settings are removed. The eval uses the app's table, so `ModelPrice` is removed too.
+   - **Configured model with no price (D52):** the API still starts and logs an Error, and Ask Caboodle answers every question with code `unavailable`.
+2. **Friendly API errors.** The SDK already retries 429 and 5xx twice. The rate limit itself never triggers the refusal fallback.
+
+   | Anthropic error | `error.code` | Status | Message to the user |
+   |---|---|---|---|
+   | 429 `rate_limit_error` | `rate_limited` | `RateLimited = 40` | "Ask Caboodle is handling a lot of questions right now. Please try again in a minute." |
+   | 529 `overloaded_error`, other 5xx | `service_busy` | `RateLimited = 40` | "The AI service is busy right now. Please try again in a moment." |
+   | `billing_error` (credit balance) | `unavailable` | `Unavailable = 45` | "Ask Caboodle is unavailable right now." Also a Critical log. |
+   | 401 / 403 (key problem) | `unavailable` | `Unavailable = 45` | Same message, also a Critical log. |
+   | anything else | `failed` | `ServiceError` | Today's message. |
+
+   - The other codes: `daily_limit`, `monthly_limit`, `busy`, `refused`, `timed_out`.
+   - The `error` event gains `code` and, for limits, `resetsAt`. Both are additions only.
+3. **Concurrency (D49).**
+   - A second question in a busy session is rejected at once, with code `busy` and the message "Still answering your previous question in this conversation."
+   - Each user can have at most 2 questions running. This is held in memory, so it applies per server. The daily limits stay exact, because they are counted in the database.
+4. **Daily question limit (D46–D48, D56, D57).**
+   - **Organizations:** each has one daily pool (module setting `daily-question-pool`, default 100), shared by all its members first come, first served. There is no per-member share.
+   - **Platform admins:** each has their own daily limit (platform setting, default 50). Nobody is exempt.
+   - **Platform admins inside an organization** (support access) use their own limit and the platform total, never the organization's pool or budget.
+   - **Brokers** use their brokerage's pool and budget, even in a connected brand's environment.
+   - **What counts:** questions that reached the model (cost > 0) on the current UTC day, plus questions still running. That includes failed, cancelled and timed-out questions. Questions blocked by these checks, and errors before any response, don't count. Deleting a session doesn't give questions back.
+   - **At the limit:** an `error` event with code `daily_limit` and `resetsAt`, for example "Your organization has used today's 100 questions. The limit resets at midnight UTC." No session is created and nothing is stored.
+   - Every `done` event carries `questionsLeftToday`: the organization's remainder, or the platform admin's own.
+5. **Monthly budgets (D50, D51).**
+   - **Settings:** each organization's $ budget (default $25) and "stop at 100 %" (on by default) are module settings with the Platform-Admin-only flag. The platform budget (default $50) is a platform setting.
+   - **Warnings** at 50 %, 80 % and 100 %, once per threshold crossed:
+     - a Warning log at 50 % and 80 %, and an Error log at 100 %;
+     - an email to the platform alert list, which is empty by default;
+     - a status on the Platform Admin's usage view (B8b).
+   - **Stop at 100 %:** the organization's questions stop, with code `monthly_limit`, until the 1st or until the Platform Admin raises the budget.
+     - The message has no dollars: "Your organization has used this month's Ask Caboodle allowance. It renews on 1 November."
+     - A question already running can finish, so the total can go slightly over.
+     - The platform budget only warns; it never stops anything.
+6. **Who sees what (D50).**
+   - **Platform admins:** everything, including the model and $.
+   - **Organization users:** in each `done` event and in saved history, tokens in (everything the model read, cached included), tokens out and their total, tool calls, and requests. Never the model or $. Today `done` sends the cost and the model to anyone who asks.
+7. **Where the settings live (D55).**
+   - **Module settings, both `ask-caboodle` nodes (Brand and Broker):**
+     - `daily-question-pool` (default 100);
+     - `monthly-budget-usd` (Platform Admin only);
+     - `stop-at-monthly-budget` (Platform Admin only).
+   - Adding them to the junior's `ModuleSettingCatalogSeedData` and `ModuleSettingKeys` is approved as the extension point he designed. After a deploy, someone runs `POST /modulesettings/definitions/backfill` once.
+   - **Platform settings:** a small `Intelligence.AskPlatformSettings` table holds:
+     - the platform admins' daily limit (50);
+     - the platform monthly budget ($50);
+     - the warning thresholds;
+     - the alert emails.
+   - B8 creates and reads the table; B8b adds its endpoints.
+8. **Database.**
+   - A new column `AskMessages.UsageOrganizationID`: the organization whose pool and budget the question used, or null for platform admins.
+   - Indexes on `(UsageOrganizationID, CreatedOn)` and `(CreatedBy, CreatedOn)`, plus the platform settings table, in one migration on local `caboodle_dev`.
+   - Counting from messages, not sessions, means deleted sessions still count.
+   - Known limit: the soft-delete purge removes a deleted session's messages 30 days after deletion. A session deleted early in a 31-day month can therefore lower that month's total on its last day.
+9. **Tests (free, stubbed HTTP):**
+   - prices, including a fallback response with `iterations` and Haiku's two price cards;
+   - pool and platform-admin limits, including what counts, support access and brokers;
+   - `busy` and the 2-running limit;
+   - budget thresholds logging once, and the stop at 100 %;
+   - 429, 529, 402 and 401 responses becoming the right code and status;
+   - who sees what in `done`;
+   - one DB test for the counting queries.
+10. **Paid check (D53):** one smoke question on Sonnet 5.5 medium, about $0.05. It confirms the real `usage.iterations` shape and that the new cost matches the old arithmetic apart from the cache-read price.
+
+**B8b — settings and usage data (API only; the screens come with the FE)**
+- **Platform admin:**
+  - reads and edits the platform settings;
+  - a usage report for any period, by organization, user and day: requests, tool calls, tokens and $;
+  - each organization's budget status.
+- **Organization admin** (IAM's `organization.update`, the same permission the junior uses for organization admins reading their settings; no IAM change):
+  - their organization's usage by user: requests, tool calls and tokens, for today, this month or a chosen period;
+  - the pool and the questions left today;
+  - "X % of this month's allowance used", only from 50 % on.
+  - No $.
+- **User:** their organization's questions left today, and their own usage.
+- BE `docs/AskCaboodle-FE.md` updated.
+
+**Resolved (owner, 2026-10-14):**
+- The pool is shared by all members, first come, first served, with no per-member share.
+- The default pool is **100 questions a day**.
+- The merge is done: `4d0830e6`, at the junior's `b5adb1a1`, including the Platform-Admin-only flag. The 4 IAM migrations are applied on local `caboodle_dev`.
+- Note from his last commit: the settings backfill now overwrites a setting's wording, default, limits and flag with the code's values. A change made in the Platform Admin's UI must also be made in `ModuleSettingCatalogSeedData`, or the next backfill resets it.
+
+**Done when:** limits and budgets are enforced with tests, prices come from the model, and the FE contract is updated.
+
+**B8 as built (2026-10-14, commit `02a256b6`):**
+- **Code:**
+  - `Usage/` holds `AskAsker` (whose pool), `AskRunningQuestions`, `AskUsageStore`, `AskLimitSettings`, `AskUsageGuard`, `AskBudgetMonitor` and `AskModelPriceCheck` (the startup log).
+  - `Llm/ModelPrices.cs` holds the price table.
+  - The handler checks, in order: model priced, 2 running, limits, then the busy session.
+  - `done` and session history: tokens for everyone; model and $ for platform admins only.
+- **Settings:**
+  - Three Ask Caboodle settings for each `ask-caboodle` node, added to the junior's catalog. The two dollar settings carry `IsPlatformAdminOnly`.
+  - New option `IntelligenceSettings:MaxRunningQuestionsPerUser` (2).
+- **Migration:** `20261014132917_AddAskCaboodleGuardrails` (column, 2 indexes, `AskPlatformSettings`), applied on local `caboodle_dev`.
+- **Found by the paid smoke run:**
+  - Ordinary responses also carry `usage.iterations`, as a `message` entry without a model, so the first version failed after the first call.
+  - Fixed: the per-attempt list is used only when a `fallback_message` entry is present, and it is read from the raw JSON. Otherwise the top-level usage is used, as before.
+  - Unit tests now reproduce both shapes, and the smoke test prints every raw `usage` even when it fails.
+- **Tests:**
+  - Intelligence 301 (42 new), coverage 96.2 % unit-only; every new usage file is at 100 % except the store, which the DB test runs.
+  - Admin 407: the junior's seed count is 17 → 23, the backfill test lists the two `ask-caboodle` modules, and one new test covers the settings.
+  - DB tests 22 green, including the usage store and the history tool-call count on real EF.
+  - Build has 0 errors and no new warnings in changed files.
+- **Docs:** BE `docs/AskCaboodle-FE.md` covers the new `done` and `error` fields, the error codes, the statuses, the limits and the settings.
 
 ---
 
@@ -504,6 +635,19 @@ Owner answers recorded 2026-10-11.
 | D43 | B7b: claims check model | **Kept:** Opus 5.5 at low effort, so reports stay comparable. |
 | D44 | B7b: catalog review | **Owner:** make the catalog clearer where it helps the model reason. Done as sharper rules and worked examples, not longer text. |
 | D45 | D8 outcome | **Owner (2026-10-14):** the app runs on **Sonnet 5.5 at medium effort** (default model and its prices changed). Sonnet high is not used. |
+| D46 | B8: who sets the limits | **Owner (2026-10-14):** each organization has a daily question pool (default 100), set by the Platform Admin and shared by all its members, first come, first served. Per-user allocations by organization admins are dropped for now. Platform admins have their own daily limit (default 50). Nobody is exempt. Organization users see their remaining requests. Model, effort and technical limits stay in appsettings. |
+| D47 | B8: what counts, and when the day resets | **Approved:** questions that reached the model count, including failed, cancelled and timed-out ones; blocked questions and errors before any response don't. The day is the UTC calendar day. Deleting a session doesn't give questions back. |
+| D48 | B8: at the limit | **Approved:** an `error` event with code `daily_limit` and `resetsAt`; `questionsLeftToday` in every `done` event |
+| D49 | B8: concurrency | **Approved:** a second question in a busy session is rejected (`busy`), not queued; at most 2 running per user (in memory, per server) |
+| D50 | B8: budgets and who sees money | **Owner:** the Platform Admin sets each organization's monthly $ budget. Only platform admins ever see dollars. Organization users see requests, tool calls and tokens (in, out, total), never the model or $. Warnings at 50 %, 80 % and 100 %. Defaults: $25 per organization, $50 for the platform. |
+| D51 | B8: at 100 % | **Owner:** stop at 100 % per organization, on by default. The message has no dollars. The organization admin sees "X % of this month's allowance used" from 50 % on. Warnings go to the log, the alert email list and the Platform Admin's usage view. The platform budget only warns. |
+| D52 | B8: model with no price | **Approved:** the API starts and logs an Error; Ask Caboodle answers with code `unavailable` |
+| D53 | B8: paid check | **Approved:** one smoke question, Sonnet 5.5 medium, about $0.05 |
+| D54 | B8: cost formula | **Owner:** tokens are added up per model and the formula is applied once per model (once when one model answers). Declined attempts before a fallback are included from `usage.iterations`. The price table is in code; the five price settings are removed. |
+| D55 | B8: where settings live | **Owner:** per-organization settings go in the junior's module settings. Dollar settings carry his new Platform-Admin-only flag (the owner asked him for it on 2026-10-14). Platform-wide settings go in a small Ask Caboodle table. Adding Ask Caboodle's entries to his settings catalog is approved. |
+| D56 | B8: platform admins inside an organization | **Owner:** their questions count against their own daily limit and the platform total, never the organization's pool or budget |
+| D57 | B8: brokers | **Owner:** a broker's questions use the brokerage's pool and budget, also in a connected brand's environment |
+| D58 | B8: order | **Owner:** merge the junior's branch once the flag is in, then B8, then B8b. The package order stays B → C → GA. |
 
 ### 7.1 Demo track — dropped 2026-10-12 (D3), kept for history
 
@@ -537,7 +681,8 @@ After the demo: B5, B7, B8, C2, C4–C8, G1–G8, A1–A3.
 | B6.1 | done | `cf0dab78` | 2026-10-13. Owner accepted the run as the B7 baseline, even though the promotions group dropped (judged as noise plus data issue DI2). Details in §3 B6.1.<br>**Tests:** solution 6,120 green (Intelligence 250); build 0 errors, no new warnings; free DB tests green (20).<br>**Paid runs, $7.37:** 9-case check $1.40; full run $5.97.<br>**Full run:** 37/44 (84 %); every rule check passed; 6 agent errors and 1 failure caused by data issue DI2.<br>**Money left for B7:** ≈ $6.60. |
 | B7 | done | `2903dce3` | 2026-10-13. The app stays on Opus 5.5 medium (no setting change); the owner wants lower cost, so B7b works on Sonnet first. Sonnet 5.5 medium 35/45 and Haiku 5.5 medium 33/45, against the Opus baseline 37/44. A Sonnet re-check confirmed real drops in Distribution and Calculator. Recommendation: keep Opus 5.5 medium. Spent $4.83; about $1.80 of the testing budget is left. |
 | B7b | done | `d7e48370` | 2026-10-14. **The app now runs on Sonnet 5.5 medium** (D45). Details in §3 B7b; report BE `docs/AskCaboodle-Eval/2026-10-14-b7b-sonnet-readiness.md`.<br>**Full runs, same prompt:** Opus 5.5 medium 41/45 ($0.112, 26 s); Sonnet 5.5 medium 39/45 ($0.040, 14 s); Sonnet 5.5 high 38/45 ($0.049, 17 s). Re-checks showed three Sonnet failures were noise; Q06 and Q09 were fixed and verified on both models; Q03 fails on both.<br>**Tests:** solution 6,129 green (Intelligence 259, coverage 96.3 % unit-only); build 0 errors, no warnings in changed files; DB tests 21 green.<br>**Spent:** $14.14, so about $57.65 is left.<br>**Data issues:** DI8–DI10 added. |
-| B8 | next | | Guardrails (§3 B8), including model-based prices for the cost estimate (B7b note). Post the plan first. |
+| B8 | done | `02a256b6` | 2026-10-14: plan and decisions D46–D58 approved (§3 B8, §7). The junior's branch with the Platform-Admin-only flag is merged (`4d0830e6`); build 0 errors, 6,594 tests green, snapshot consistent, and the 4 IAM migrations applied on local `caboodle_dev`. The open points are resolved: shared pool, default 100.<br>**Built** as in §3 B8 "B8 as built": migration `AddAskCaboodleGuardrails` applied locally; Intelligence 301 tests, DB tests 22 green.<br>**Paid smoke, about $0.075 in total:**<ul><li>**Run 1 (about $0.04):** it wrote the 1-hour prompt cache, then failed on the real `usage.iterations` shape. Fixed and unit-tested.</li><li>**Run 2 ($0.0337, passed):** 4 calls, 11.5 s, Sonnet 5.5 medium.<ul><li>Every real response carries `iterations: [{ type: "message", model: null, … }]` with the same tokens as the top-level usage, which confirms the fix.</li><li>Priced per attempt and priced from the summed usage, the cost is the same ($0.0337).</li><li>`done` showed 5 tool calls and tokens in / out / total of 58,768 / 1,065 / 59,833.</li><li>The answer's monthly figures were right and add up to 92,376, but the stated total was **93,376**. That is the known hand-added-total weakness; B8 doesn't change the prompt.</li></ul></li></ul> | Found while preparing: Sonnet 5.5 cache reads cost $0.10, not $0.20, so B7b's Sonnet cost per answer was about $0.035 (medium), not $0.040. |
+| B8b | next | | Settings and usage data for the Platform Admin, organization admins and users (§3 B8). Post the plan first. |
 | C1 … A3 | todo | | |
 
 ## 9. Data Ask Caboodle does not read (skipped on purpose)

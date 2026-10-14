@@ -1,19 +1,20 @@
 # Ask Caboodle — Handoff for the next session
 
-Written 2026-10-14, at the end of the session that built B7b. Read this first, then §0 and §8 of [`ask-caboodle-be-implementation-plan.md`](ask-caboodle-be-implementation-plan.md).
+Written 2026-10-14, at the end of the session that merged the IAM settings work and built B8. Read this first, then §0, §3 B8 and §8 of [`ask-caboodle-be-implementation-plan.md`](ask-caboodle-be-implementation-plan.md).
 
 ## Starter prompt
 
-> Read `docs/ask-caboodle/ask-caboodle-next-session.md`, then §0 and §8 of `docs/ask-caboodle/ask-caboodle-be-implementation-plan.md` in `D:\Fork\Onboarding-Journey`. The backend is `D:\Fork\Caboodle BE Repository\caboodle.backend`, branch `feature/ask-caboodle` (B7b committed at `d7e48370`). Start with package B8 (guardrails): post its plan and open decisions first, then wait for my go-ahead.
+> Read `docs/ask-caboodle/ask-caboodle-next-session.md`, then §0, §3 B8, §7 (D46–D58) and §8 of `docs/ask-caboodle/ask-caboodle-be-implementation-plan.md` in `D:\Fork\Onboarding-Journey`. The backend is `D:\Fork\Caboodle BE Repository\caboodle.backend`, branch `feature/ask-caboodle` (B8 committed at `02a256b6`). Start with package B8b (settings and usage data): post its plan and open decisions first, then wait for my go-ahead.
 
 ## Where things stand
 
 | Item | State |
 |---|---|
-| **Backend branch** | `feature/ask-caboodle`, last commit `d7e48370` (B7b). Origin has the branch only up to B2 (`940365b8`). Never push unless the owner asks. |
+| **Backend branch** | `feature/ask-caboodle`, last commit `02a256b6` (B8), after the IAM merge `4d0830e6`. Origin has the branch only up to B2 (`940365b8`). Never push unless the owner asks. |
 | **Docs repo** | `D:\Fork\Onboarding-Journey`, branch `caboodle-access-v2`. Docs commits are one line: `Update - Ask Caboodle docs - …`. |
-| **Model in the app** | **Sonnet 5.5, effort medium** since B7b (D45). Its prices are the defaults of the five `*PricePerMillionTokens` settings, and Development and Staging settings say `claude-sonnet-5-5`. |
-| **Tests** | Solution 6,129 green across 16 projects (Intelligence 259, coverage 96.3 % unit-only). Build has 0 errors. The 21 free DB tests are green. |
+| **Model in the app** | **Sonnet 5.5, effort medium** since B7b (D45). Since B8, prices come from the `ModelPrices` table in code, per model and per attempt; the five price settings are gone. Development and Staging settings say `claude-sonnet-5-5`. |
+| **Tests** | Solution 6,638 green across 16 projects (Intelligence 301, coverage 96.2 % unit-only). Build has 0 errors. The 22 free DB tests are green. |
+| **IAM work** | Merge from `origin/feature/CS-1770-iam-service-broker-workspace` (last merged at `b5adb1a1`). Its module settings hold Ask Caboodle's three per-organization settings; the two dollar settings are Platform Admin only. Re-fetch and re-check before each merge. |
 | **Golden eval** | 45 questions in `caboodle/tests/Intelligence.Application.Test/Eval/golden.yaml`, asked as if today were 2026-10-12. Reports, README and the B7b comparison are in BE `docs/AskCaboodle-Eval/`. |
 | **Current baseline (B7b)** | **Sonnet 5.5 medium:** 39/45 in the full run; on confirmed results it matches or beats Opus in every group; $0.040 and 14 s per answer. **Opus 5.5 medium**, same prompt: 41/45, $0.112, 26 s. Sonnet's Q06 and Q09 were fixed after the full run and verified on both models. |
 | **Known weaknesses** | Pattern claims ("most months", "rose every month") and hand-added totals, on both models (Q03; Opus also Q10, Q13, Q29). |
@@ -22,7 +23,7 @@ Written 2026-10-14, at the end of the session that built B7b. Read this first, t
 ## Money (read before any paid run)
 
 - **Who pays:** the client (Constance) pays the API bill through the Claude Console. The owner cannot add money themselves.
-- **Balance:** about **$57.65** after B7b, which spent $14.14 of the $71.80.
+- **Balance:** about **$57.57** after B8, which spent about $0.075 on two smoke runs. B7b spent $14.14 of the $71.80. The Console has the exact figure: earlier Sonnet estimates used the old $0.20 cache-read price and were slightly high.
 - **Typical costs:**
 
   | What | Cost |
@@ -39,24 +40,48 @@ Written 2026-10-14, at the end of the session that built B7b. Read this first, t
   - Report the spend after each package.
   - The eval's default model is now the app's: Sonnet 5.5. Pass `-Model` explicitly anyway.
 
-## Next package: B8 — Guardrails (needs the owner's go-ahead)
+## Done: B8 — Guardrails (commit `02a256b6`, 2026-10-14)
 
-From plan §3 B8:
-- a per-user daily question cap;
-- one question at a time per session (already in place);
-- a per-organization monthly budget hook (log and warn);
-- cost per turn persisted (already done in B3);
-- rate limits turned into a friendly `error` event.
+Decisions D46–D58 are in plan §7, and the design and "as built" notes are in §3 B8. B8 delivered:
+- a shared daily question pool per organization (default 100), and each platform admin's own limit (50);
+- monthly $ budgets with "stop at 100 %";
+- prices by model;
+- `error.code` on every error, plus the `busy` checks;
+- dollars and the model shown to platform admins only.
 
-B7b added one item: take the prices for the cost estimate from the configured model, with a price table like the eval's `ModelPrice`. A model change can then never misprice answers or budgets. Today the five price settings must be changed by hand together with `Model`.
+The smoke run showed that real responses always carry `usage.iterations`, with a `message` entry that has no model. B8 reads the list only after a fallback.
 
-**Decisions to post** (no recommendation made yet):
-- the daily cap value, and whether admins are exempt;
-- what the user sees at the cap;
-- budget thresholds, and where the warning goes;
-- whether B8 needs a paid check. It probably needs at most a single smoke question, because the guardrails don't change answers.
+Its answer stated 93,376 cases where the months add up to 92,376: the known hand-added-total weakness.
 
-After B8 the order is C1–C8, G1–G8 and A1–A3 (A only if the demand gate says so). The frontend follows when the owner's mockup is ready.
+Sonnet 5.5 cache reads cost $0.10 per million tokens, not $0.20, so B7b's Sonnet medium cost was about **$0.035** per answer.
+
+## Next package: B8b — settings and usage data (post the plan first)
+
+From plan §3 B8. The API only; the screens come with the FE.
+- **Platform admin:**
+  - reads and edits the platform settings (`Intelligence.AskPlatformSettings`: platform admins' daily limit, platform budget, thresholds, alert emails);
+  - a usage report for any period, by organization, user and day: requests, tool calls, tokens and $;
+  - each organization's budget status.
+- **Organization admin**, by IAM's `organization.update`:
+  - their organization's usage by user: requests, tool calls and tokens;
+  - the pool and the questions left today;
+  - "X % of this month's allowance used", from 50 % on;
+  - never $.
+- **User:** their organization's questions left today, and their own usage.
+- Update BE `docs/AskCaboodle-FE.md`.
+
+**Decisions to post:**
+- the routes, and whether they go in one controller;
+- how the Platform Admin endpoints are guarded;
+- the period options and limits (UTC days and months);
+- what identifies a user in the organization admin's view;
+- whether a deleted session's questions show in the reports (B8 counts them for the limits).
+
+**Paid check:** none; B8b makes no model calls.
+
+After B8b the order is C1–C8, G1–G8 and A1–A3 (A only if the demand gate says so). In GA, G1 finishes the `ask-caboodle` module's dependencies and G2 switches the endpoint to IAM's module guard: only then can organization users ask.
+
+The frontend follows when the owner's mockup is ready.
 
 ## Working agreement (owner)
 
@@ -125,6 +150,12 @@ param([string]$Filter = "FullyQualifiedName~Intelligence.Application.Test.Live|F
 dotnet test caboodle/tests/Intelligence.Application.Test/Intelligence.Application.Test.csproj --no-build --filter $Filter --logger "console;verbosity=normal" 2>&1 |
     ForEach-Object { "$_" } | Where-Object { $_ -notmatch 'warning (SA|CS|NU|MSB)' -and $_.Trim() -ne '' }
 ```
+
+**One paid smoke question** (`smoke.ps1`, about $0.05 on Sonnet 5.5 medium; B8's paid check):
+- It starts with the same first lines as the other launchers: both connection strings, plus `ANTHROPIC_API_KEY` from user scope.
+- It then sets `ASK_CABOODLE_LIVE_TEST=1`, `ASK_CABOODLE_BRAND_ID` (default Bubbies, `0303a5ee-9913-47ef-ba6d-cdea180a723f`) and `ASK_CABOODLE_QUESTION`.
+- It runs `dotnet test … --no-build --filter "FullyQualifiedName~AnswersAQuestionEndToEnd"`.
+- Run it once, never twice in one command.
 
 **psql on `caboodle_dev`:** `C:\Program Files\PostgreSQL\17\bin\psql.exe`, host localhost, user postgres, database `caboodle_dev`. Read the password from `appsettings.Development.json` into `PGPASSWORD` in the same command, and never print it.
 
