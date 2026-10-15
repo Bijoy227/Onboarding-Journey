@@ -689,7 +689,7 @@ Since the FE review (2026-10-15, D69–D71), C0 comes first: the FE team builds 
     - **Paid:** a 4-case check (Q13, Q16, Q29, Q43, about $0.30), a full run (about $2.50) and re-checks: about $3–4 in all, each approved first.
 11. **Docs:** BE `docs/AskCaboodle-FE.md` (the note) and §10 here.
 
-**Decisions to post with the plan:** the small-count rule and its exception for concept answers; the never-flagged list; the rounding rule; the note's field and wording; how the correction round counts against the limits; when to tune before committing.
+**Decisions:** all approved on 2026-10-15: D98 (small counts), D99 (never flagged), D100 (rounding), D101 (the note), D102 (limits), D103 (when to tune), D104 (prompt unchanged). With D90, D91 and D96, nothing is left to decide before building.
 
 **Step 2** is package C0c (below).
 
@@ -1001,6 +1001,13 @@ Owner answers recorded 2026-10-11.
 | D95 | A second check per answer | **Owner:** no second model check on every answer. Re-running a specific step to confirm an answer may come later, decided with C8's real-usage data (§7.2). |
 | D96 | How checked text streams | **Owner (2026-10-15), after the streaming demo (https://claude.ai/artifact/BEggmtkXmewyuQ5B2W3pYA):** panel 3, "sentence by sentence, typed out". Each sentence is released once its figures pass C0b's check, and the FE types it out word by word. It feels like word-by-word streaming (about 0.5 s later to start) and never shows an unchecked figure; a failed figure pauses the text while the answer is rewritten. C0b builds the per-sentence check; C1 wires it into the stream. |
 | D97 | Feedback loop from real use | **Owner (2026-10-15):** real use drives the fixes. Every thumbs-down answer, with its C0 reason, goes to C8's triage list, where the Platform Admin records the fix. Each fixed one becomes a golden eval case, so the fix is measured and stays fixed. This is how answers improve after launch; nobody expects them to be right on day one. |
+| D98 | C0b: small counts | **Approved (2026-10-15):** a small count (an integer under 1,000 without `$` or `%`, in digits or as a word up to twenty: "3 stores", "eleven flavors") passes only against a result value, a row count or the user's question; catalog text, SQL and dates don't count. Exception: an answer that ran no query may also use the catalog's numbers ("up to 5 versions"). |
+| D99 | C0b: never flagged | **Approved:** years and dates; list numbering; numbers inside names the data returned ("8-pack", "SPROUTS 2026 - MD"); numbers from the user's question. |
+| D100 | C0b: rounding | **Approved:** a figure passes when a known value rounds to it at the precision shown (1,395,588 → "$1.4M"; 0.2357 or 23.57 → "23.6%"; 10,264.11 → "10,264"). "About" or "roughly" doesn't loosen it. |
+| D101 | C0b: the note | **Approved:** an answer whose figures still fail after the correction goes out with *"Some figures in this answer couldn't be checked against the data: 93,376."* The figures are stored with the message (in `PiecesJson`, no migration), sent as `unverifiedFigures` on the `text` event and in `GET sessions/{id}` (empty when all are verified), logged, and listed in C8's triage (D97). |
+| D102 | C0b: limits | **Approved:** the correction round counts toward the 12 steps and 180 s. An answer that hits a limit during the correction goes out with the note. |
+| D103 | C0b: when to tune | **Approved:** if more than 1 in 10 answers in the full run needs a correction, or the same right figure is flagged more than twice, tune the rules and re-check before the owner's review. |
+| D104 | C0b: prompt | **Approved:** the system prompt and the tool definitions stay unchanged, so runs stay comparable with C0; the correction instruction goes only in the message the server sends when a figure fails. |
 
 ### 7.1 Demo track — dropped 2026-10-12 (D3), kept for history
 
@@ -1061,7 +1068,7 @@ Each one is posted with its package, and gets a D number once decided.
 | FE review | done | — (docs) | 2026-10-15: the owner's Workbench artifact was reviewed for functionality only (D69). The answer contract became package C0, which comes first (D70). C1, C3, C4 and C8 gained the FE's needs, the backend/FE split is D71, the open points are in §7.2, and §10 collects the FE notes. |
 | Plan update | done | — (docs) | 2026-10-15: B9 (catalog completion), B10 (Platform Admin knowledge) and C9 (Caboodle guide) added, plus the C0 guard for app questions. §9 gained a "Plan" column. Decisions D72–D78. |
 | C0 | done | `a102eed1` | 2026-10-15: plan and decisions D79–D89 approved (§4 C0, §7); the IAM branch is unchanged since `b5adb1a1`. Built as in §4 C0 "C0 as built": migration `AddAskCaboodleAnswerPieces` applied locally; solution 6,735 green, Intelligence 398, coverage 97.3 %, DB tests 23 green, build 0 errors.<br>**Paid checks, $3.54:** full run 40/45 counted (B7b 39/45) with the kinds fix, app questions 3/3, $0.035 per answer; the re-checks fixed Q04-DAVID (period), Q19, Q43 and Q44 (fewer rejected calls). Q11, Q29 and Q27 are still failing (see "C0 as built").<br>**Balance:** about $54.03. |
-| C0b | next | | Fact check, step 1: every figure the user sees is checked against the figures the model had (D90, D91, D96). Plan posted 2026-10-15; awaiting the go-ahead. |
+| C0b | next | | Fact check, step 1: every figure the user sees is checked against the figures the model had. Plan and decisions approved 2026-10-15 (D90, D91, D96, D98–D104): build it. |
 | C0c | planned | | Fact check, step 2: rankings, trends and figures in the wrong place. Right after C0b (placement approved 2026-10-15); go or no-go with C0b's numbers (D90). |
 | B9 | todo | | Catalog completion: fee lines through the calculator, and three CRM tables. |
 | B10 | todo | | Platform Admin knowledge: everything except credentials (D72–D75). |

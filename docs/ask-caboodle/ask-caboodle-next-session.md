@@ -1,10 +1,14 @@
 # Ask Caboodle — Handoff for the next session
 
-Written 2026-10-15, after C0. Read this first, then §0, §3 (B9, B10), §4 (C0 "as built", C0b, C0c, C1, C5, C8, C9), §7 (D69–D97 and §7.2), §8, §9 and §10 of [`ask-caboodle-be-implementation-plan.md`](ask-caboodle-be-implementation-plan.md).
+Written 2026-10-15, after C0 and C0b's planning. Read this first, then §0, §4 (C0 "as built", C0b, C0c, C1), §7 (D79–D104 and §7.2), §8 and §10 of [`ask-caboodle-be-implementation-plan.md`](ask-caboodle-be-implementation-plan.md).
 
 ## Starter prompt
 
-> Read `docs/ask-caboodle/ask-caboodle-next-session.md`, then §0, §3 (B9, B10), §4 (C0 "as built", C0b, C0c, C1, C5, C8, C9), §7 (D69–D97 and §7.2), §8, §9 and §10 of `docs/ask-caboodle/ask-caboodle-be-implementation-plan.md` in `D:\Fork\Onboarding-Journey`. The backend is `D:\Fork\Caboodle BE Repository\caboodle.backend`, branch `feature/ask-caboodle` (C0 committed at `a102eed1`; working tree clean). Start with package C0b (fact check): read the code it builds on (`Tools/PresentAnswerTool.cs`, `Agent/AskAgent.cs`, `Answers/`, and the eval's `AnswerNumbers.cs`), post its plan and open decisions first, then wait for my go-ahead.
+> Read `docs/ask-caboodle/ask-caboodle-next-session.md`, then §0, §4 (C0 "as built", C0b, C0c, C1), §7 (D79–D104 and §7.2), §8 and §10 of `docs/ask-caboodle/ask-caboodle-be-implementation-plan.md` in `D:\Fork\Onboarding-Journey`. The backend is `D:\Fork\Caboodle BE Repository\caboodle.backend`, branch `feature/ask-caboodle` (C0 committed at `a102eed1`; working tree clean).
+>
+> Build package C0b (fact check, step 1) now. Its plan (§4 C0b) and every decision it needs (D90, D91, D96, D98–D104) are approved, so don't post the plan or ask about those decisions again. Ask only if you hit something the plan and the decisions don't cover. First read the code it builds on: `Agent/AskAgent.cs`, `Agent/AskSessionState.cs`, what each tool in `Tools/` returns to the model, `Answers/`, `History/AskHistoryMapping.cs`, and the eval's `AnswerNumbers.cs`, `EvalScorer.cs` and `EvalReport.cs`. Also fetch `origin/feature/CS-1770-iam-service-broker-workspace` and tell me whether it has commits after `b5adb1a1`; don't merge without my go-ahead.
+>
+> Then build it with its free tests: the solution builds with 0 errors and no new warnings, and `dotnet test caboodle.sln` and the free DB tests pass. Before each paid run, tell me its cost and wait for my approval: a 4-case check (Q13, Q16, Q29, Q43, about $0.30), then a full Sonnet 5.5 medium eval (about $2.50), then any re-checks. Apply D103 before asking for my review. Update BE `docs/AskCaboodle-FE.md`, the eval README, the plan (C0b "as built", §8, §10) and this handoff, then ask me to review before committing.
 
 ## Where things stand
 
@@ -125,17 +129,29 @@ Decisions D79–D89 are in plan §7; "C0 as built" (§4) has the details and eve
 - **Panel 3 for streaming (D96)**, and C0c (fact check step 2) right after C0b, go or no-go with C0b's numbers.
 - **Open for the owner:** the Sonnet cache-read price in the Console ($0.10 or $0.20; §7.2).
 
-## Next package: C0b — fact check, step 1 (post the plan first)
+## Next package: C0b — fact check, step 1 (approved: build it)
 
-From plan §4 C0b:
-- **A fact register per answer:** every figure the model saw (query rows, calculator figures, the headline and totals, the question's numbers, today's date).
-- **A number check on what the user sees** (text, headline label, notes, options), including small counting words. It reuses the eval's number matcher, moved into the app. Years, dates, the question's numbers and numbers inside names are never flagged.
-- **One correction round** when a figure isn't in the register. If it still fails, the answer goes out with a note that some figures couldn't be verified (D91).
-- **Eval:** a reported "unverified figures" check, the correction rate and false alarms. Q16 and Q29 are the test cases.
-- **Decisions to post:** the never-flagged list, the note's wording and field, and the correction rate that triggers tuning.
-- **Streaming (D96):** panel 3 of the streaming demo (https://claude.ai/artifact/BEggmtkXmewyuQ5B2W3pYA), "sentence by sentence, typed out". So the checker works one sentence at a time; C1 releases each checked sentence and the FE types it out.
-- **Full plan:** plan §4 C0b. It was posted to the owner on 2026-10-15; check §7 for the decisions they approved.
-- **Paid:** about $3–4 in total: a 4-case check, a full run and re-checks, each approved first.
+Plan §4 C0b has the full plan. Every decision it needs is approved (D90, D91, D96, D98–D104), so build it without posting the plan again. In short:
+- **Figure reader** (`Answers/AskFigures`): the eval's number reader moved into the app. It reads `$`, `%`, `K`/`M`, decimals, ranges, and counting words up to twenty.
+- **Fact register** (`Answers/AskFactRegister`): kept with the session; each tool adds what it returned.
+  - **Values:** result cells, row counts, calculator and search figures, the headline, totals and highlights.
+  - **The question:** the user's numbers and today's date.
+  - **Reference text:** numbers in the catalog text, used only for large or exact figures.
+  - **After a restart:** the register is rebuilt from the stored transcripts.
+- **Check, one sentence at a time:**
+  - **Rounding (D100):** a figure passes when a known value rounds to it at the precision shown.
+  - **Small counts (D98):** they pass only against values, row counts or the question; an answer that ran no query may also use catalog numbers.
+  - **Never flagged (D99):** years and dates, list numbering, numbers inside names, numbers from the question.
+- **One correction round in `AskAgent`:**
+  - one appended user message names the failing figures; the history stays append-only (preserved thinking), so never edit earlier turns;
+  - the round counts toward the 12 steps and 180 s (D102).
+- **Still failing (D101):** the answer goes out with *"Some figures in this answer couldn't be checked against the data: 93,376."*
+  - `unverifiedFigures` is sent on the `text` event and in `GET sessions/{id}`, and stored in `PiecesJson` (no migration);
+  - the figures are logged for C8's triage.
+- **The system prompt and tool definitions don't change (D104).**
+- **Eval:** reported checks for unverified figures and corrections; false alarms counted against the claims check. Test cases: Q16 and Q29 (counts), Q42–Q44 (catalog numbers). Tune by D103 before the review.
+- **Paid, each approved first:** a 4-case check (Q13, Q16, Q29, Q43, about $0.30), a full run (about $2.50), re-checks. About $3–4 in total.
+- **Streaming (D96):** panel 3 of the demo (https://claude.ai/artifact/BEggmtkXmewyuQ5B2W3pYA). C0b only builds the per-sentence check; C1 streams with it.
 
 Step 2 is package C0c (plan §4): rankings, trend words and figures in the wrong place (e.g. Q11, "July: 8,036" when that's April's). It is decided with C0b's numbers.
 
