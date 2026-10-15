@@ -547,7 +547,7 @@ Decisions D72–D75 (owner, 2026-10-15). Platform admins can ask about the whole
 
 ## 4. Phase 1c — Experience layer (still admin-only)
 
-Since the FE review (2026-10-15, D69–D71), C0 comes first: the FE team builds against it, and pins (C3) depend on it. The order is now **C0 → C0b → B9 → B10 → C1 → … → C9** (D77, D90). §10 collects what the FE needs from every package.
+Since the FE review (2026-10-15, D69–D71), C0 comes first: the FE team builds against it, and pins (C3) depend on it. The order is now **C0 → C0b → (C0c) → B9 → B10 → C1 → … → C9** (D77, D90); C0c runs there only if C0b's numbers justify it. §10 collects what the FE needs from every package.
 
 ### C0 — Answer contract (done 2026-10-15, commit `a102eed1`)
 **Why:** the FE renders every answer from one fixed set of pieces, so the design never depends on the question. Pins (C3) re-run the same data block later on fresh data, so everything in it is a rule that the server applies again on every run, never a value the model typed.
@@ -646,40 +646,71 @@ Since the FE review (2026-10-15, D69–D71), C0 comes first: the FE team builds 
 ### C0b — Fact check (next; before B9)
 **Why:** C0 made the headline, totals and highlighted rows server figures, but the text is still written by the model. A hand-added or miscounted figure can still reach the user: B8's 93,376 for 92,376, "11 flavors" for 10 (Q16), "three promo windows" for two (Q29). C0b checks every figure the user sees against the figures the model actually had, before the answer goes out. This is step 1 of two (D90).
 
-1. **Fact register:** for each answer, every figure the model saw:
-   - the query rows it was shown;
-   - the calculator's figures;
-   - the computed headline, totals and highlights;
-   - the numbers in the user's question, and today's date.
-2. **Number check on everything the user sees:** the text, the headline label, the notes and the options.
-   - **What counts as a figure:** amounts with `$`, `%`, `K` or `M`, plain numbers, and small counting words ("three windows").
-   - **Matching:** within display rounding. The eval's number matcher moves into the app, so the eval and the app read figures the same way.
-   - **Never flagged:** years, dates and months; numbers in the question; numbers inside names the results returned ("8-pack", promotion names).
-3. **One correction round:** figures that aren't in the register go back to the model ("these figures aren't in any result: compute them in SQL or remove them"). An answer that checks out costs no extra model call.
-4. **Still failing after one round (D91):** the answer is sent with a note that some figures couldn't be verified, and logged for C8's triage list.
-5. **Streaming:** whether the text is held until it's checked or streamed and replaced is decided with C1 (§7.2, with the timings).
-6. **Eval:**
-   - a reported check, "unverified figures in the answer";
-   - the correction rate, and false alarms (a right figure flagged);
-   - Q16 and Q29 are the test cases for counting words.
-7. **Tests (free):**
-   - the extractor and the matcher, with each kind of figure and each exception;
-   - the correction round and the note;
-   - the note in the history.
-8. **Cost and paid checks:**
-   - no extra cost when the text checks out; one extra step (about $0.005) when it doesn't;
-   - paid: a 4-case check (about $0.25), a full run (about $2.40) and re-checks, about $3–4 in all, each approved first.
-9. **Docs:** BE `docs/AskCaboodle-FE.md` (the note) and §10 here.
+1. **Fact register** (`Answers/AskFactRegister`): every figure the model was given, kept with the session so follow-ups count too. Each tool adds what it returned:
+   - **values:** the numeric cells of the query rows it was shown, each result's row count, the calculator's figures, the name search's figures, and the computed headline, totals and highlights;
+   - **the question:** the user's numbers and today's date;
+   - **reference text:** numbers in the catalog text it read (get_table_info and the system prompt), used only for large or exact figures (see 3).
+2. **Figure reader** (`Answers/AskFigures`): the eval's number reader, moved into the app so both read figures the same way.
+   - **Reads:** amounts with `$`, `%`, `K`, `M`, decimals, ranges ("8–12"), and counting words up to twenty ("three windows").
+   - **Never flagged:**
+     - years and dates;
+     - list numbering;
+     - numbers inside names the data returned ("8-pack", "SPROUTS 2026 - MD");
+     - numbers in the question.
+3. **Check:** a figure is verified when rounding a register value to the figure's shown precision gives the figure: 1,395,588 → "$1.4M"; 0.2357 → "23.6%"; 10,264.11 → "10,264".
+   - **Large or exact figures** (1,000 and up, decimals, `$`, `%`) may come from anything the model was given.
+   - **Small counts** ("three windows", "11 flavors", "4 stores") must match a value, a row count or the question, never catalog text, SQL or a date. That's what lets the check catch Q16 and Q29.
+   - **It covers everything the user sees:** the text, the notes and the options.
+   - **It works one sentence at a time,** so C1 can release each sentence as soon as it passes (panel 3, D96). Before C1 there is no text streaming, so C0b checks the finished text sentence by sentence.
+4. **One correction round, in the agent loop:**
+   - **The message:** when a figure fails, the server adds one user message: "These figures aren't in any result: 93,376 (in 'KeHE shipped 93,376 cases…'). Compute them with a query or remove them, then write the whole answer again."
+   - **The model** may run queries and present the answer again.
+   - **The history** stays append-only, so the replay and the prompt cache stay valid.
+   - **Limits:** the round counts toward the 12 steps and the 180 s.
+   - **Cost:** an answer that checks out costs no extra model call.
+5. **Still failing after one round (D91):** the answer goes out with a note naming the figures that couldn't be checked. They're stored with the message (in `PiecesJson`, no migration) and logged for C8's triage list.
+6. **The system prompt doesn't change,** so runs stay comparable; the correction message carries the guidance.
+7. **Eval:**
+   - **New reported checks:** "unverified figures" and the number of corrections.
+   - **False alarms:** figures that were flagged although the claims check found nothing wrong with them.
+   - **Test cases:** Q16 and Q29 (counting words), and Q42–Q44 (concept answers that quote the catalog).
+8. **Tests (free):**
+   - **The reader:** each kind of figure and each exception.
+   - **Rounding and the tiers.**
+   - **The correction round:** a wrong answer, then a right one; wrong twice, then the note; the step limit.
+   - **Storage:** the note in the history.
+9. **What step 1 can't catch:**
+   - a real figure put in the wrong place ("July: 8,036 cases", when 8,036 is April's);
+   - rankings and trend words without numbers (Q11).
 
-**Decisions to post with the plan:**
-- the exact list of figures that are never flagged;
-- the note's wording, and where it sits in the frame;
-- how many answers may need a correction before the rules are tuned.
+   The eval's claims check still catches these; step 2 targets them.
+10. **Cost and paid checks:**
+    - **Per answer:** no extra cost when the text checks out; one extra step (about $0.005–0.01) when it doesn't.
+    - **Paid:** a 4-case check (Q13, Q16, Q29, Q43, about $0.30), a full run (about $2.50) and re-checks: about $3–4 in all, each approved first.
+11. **Docs:** BE `docs/AskCaboodle-FE.md` (the note) and §10 here.
 
-**Step 2 (a later package, D90):** rankings and trend words without numbers ("Harmon's comes next", "rose every month"). The server would attach plain facts to each result (the order of rows, the highest and lowest, where a trend breaks) and check those claims against them. Decide after step 1's numbers. It catches many cases but not all, because the wording varies too much.
+**Decisions to post with the plan:** the small-count rule and its exception for concept answers; the never-flagged list; the rounding rule; the note's field and wording; how the correction round counts against the limits; when to tune before committing.
+
+**Step 2** is package C0c (below).
+
+### C0c — Fact check, step 2: rankings, trends and figures in the wrong place (after C0b; placement approved 2026-10-15)
+**Why:** C0b proves each figure exists in the data, but not that it is attached to the right thing, and it can't read claims without numbers. These are the errors left after C0b: "July: 8,036 cases" when 8,036 is April's; "Harmon's comes next" when another store comes first (Q11); "rose every month" when one month fell (the B6 pattern weakness).
+
+1. **Facts per result:** the server attaches plain facts to each result the model sees and adds them to the register:
+   - the order of the rows by each numeric column;
+   - the highest and lowest rows;
+   - the month-to-month direction and where a trend breaks.
+2. **Figure and label pairs:** a figure in a sentence that names a row label (a month, a retailer, a product) must sit on that row in the data.
+3. **Ranking words** ("top", "next", "highest", "lowest", "second") must follow the row order, and **trend words** ("every month", "steadily", "rose", "fell") must match the direction facts.
+4. **The same pipeline as C0b:** the same correction round and note, and one sentence at a time (D96).
+5. **Eval:** Q11, Q03 and the pattern cases; false alarms are counted as in C0b.
+6. **Honest limit:** wording varies too much to catch every claim. Expect most ranking and trend errors to be caught, not all.
+7. **Go or no-go:** decided with C0b's measured numbers (D90). If C0b leaves few errors, C0c moves later in the order.
+8. **Paid:** about the same as C0b (≈ $3–4), each step approved first.
 
 ### C1 — Token streaming
 - `AnthropicConversation.SendStreamingAsync` using `client.Beta.Messages.CreateStreaming`: accumulate content blocks (text deltas, thinking deltas + signature deltas, tool_use input JSON deltas, server-tool blocks), rebuild the assistant message for the append-only history, stream **text deltas** to the sink as `text-delta` events; final `text` event keeps the full markdown for clients that don't stream.
+- **Checked sentences, typed out (D96, panel 3 of the streaming demo):** the server collects the text deltas, checks each sentence with C0b's checker as soon as it ends, and releases it in a `text-sentence` event; the FE types each released sentence out word by word. A failed sentence stops the release ("A figure failed the check · rewriting") until the corrected answer arrives. The user never sees an unchecked figure; text starts about half a second later than raw word-by-word streaming.
 - Optional: `thinking.display: "updates"` (beta `thinking-display-updates-2026-08-18`) → short progress notes as `progress` events.
 - Tests: stubbed SSE HTTP responses (text-only turn, tool-use turn, thinking with signature).
 - FE contract update.
@@ -749,7 +780,7 @@ Since the FE review (2026-10-15, D69–D71), C0 comes first: the FE team builds 
 - **From the FE review (2026-10-15), the "Flight recorder" screen** (platform admins only):
   - **Figures:** cost per question (average and by day), steps per question, latency p50/p95, the cache-read share, the thumbs-up rate, the eval pass rate and its date, and refusals correct. Few-shot hit and short-circuit rates come after C5.
   - **Eval results in the database:** today they are only report files in BE `docs/AskCaboodle-Eval/`. The harness, or an import, must write each run's result, with its date and prompt/catalog version, to a table the API reads.
-  - **Open (§7.2):** a thumbs-down triage list (question, reason, fix note, open/fixed), where the Platform Admin records each fix.
+  - **Thumbs-down triage list (D97):** question, reason, fix note, open/fixed; the Platform Admin records each fix, and each fixed answer becomes a golden eval case. It also lists the answers C0b sent with unverified figures (D91).
 
 ### C9 — Caboodle guide (concepts and relationships; how-to steps later)
 Decision D76 (owner, 2026-10-15). Answers questions about how Caboodle works: what a term or entity means, and how things connect.
@@ -961,13 +992,15 @@ Owner answers recorded 2026-10-11.
 | D86 | C0: cannot_answer | **Approved:** it may carry a table of what is available, never a headline. Added after the 4-case check: a forecast question stays `cannot_answer` even when a plan or past figures could stand in. |
 | D87 | C0: eval | **Approved:** the `kind` check counts (refuse → `cannot_answer`; clarify → `clarify` or a stated reading; otherwise `answer`). **Owner, after the full run:** a case the data answers only in part lists the kinds that fit in `expect.kinds`; Q15, Q19, Q34 and Q41 accept `answer` or `cannot_answer`. The headline check (7 cases marked) and the schema-word check are reported only. The app group (Q42–Q44) is reported on its own line, outside the overall pass rate, until C9 adds a fourth case. |
 | D88 | C0: screens in app answers | **Approved:** only the six screens the catalog names (its NOT AVAILABLE pointers). No new screen names until C9 has a documented source. |
-| D89 | Answer quality bar | **Owner (2026-10-15):** answers must be precise and concise; a wrong figure is worse than none. More answer kinds are welcome when they serve that. |
-| D90 | Order and C0b | **Owner (2026-10-15):** a fact-check package, C0b, comes right after C0: C0 → C0b → B9 → B10 → C1 → … → C9. Its step 2 (rankings and trend words) is a later package, decided with step 1's numbers. |
+| D89 | Answer quality bar | **Owner (2026-10-15):** answers must be precise and concise; a wrong figure is worse than none. More answer kinds are welcome when they serve that. **The goal:** right about 95 % of the time and honest about the rest. When Ask Caboodle can't answer, it says so and shows what it can, instead of guessing; no system answers everything. |
+| D90 | Order and C0b | **Owner (2026-10-15):** a fact-check package, C0b, comes right after C0: C0 → C0b → B9 → B10 → C1 → … → C9. Its step 2 is package C0c (rankings, trend words and figures in the wrong place), right after C0b (owner approved the placement), with go or no-go decided by C0b's measured numbers. |
 | D91 | C0b: figures still unverified after one correction | **Owner:** the answer is sent with a note that some figures couldn't be verified, and logged for C8's triage. |
 | D92 | C5 additions | **Owner:** human approval; a starter library of at least 100 questions, mostly for brands and brokers, verified with Constance; C0's rules stored with each example; a nightly re-check; templates with slots (§4 C5). |
 | D93 | Data problems | **Owner:** the owner fixes them at the source with the brands, later. Until then each one is recorded in the data-issues doc, the warnings stay, and Ask Caboodle never patches data. When one is fixed: re-check it, remove its warning, re-record the eval figures, and mark it fixed. |
 | D94 | Model | **Owner (reconfirmed):** the app stays on Sonnet 5.5 medium for cost (D45). Opus 5.5 at low effort stays only as the eval's claims check (D43). |
 | D95 | A second check per answer | **Owner:** no second model check on every answer. Re-running a specific step to confirm an answer may come later, decided with C8's real-usage data (§7.2). |
+| D96 | How checked text streams | **Owner (2026-10-15), after the streaming demo (https://claude.ai/artifact/BEggmtkXmewyuQ5B2W3pYA):** panel 3, "sentence by sentence, typed out". Each sentence is released once its figures pass C0b's check, and the FE types it out word by word. It feels like word-by-word streaming (about 0.5 s later to start) and never shows an unchecked figure; a failed figure pauses the text while the answer is rewritten. C0b builds the per-sentence check; C1 wires it into the stream. |
+| D97 | Feedback loop from real use | **Owner (2026-10-15):** real use drives the fixes. Every thumbs-down answer, with its C0 reason, goes to C8's triage list, where the Platform Admin records the fix. Each fixed one becomes a golden eval case, so the fix is measured and stays fixed. This is how answers improve after launch; nobody expects them to be right on day one. |
 
 ### 7.1 Demo track — dropped 2026-10-12 (D3), kept for history
 
@@ -992,14 +1025,15 @@ Each one is posted with its package, and gets a D number once decided.
 | Open point | Package | Recommendation so far |
 |---|---|---|
 | C0's own decisions: headline rules, `source` required, storage, options as suggestions, feedback reasons | C0 | **Decided:** D79–D88 |
-| C0b with streaming: hold the text until it's checked, or stream it and replace it when the check fails | C0b, C1 | The check itself takes milliseconds. Holding the text delays its first word by the time the model takes to write it, about 3–6 s on Sonnet; the headline, notes and table still arrive first. A correction adds one model call (about 3–6 s), only when it's needed. Streaming and replacing has no delay, but the user may briefly see a wrong figure. |
+| C0b with streaming: hold the text until it's checked, or stream it and replace it when the check fails | C0b, C1 | **Decided:** D96, sentence by sentence, typed out (panel 3). |
 | Re-running a step to confirm an answer (instead of a second model check) | Later, after C8 | Decide with real-usage data: which answers go wrong, and which step to re-run (D95). |
 | How much of the run trace organization users see; `done.queries` (raw SQL) goes to everyone today | C1 (before G2) | Organization users get labels, tools, timings, row counts and matched names. SQL, tables, columns, catalog notes and Postgres errors are for platform admins only. |
 | One list of period tokens for pins | C3 (also C0's `period` note) | Merge the two lists; owner picks |
 | KPI delta against the previous period on a pin | C3 | Optional; costs a second run of the plan, no AI call |
 | Personal or shareable pins | C3 | — |
 | Who reviews prompts shared with an organization | C4 | — |
-| Thumbs-down triage list in the Flight recorder | C8 | — |
+| Thumbs-down triage list in the Flight recorder | C8 | **Decided:** D97. Build it in C8; each fixed answer becomes an eval case. |
+| Sonnet 5.5 cache-read price: $0.10 per million tokens (B8; the app's `ModelPrices`) or $0.20 (the `claude-api` skill's table) | Owner (Claude Console) | If the Console bills $0.20, update `ModelPrices`: answers cost about 14 % more than the reports say, and the budgets fill faster. |
 | Where the organization admin's usage page and the "questions left today" indicator sit | FE (§10.9) | FE team |
 | Grant `DataHub.DistributorUpcMappings` (without notes and "resolved by") | B9 | Owner decides when B9 starts |
 | Split B10 into B10a (IAM, organizations, modules, settings, audit) and B10b (data pipeline) | B10 | Decide when B10 starts |
@@ -1027,7 +1061,8 @@ Each one is posted with its package, and gets a D number once decided.
 | FE review | done | — (docs) | 2026-10-15: the owner's Workbench artifact was reviewed for functionality only (D69). The answer contract became package C0, which comes first (D70). C1, C3, C4 and C8 gained the FE's needs, the backend/FE split is D71, the open points are in §7.2, and §10 collects the FE notes. |
 | Plan update | done | — (docs) | 2026-10-15: B9 (catalog completion), B10 (Platform Admin knowledge) and C9 (Caboodle guide) added, plus the C0 guard for app questions. §9 gained a "Plan" column. Decisions D72–D78. |
 | C0 | done | `a102eed1` | 2026-10-15: plan and decisions D79–D89 approved (§4 C0, §7); the IAM branch is unchanged since `b5adb1a1`. Built as in §4 C0 "C0 as built": migration `AddAskCaboodleAnswerPieces` applied locally; solution 6,735 green, Intelligence 398, coverage 97.3 %, DB tests 23 green, build 0 errors.<br>**Paid checks, $3.54:** full run 40/45 counted (B7b 39/45) with the kinds fix, app questions 3/3, $0.035 per answer; the re-checks fixed Q04-DAVID (period), Q19, Q43 and Q44 (fewer rejected calls). Q11, Q29 and Q27 are still failing (see "C0 as built").<br>**Balance:** about $54.03. |
-| C0b | next | | Fact check, step 1: every figure the user sees is checked against the figures the model had (D90, D91). Post the plan first. |
+| C0b | next | | Fact check, step 1: every figure the user sees is checked against the figures the model had (D90, D91, D96). Plan posted 2026-10-15; awaiting the go-ahead. |
+| C0c | planned | | Fact check, step 2: rankings, trends and figures in the wrong place. Right after C0b (placement approved 2026-10-15); go or no-go with C0b's numbers (D90). |
 | B9 | todo | | Catalog completion: fee lines through the calculator, and three CRM tables. |
 | B10 | todo | | Platform Admin knowledge: everything except credentials (D72–D75). |
 | C1 … C8 | todo | | C1 now includes the run-trace events. |
@@ -1177,8 +1212,8 @@ The full contract is in BE `docs/AskCaboodle-FE.md`, "The answer pieces".
 | B9 | Fee lines in promotion answers (one row per fee: name, type, where it applies, amount); markup, region and distributor answers. No new FE pieces. |
 | B10 | No FE change; platform admins get wider answers (organizations, users, modules, imports) |
 | C0 | The `frame` event (kind, headline, notes, options) and its replace rule; the data block's series, formats, totals, highlights and `chartable`; the same pieces in `GET sessions/{id}`; the feedback `reason` (down only) and `feedbackReason` in history |
-| C0b | A note on an answer when some figures couldn't be verified; possibly a short hold before the text (§7.2) |
-| C1 | Streamed text, live trace events, the trace endpoint, the step limits |
+| C0b | A note naming the figures that couldn't be checked (rare); a corrected answer may take a few seconds longer |
+| C1 | Streamed text as checked sentences that the FE types out word by word (D96; see the streaming demo), with the "rewriting" pause when a figure fails; live trace events, the trace endpoint, the step limits |
 | C2 | Starters for the empty state |
 | C3 | Pins: create, list, render, delete; broken pins |
 | C4 | Prompt gallery and the `/` picker |

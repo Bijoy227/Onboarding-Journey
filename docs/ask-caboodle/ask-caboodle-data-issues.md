@@ -1,6 +1,12 @@
 # Ask Caboodle — Data issues found while building
 
-Status: open list, started 2026-10-13 (B6). The owner reviews these later (decision 2026-10-13); nothing is fixed for now.
+Status: open list, started 2026-10-13 (B6). Nothing is fixed for now. The owner will fix these at the source with the brands, later (plan D93, 2026-10-15). Until then, every package records each new problem here, the catalog warnings and answer caveats stay, and Ask Caboodle never patches data.
+
+**When an issue is fixed:**
+1. Re-check the data on local `caboodle_dev`.
+2. Remove or soften the related catalog rule or warning.
+3. Re-record the affected golden eval values (`GoldenReferenceTests` fails on changed figures).
+4. Move the row to a "Fixed" section, with the date.
 
 This file lists problems in Caboodle's **data** that Ask Caboodle work has uncovered. These are not bugs in Ask Caboodle code. Each one makes some answers wrong or misleading, even when the agent reads the data correctly. Update the file whenever a package finds a new issue, or when one is fixed. A fix also needs the related golden eval references re-recorded (`GoldenReferenceTests`).
 

@@ -1,10 +1,10 @@
 # Ask Caboodle — Handoff for the next session
 
-Written 2026-10-15, after C0. Read this first, then §0, §3 (B9, B10), §4 (C0 "as built", C0b, C1, C5, C9), §7 (D69–D95 and §7.2), §8, §9 and §10 of [`ask-caboodle-be-implementation-plan.md`](ask-caboodle-be-implementation-plan.md).
+Written 2026-10-15, after C0. Read this first, then §0, §3 (B9, B10), §4 (C0 "as built", C0b, C0c, C1, C5, C8, C9), §7 (D69–D97 and §7.2), §8, §9 and §10 of [`ask-caboodle-be-implementation-plan.md`](ask-caboodle-be-implementation-plan.md).
 
 ## Starter prompt
 
-> Read `docs/ask-caboodle/ask-caboodle-next-session.md`, then §0, §3 (B9, B10), §4 (C0 "as built", C0b, C1, C5, C9), §7 (D69–D95 and §7.2), §8, §9 and §10 of `docs/ask-caboodle/ask-caboodle-be-implementation-plan.md` in `D:\Fork\Onboarding-Journey`. The backend is `D:\Fork\Caboodle BE Repository\caboodle.backend`, branch `feature/ask-caboodle` (C0 committed at `a102eed1`; working tree clean). Start with package C0b (fact check): read the code it builds on (`Tools/PresentAnswerTool.cs`, `Agent/AskAgent.cs`, `Answers/`, and the eval's `AnswerNumbers.cs`), post its plan and open decisions first, then wait for my go-ahead.
+> Read `docs/ask-caboodle/ask-caboodle-next-session.md`, then §0, §3 (B9, B10), §4 (C0 "as built", C0b, C0c, C1, C5, C8, C9), §7 (D69–D97 and §7.2), §8, §9 and §10 of `docs/ask-caboodle/ask-caboodle-be-implementation-plan.md` in `D:\Fork\Onboarding-Journey`. The backend is `D:\Fork\Caboodle BE Repository\caboodle.backend`, branch `feature/ask-caboodle` (C0 committed at `a102eed1`; working tree clean). Start with package C0b (fact check): read the code it builds on (`Tools/PresentAnswerTool.cs`, `Agent/AskAgent.cs`, `Answers/`, and the eval's `AnswerNumbers.cs`), post its plan and open decisions first, then wait for my go-ahead.
 
 ## Where things stand
 
@@ -114,12 +114,16 @@ Decisions D79–D89 are in plan §7; "C0 as built" (§4) has the details and eve
   - never table or column names.
 - **The owner's bar (D89):** precise and concise; a wrong figure is worse than none; more answer kinds are welcome if they serve that.
 
-**After C0, the owner decided (D90–D95):**
+**After C0, the owner decided (D89 goal, D90–D97):**
 - **C0b, a fact check, comes next,** before B9.
 - **C5 grows:** a starter library of at least 100 questions, mostly for brands and brokers, verified with Constance; plus human approval and a nightly re-check (D92).
 - **Data problems:** fixed at the source later by the owner; until then, record them and keep the warnings (D93).
 - **Model:** stay on Sonnet (D94).
 - **No second model check per answer;** re-running a step to confirm an answer is a "later" item in §7.2 (D95).
+- **The goal (D89):** right about 95 % of the time and honest about the rest.
+- **Feedback loop (D97):** thumbs-down answers go to C8's triage list, and each fixed one becomes an eval case.
+- **Panel 3 for streaming (D96)**, and C0c (fact check step 2) right after C0b, go or no-go with C0b's numbers.
+- **Open for the owner:** the Sonnet cache-read price in the Console ($0.10 or $0.20; §7.2).
 
 ## Next package: C0b — fact check, step 1 (post the plan first)
 
@@ -129,10 +133,11 @@ From plan §4 C0b:
 - **One correction round** when a figure isn't in the register. If it still fails, the answer goes out with a note that some figures couldn't be verified (D91).
 - **Eval:** a reported "unverified figures" check, the correction rate and false alarms. Q16 and Q29 are the test cases.
 - **Decisions to post:** the never-flagged list, the note's wording and field, and the correction rate that triggers tuning.
-- **Streaming (§7.2):** whether to hold the text until checked or stream and replace it. The check takes milliseconds; holding the text delays its first word by about 3–6 s on Sonnet, while the headline and table still arrive first. Decided with C1.
+- **Streaming (D96):** panel 3 of the streaming demo (https://claude.ai/artifact/BEggmtkXmewyuQ5B2W3pYA), "sentence by sentence, typed out". So the checker works one sentence at a time; C1 releases each checked sentence and the FE types it out.
+- **Full plan:** plan §4 C0b. It was posted to the owner on 2026-10-15; check §7 for the decisions they approved.
 - **Paid:** about $3–4 in total: a 4-case check, a full run and re-checks, each approved first.
 
-Step 2 (rankings and trend words, e.g. Q11) is a later package, decided with step 1's numbers.
+Step 2 is package C0c (plan §4): rankings, trend words and figures in the wrong place (e.g. Q11, "July: 8,036" when that's April's). It is decided with C0b's numbers.
 
 ## After C0b: B9 — catalog completion (post the plan first)
 
