@@ -1,46 +1,46 @@
 # Ask Caboodle — Handoff for the next session
 
-Written 2026-10-15, after C0 and C0b's planning. Read this first, then §0, §4 (C0 "as built", C0b, C0c, C1), §7 (D79–D104 and §7.2), §8 and §10 of [`ask-caboodle-be-implementation-plan.md`](ask-caboodle-be-implementation-plan.md).
+Written 2026-10-16, after C0b (commit `6da28c2d`). Read this first, then §0, §4 (C0b "as built", C0c, C1), §3 B9, §7 (D90–D107 and §7.2), §8 and §10 of [`ask-caboodle-be-implementation-plan.md`](ask-caboodle-be-implementation-plan.md).
 
 ## Starter prompt
 
-> Read `docs/ask-caboodle/ask-caboodle-next-session.md`, then §0, §4 (C0 "as built", C0b, C0c, C1), §7 (D79–D104 and §7.2), §8 and §10 of `docs/ask-caboodle/ask-caboodle-be-implementation-plan.md` in `D:\Fork\Onboarding-Journey`. The backend is `D:\Fork\Caboodle BE Repository\caboodle.backend`, branch `feature/ask-caboodle` (C0 committed at `a102eed1`; working tree clean).
+> Read `docs/ask-caboodle/ask-caboodle-next-session.md`, then §0, §4 (C0b "as built", C0c, C1), §3 B9, §7 (D90–D107 and §7.2), §8 and §10 of `docs/ask-caboodle/ask-caboodle-be-implementation-plan.md` in `D:\Fork\Onboarding-Journey`. The backend is `D:\Fork\Caboodle BE Repository\caboodle.backend`, branch `feature/ask-caboodle` (C0b committed at `6da28c2d`; working tree clean).
 >
-> Build package C0b (fact check, step 1) now. Its plan (§4 C0b) and every decision it needs (D90, D91, D96, D98–D104) are approved, so don't post the plan or ask about those decisions again. Ask only if you hit something the plan and the decisions don't cover. First read the code it builds on: `Agent/AskAgent.cs`, `Agent/AskSessionState.cs`, what each tool in `Tools/` returns to the model, `Answers/`, `History/AskHistoryMapping.cs`, and the eval's `AnswerNumbers.cs`, `EvalScorer.cs` and `EvalReport.cs`. Also fetch `origin/feature/CS-1770-iam-service-broker-workspace` and tell me whether it has commits after `b5adb1a1`; don't merge without my go-ahead.
->
-> Then build it with its free tests: the solution builds with 0 errors and no new warnings, and `dotnet test caboodle.sln` and the free DB tests pass. Before each paid run, tell me its cost and wait for my approval: a 4-case check (Q13, Q16, Q29, Q43, about $0.30), then a full Sonnet 5.5 medium eval (about $2.50), then any re-checks. Apply D103 before asking for my review. Update BE `docs/AskCaboodle-FE.md`, the eval README, the plan (C0b "as built", §8, §10) and this handoff, then ask me to review before committing.
+> Next is the C0c go or no-go (D90), using C0b's numbers in §4 "C0b as built" and §7.2. Post a short recommendation and wait for my decision. Then post the plan and open decisions for the package that comes next (C0c or B9), and wait for my go-ahead. Also fetch `origin/feature/CS-1770-iam-service-broker-workspace` and tell me whether it has commits after `b5adb1a1`; don't merge without my go-ahead.
 
 ## Where things stand
 
 | Item | State |
 |---|---|
-| **Backend branch** | `feature/ask-caboodle`, last commit `a102eed1` (C0), after B8b `b2f00e22`, B8 `02a256b6` and the IAM merge `4d0830e6`. Origin has the branch only up to B2 (`940365b8`). Never push unless the owner asks. |
+| **Backend branch** | `feature/ask-caboodle`, last commit `6da28c2d` (C0b), after C0 `a102eed1`, B8b `b2f00e22`, B8 `02a256b6` and the IAM merge `4d0830e6`. Origin has the branch only up to B2 (`940365b8`). Never push unless the owner asks. |
 | **Docs repo** | `D:\Fork\Onboarding-Journey`, branch `caboodle-access-v2`. Docs commits are one line: `Update - Ask Caboodle docs - …`. |
 | **Model in the app** | **Sonnet 5.5, effort medium** since B7b (D45). Since B8, prices come from the `ModelPrices` table in code, per model and per attempt; the five price settings are gone. Development and Staging settings say `claude-sonnet-5-5`. |
-| **Tests** | Solution 6,735 green across 16 projects (Intelligence 398, coverage 97.3 % unit-only). Build has 0 errors. The 23 free DB tests are green. |
-| **IAM work** | Merge from `origin/feature/CS-1770-iam-service-broker-workspace` (last merged at `b5adb1a1`; still no new commits when fetched on 2026-10-15). Its module settings hold Ask Caboodle's three per-organization settings; the two dollar settings are Platform Admin only. Re-fetch and re-check before each merge. |
-| **Golden eval** | 48 questions in `caboodle/tests/Intelligence.Application.Test/Eval/golden.yaml`, asked as if today were 2026-10-12: 45 counted, plus "App questions" (Q42–Q44), reported apart until C9. Since C0: a counted `kind` check, `expect.kinds` for partial answers, and reported headline and database-name checks. Reports and README are in BE `docs/AskCaboodle-Eval/`. |
-| **Current baseline (C0)** | **Sonnet 5.5 medium:** 40/45 counted (B7b: 39/45), app questions 3/3, **$0.035 per answer**, 13 s. Re-checks fixed Q04-DAVID, Q19, Q43 and Q44; still failing: Q11, Q29 (wording slips) and Q27 (as in B7b). Opus 5.5 medium was last measured in B7b: 41/45, $0.112, 26 s. |
-| **Known weaknesses** | Pattern and counting claims in the wording ("three promo windows" for two, a skipped row in a ranking; Q11, Q29). Hand-added totals are fixed where the server computes the headline or totals (C0: Q03 and Q13 now pass). |
+| **Tests** | Solution 6,813 green across 16 projects (Intelligence 476, coverage 97.8 % unit-only). Build has 0 errors. The 23 free DB tests are green. |
+| **IAM work** | Merge from `origin/feature/CS-1770-iam-service-broker-workspace` (last merged at `b5adb1a1`; still no new commits when fetched on 2026-10-16). Its module settings hold Ask Caboodle's three per-organization settings; the two dollar settings are Platform Admin only. Re-fetch and re-check before each merge. |
+| **Golden eval** | 48 questions in `caboodle/tests/Intelligence.Application.Test/Eval/golden.yaml`, asked as if today were 2026-10-12: 45 counted, plus "App questions" (Q42–Q44), reported apart until C9. Since C0: a counted `kind` check, `expect.kinds` for partial answers, and reported headline and database-name checks. Since C0b: a "Fact check" section and a reported `unverified_figures` check. Reports and README are in BE `docs/AskCaboodle-Eval/`. |
+| **Current baseline (C0b)** | **Sonnet 5.5 medium:** 38/45 counted (C0: 40/45; the difference is run-to-run flips, none caused by the check), app questions 3/3, **$0.036 per answer**, 13.5 s. 5 of 48 answers corrected by the fact check before the last tuning (about 3 of 48 expected now), none sent with the note. Failing: Q15 (borderline), Q27 (as since B7b), Q29 (a range claim, C0c's kind), Q35 (`cannot_answer` for "nothing found"; stays `answer` by D107). Q33 now accepts either kind (D107). Opus 5.5 medium was last measured in B7b: 41/45, $0.112, 26 s. |
+| **Known weaknesses** | Figures in the wrong place, rankings and pattern claims ("56–68 units per store" when one week is 40; Q11, Q29): C0c. Wrong figures and counts are now caught by C0b (Q16, Q29's "three promo periods"), and hand-added totals pass only when right. |
 | **Data problems** | DI1–DI10 in [`ask-caboodle-data-issues.md`](ask-caboodle-data-issues.md). The owner's rule: record and maintain them, don't fix them. Add any new one a package finds. DI9 matters for store counts: KeHE zero-case rows count as stores, both in the app and in Ask Caboodle. |
 
 ## Money (read before any paid run)
 
 - **Who pays:** the client (Constance) pays the API bill through the Claude Console. The owner cannot add money themselves.
-- **Balance:** about **$54.03**. C0 spent $3.54 (4-case check $0.24, re-checks $0.11 + $0.50 + $0.30, full run $2.39); B8b nothing; B8 about $0.075. The Console has the exact figure.
+- **Balance:** about **$50.60**. C0b spent $3.43 (4-case check $0.41, full run $2.62, re-check of 7 $0.40); C0 $3.54; B8b nothing; B8 about $0.075. The Console has the exact figure.
 - **Cache-read price to confirm:** the app's price table and B8 use $0.10 per million tokens for Sonnet 5.5 cache reads; the `claude-api` skill's table says $0.20. If the Console shows $0.20, Sonnet answers cost about 14 % more than the reports say.
 - **Typical costs:**
 
   | What | Cost |
   |---|---|
-  | Full 48-question run, Sonnet 5.5 medium | ≈ $2.40 (≈ $0.80 of it is the claims check; measured in C0) |
-  | Full run, Opus 5.5 medium | ≈ $6.30 (≈ $1.25 claims check) |
-  | One question, Sonnet 5.5 medium | ≈ $0.04 + ≈ $0.02 claims check |
+  | Full 48-question run, Sonnet 5.5 medium | ≈ $2.60 (≈ $0.90 of it is the claims check, which since C0b also judges the drafts of corrected answers; measured in C0b) |
+  | Full run, Opus 5.5 medium | ≈ $6.30 (≈ $1.25 claims check; B7b) |
+  | One question, Sonnet 5.5 medium | ≈ $0.04 + ≈ $0.02 claims check (+ ≈ $0.03 more when the answer was corrected) |
+  | The first case of any run | ≈ $0.06–0.10: it writes the 1-hour prompt cache |
   | One question, Opus 5.5 medium | ≈ $0.11 + ≈ $0.03 claims check |
 
 - **Rules:**
   - State the cost and get the owner's approval before every paid run.
   - Run without automatic re-runs (`-Rerun 0`). Re-check only questions whose result differs from the baseline.
+  - Before a paid run that tests a fact-check change, run the free replay (below) on the last full run.
   - Each question in flight reserves $0.30 of the cap, so leave headroom or the last questions are skipped.
   - Report the spend after each package.
   - The eval's default model is now the app's: Sonnet 5.5. Pass `-Model` explicitly anyway.
@@ -129,33 +129,22 @@ Decisions D79–D89 are in plan §7; "C0 as built" (§4) has the details and eve
 - **Panel 3 for streaming (D96)**, and C0c (fact check step 2) right after C0b, go or no-go with C0b's numbers.
 - **Open for the owner:** the Sonnet cache-read price in the Console ($0.10 or $0.20; §7.2).
 
-## Next package: C0b — fact check, step 1 (approved: build it)
+## Done: C0b — fact check, step 1 (commit `6da28c2d`, 2026-10-16)
 
-Plan §4 C0b has the full plan. Every decision it needs is approved (D90, D91, D96, D98–D104), so build it without posting the plan again. In short:
-- **Figure reader** (`Answers/AskFigures`): the eval's number reader moved into the app. It reads `$`, `%`, `K`/`M`, decimals, ranges, and counting words up to twenty.
-- **Fact register** (`Answers/AskFactRegister`): kept with the session; each tool adds what it returned.
-  - **Values:** result cells, row counts, calculator and search figures, the headline, totals and highlights.
-  - **The question:** the user's numbers and today's date.
-  - **Reference text:** numbers in the catalog text, used only for large or exact figures.
-  - **After a restart:** the register is rebuilt from the stored transcripts.
-- **Check, one sentence at a time:**
-  - **Rounding (D100):** a figure passes when a known value rounds to it at the precision shown.
-  - **Small counts (D98):** they pass only against values, row counts or the question; an answer that ran no query may also use catalog numbers.
-  - **Never flagged (D99):** years and dates, list numbering, numbers inside names, numbers from the question.
-- **One correction round in `AskAgent`:**
-  - one appended user message names the failing figures; the history stays append-only (preserved thinking), so never edit earlier turns;
-  - the round counts toward the 12 steps and 180 s (D102).
-- **Still failing (D101):** the answer goes out with *"Some figures in this answer couldn't be checked against the data: 93,376."*
-  - `unverifiedFigures` is sent on the `text` event and in `GET sessions/{id}`, and stored in `PiecesJson` (no migration);
-  - the figures are logged for C8's triage.
-- **The system prompt and tool definitions don't change (D104).**
-- **Eval:** reported checks for unverified figures and corrections; false alarms counted against the claims check. Test cases: Q16 and Q29 (counts), Q42–Q44 (catalog numbers). Tune by D103 before the review.
-- **Paid, each approved first:** a 4-case check (Q13, Q16, Q29, Q43, about $0.30), a full run (about $2.50), re-checks. About $3–4 in total.
-- **Streaming (D96):** panel 3 of the demo (https://claude.ai/artifact/BEggmtkXmewyuQ5B2W3pYA). C0b only builds the per-sentence check; C1 streams with it.
+Plan §4 "C0b as built" has the details and every paid run. In short:
+- **Every figure the user sees is checked** (text, notes, options, table title) against the figures the model was given, one sentence at a time (`Answers/AskFigures`, `AskFactRegister`, `AskFactCheck`; `AskTextCheck.Next` is the per-sentence entry point for C1).
+- **The register** is built from the exact text each tool returned, so it is rebuilt from the stored transcripts after a restart. It also holds row counts by value and, for fully shown results, column sums and averages: a hand-added total passes only when it is right.
+- **One correction round** in `AskAgent`; an answer that still fails goes out with `unverifiedFigures` (the note). Since C0b the `text` event is `{ text, unverifiedFigures[] }`.
+- **The system prompt and tool definitions are unchanged (D104).** `present_answer`'s reply now states the table's row count.
+- **Tuned by D103 with a free replay** (`FactCheckReplayTests`, below). At review the owner kept the two tunings beyond the plan's wording (D105: figures recomputed from two checked figures; the row count in `present_answer`'s reply), kept small counts exact (D106), and let Q33 accept either kind (D107).
+- **Paid, $3.43:** Q16 and Q29 now pass; the full run is 38/45 counted (C0: 40/45, flips only), $0.036 per answer; 5 of 48 corrected before the last tuning, none sent with the note.
 
-Step 2 is package C0c (plan §4): rankings, trend words and figures in the wrong place (e.g. Q11, "July: 8,036" when that's April's). It is decided with C0b's numbers.
+## Next: C0c go or no-go, then B9
 
-## After C0b: B9 — catalog completion (post the plan first)
+- **C0c (plan §4):** rankings, trend words and figures in the wrong place. C0b's numbers: one such error per full run is left (C0: Q11's ranking; C0b: Q29's range "56–68 units per store"). D90: with few left, C0c can move later. Post a recommendation and wait for the owner.
+- **Industry terms (§7.2):** users' day-to-day words can clash with Caboodle's ("sales" = sell-through, "depletions", "distribution" = ACV or TDPs, "the plan" = AOP, "deductions", "MCBs"). The owner is talking to Constance first. When the owner says go: draft about 50–60 terms with test questions (what users mean, how Caboodle maps it, clash or gap, proposed handling); she reviews; approved terms go to the glossary, the eval and C5. Don't start it unasked.
+
+## B9 — catalog completion (post the plan first)
 
 From plan §3 B9:
 - **Promotion fee lines through the calculator:** a fee-line breakdown in `get_promotion_performance` (name, type, where it applies, coupon dates, amount), for approved and sandbox promotions. The fee tables stay calculator-only, with no SQL grant. First find where the app computes each fee's amount and reuse that code. Remove `not_available.promotion_fee_lines`.
@@ -270,10 +259,22 @@ dotnet test caboodle/tests/Intelligence.Application.Test/Intelligence.Applicatio
 - It runs `dotnet test … --no-build --filter "FullyQualifiedName~AnswersAQuestionEndToEnd"`.
 - Run it once, never twice in one command.
 
+**Free fact-check replay** (`replay.ps1`, no model calls; C0b):
+- It starts with the same first lines as `dbtests.ps1` (both connection strings, no API key).
+- It sets `ASK_CABOODLE_FACTCHECK_REPLAY` to a stored run's `.json` (for example `docs/AskCaboodle-Eval/2026-10-16-claude-sonnet-5-5-medium-c0b.json`), optionally `ASK_CABOODLE_EVAL_CASES` and `ASK_CABOODLE_FACTCHECK_VERBOSE=1` (prints what each tool returned).
+- It runs `dotnet test … --no-build --filter "FullyQualifiedName~FactCheckReplayTests" --logger "console;verbosity=detailed"`.
+- It prints, per case, what the current rules flag first (the first draft, else the answer) next to that run's claims-check findings.
+
 **psql on `caboodle_dev`:** `C:\Program Files\PostgreSQL\17\bin\psql.exe`, host localhost, user postgres, database `caboodle_dev`. Read the password from `appsettings.Development.json` into `PGPASSWORD` in the same command, and never print it.
 
 ## Lessons from recent sessions
 
+- **Replay before paying (C0b).** The free replay over C0's stored answers showed 16 of 48 flagged before tuning and 4 after, at $0, and the live runs then matched it.
+- **A rule that excuses figures must not hide the ones it doesn't need to (C0b).** The "inside a name" rule first ran before the check, so "cases 47,412" was skipped and couldn't serve as an operand for "4,800 fewer". Excuse only figures that would otherwise fail.
+- **Show a percentage near a threshold with a decimal (C0b).** The report printed 10.4 % as "10 %", hiding that D103's limit was passed.
+- **A "worse" pass rate needs a history check before any blame (C0b).** 40 → 38 was cases that have flipped before; compare the same cases across earlier runs (each runs once, so ±2–3 is normal).
+- **Moq's `SetupSequence` can't read the cancellation token.** Use `Setup(…).Returns<CancellationToken>(…)` with a call counter.
+- **Never write markdown with backticks through bash double quotes** (`node -e "…"`): bash ran each backticked word as a command and deleted it. Edit docs with the Edit tool.
 - **Moving words out of the text can drop a check the old wording forced (C0).** The old "Source: …, Jul–Aug 2026" line made the model check how far the data runs. With the period in a note, it wrote the period asked until the rule said "the months actually covered, checked against the latest month".
 - **Every `present_answer` rejection costs a model step.** Default what is harmless (chart none without a result, the headline's result) and reject only what would be wrong. Read `toolCalls[].isError` in the eval JSON after each run.
 - **Expected kinds need judgment.** A question the data answers only in part fits `answer` or `cannot_answer`; list both in `expect.kinds` instead of failing a good answer.

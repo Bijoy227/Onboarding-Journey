@@ -643,7 +643,7 @@ Since the FE review (2026-10-15, D69–D71), C0 comes first: the FE team builds 
     - Q11 and Q29: the known pattern and counting weakness. Their figures are right; the counts in the wording are not.
     - Q27: as in B7b.
 
-### C0b — Fact check (next; before B9)
+### C0b — Fact check (done 2026-10-16, commit `6da28c2d`)
 **Why:** C0 made the headline, totals and highlighted rows server figures, but the text is still written by the model. A hand-added or miscounted figure can still reach the user: B8's 93,376 for 92,376, "11 flavors" for 10 (Q16), "three promo windows" for two (Q29). C0b checks every figure the user sees against the figures the model actually had, before the answer goes out. This is step 1 of two (D90).
 
 1. **Fact register** (`Answers/AskFactRegister`): every figure the model was given, kept with the session so follow-ups count too. Each tool adds what it returned:
@@ -692,6 +692,48 @@ Since the FE review (2026-10-15, D69–D71), C0 comes first: the FE team builds 
 **Decisions:** all approved on 2026-10-15: D98 (small counts), D99 (never flagged), D100 (rounding), D101 (the note), D102 (limits), D103 (when to tune), D104 (prompt unchanged). With D90, D91 and D96, nothing is left to decide before building.
 
 **Step 2** is package C0c (below).
+
+**C0b as built (2026-10-16, commit `6da28c2d`; owner decisions at review: D105–D107):**
+- **`Answers/AskFigures`** (the figure reader, shared with the eval's numbers check):
+  - reads `$`, `%`, `K`/`M`/`B`, decimals, ranges (`$97–106K` gives both ends the scale and the `$`), and counting words one to twenty;
+  - never reads dates (ISO, `12/31`, `07.24.26`, `19 Jul`, `Dec 9–22`, `week 32`, `'26`), times, ids, links, or digits joined to letters (`Q3`, `r12`, `2nd`, `3x`);
+  - `Claims` also leaves out what is never flagged (D99): years, list numbering, numbers in quotes, numbers joined to a word (`8-pack`, `7-Eleven`) and numbers inside a name the data returned (`week @$4.99`).
+- **`Answers/AskFactRegister`**, kept with the session (`AskSessionState.Facts`):
+  - built from the exact text each tool returned to the model, so after a restart `AskSessionService` rebuilds it from the stored transcripts (the server's own correction messages are skipped);
+  - **values:** query rows and row counts, calculator, name-search and `present_answer` figures, and the user's messages (the question and the context block);
+  - **reference:** `get_table_info` text, plus the system prompt in `AskFactCheck`; these back only large or exact figures (D98);
+  - left out: error results, the model's own table title and calculator month filter, search scores and ids, and the earlier conversation repeated after a failed replay (its queries are gone, so its figures are asked for again).
+- **`Answers/AskFactCheck`:** checks the text, the notes, the options and the table title, one sentence at a time (`AskTextCheck.Next`, ready for C1). Rounding follows D100; a counting word needs an exact whole number.
+- **One correction round in `AskAgent`:**
+  - the text is held until it passes;
+  - a failing draft gets one user message, `<fact_check> These figures in your answer aren't in any result you were given: 93,376 (text: "…"). Compute each one with a query or take it from a tool result, or remove it…`, and the progress label "Correcting figures that didn't match the data";
+  - a draft at the last step goes out at once with the note. A step limit, timeout, refusal or service error during the correction also sends the draft with the note (D102; refusal and service error added while building).
+- **The note (D101):** `text.unverifiedFigures`, `unverifiedFigures` in `GET sessions/{id}`, stored in `PiecesJson` with the frame (no migration; C0's rows still read), and a warning in the log for C8. A restored session's replay adds "Figures not checked against the data: …".
+- **Tuned before the paid runs (D103), with a free replay** (`FactCheckReplayTests` re-runs a stored run's tool calls on `caboodle_dev` and checks its answers). On C0's 48 answers it flagged 16 before tuning and 4 after; Q16's "11" and Q29's "Three" are still caught. What changed:
+  - trailing zeros in a whole number from 1,000 up show the rounding ("19,000" for 19,123; two significant digits kept);
+  - not counts: "one" as a pronoun; "the next three", "top 5", "the last 12 months"; "the two" (a counting word after the/these/those); lengths of time ("nine months"); "zero" isn't read;
+  - **row counts by value and column totals:** each fully shown query result adds, per text column, its number of distinct values and how many rows share each one, and, per numeric column, its sum and average. A hand-added total passes only when it is right; B8's 93,376 still fails;
+  - name-search candidate counts, in all and per type;
+  - **`present_answer`'s reply now states the table's row count** ("(12 rows)"), so "all 12 products" checks out. The tool definitions and the prompt are unchanged (D104).
+  - **Recomputed figures:** a figure that isn't a small count passes when the server recomputes it from two figures already checked earlier in the same text: a difference, a ratio or a % change ("about 4,800 fewer (47,412 vs 52,195)", "1.8 times", "35% more"). "Four times" is read as a ratio. Small counts are never recomputed (D98). **Approved at review (D105).**
+- **Eval:** `AskFigures` replaces the eval's own reader. The report adds a "Fact check" section (answers corrected, sent with the note, each flagged figure caught or a false alarm), a "Fact check" column, and the note under the shown answer. The `unverified_figures` check is reported only. The draft of a corrected answer gets its own claims check.
+- **Tests (free):**
+  - solution 6,813 green across 16 projects; Intelligence 476 (78 new);
+  - coverage 97.8 % unit-only, 99.2 % with the DB tests; every new or changed file at 100 % except one line (a `decimal` constant's static initializer);
+  - the 23 DB tests green, with the `jsonb` round trip now carrying unverified figures;
+  - build 0 errors, no warnings in changed files.
+- **Paid, Sonnet 5.5 medium, $3.43 in total** (reports in BE `docs/AskCaboodle-Eval/2026-10-16-*-c0b*.md`):
+  - **4-case check ($0.41, 4 of 4):** Q16's "11" was caught, and the corrected answer passed (C0: failed). Q29's draft said "two stretches", which was right but in no result; the model then counted the stretches with a query, and the answer passed (C0: failed). Q13 and Q43 had nothing flagged.
+  - **Full run ($2.62, 48 cases):**
+    - **Results:** 38/45 counted (C0: 40/45), app questions 3/3, **$0.036 per answer** (C0: $0.035), 13.5 s.
+    - **Fact check:** 5 of 48 answers corrected (10.4 %, over D103's 10 %); none sent with the note. All 7 flagged figures were right by the claims check: "three months of Q3", "nine months", "four times", "about 170 stores", "$0.36/unit", and the hand counts "two" and "10".
+    - **No failure was caused by the check:** Q14's draft already lacked the other Fresh Market retailers, and the correction changed only the flagged sentences. The other failures are run-to-run changes of cases that have flipped before (Q08-DAVID, Q15, Q29, Q27), plus Q33 and Q35 framing "nothing found" as `cannot_answer`.
+  - **D103 tuning after the full run:** lengths of time and "N times" ratios (above). The replay of the full run's drafts then flags 2 of 48 (Q14 "about 170", Q16 "$0.36").
+  - **Re-check of 7 ($0.40):**
+    - Q04 and Q07 passed with no correction, so the tuning works live; Q08-DAVID and Q14 passed (noise).
+    - Q14 was corrected again for "about 170 stores" (the average is 168.9). It is the same right figure flagged twice, which is not yet over D103's limit. The corrected text gives the range "161–172" instead.
+    - Q15 failed again (known borderline). Q33 and Q35 chose `cannot_answer` again; their texts are right (§7.2).
+- **What step 1 leaves for C0c:** across C0 and C0b, the claims check found one figure-placement or pattern error per full run (C0: Q11's ranking; C0b: Q29's range "56–68 units per store", which one week breaks). The other contradictions were wording (Q15, Q27, Q33). This is the number for the C0c go or no-go (D90).
 
 ### C0c — Fact check, step 2: rankings, trends and figures in the wrong place (after C0b; placement approved 2026-10-15)
 **Why:** C0b proves each figure exists in the data, but not that it is attached to the right thing, and it can't read claims without numbers. These are the errors left after C0b: "July: 8,036 cases" when 8,036 is April's; "Harmon's comes next" when another store comes first (Q11); "rose every month" when one month fell (the B6 pattern weakness).
@@ -1008,6 +1050,9 @@ Owner answers recorded 2026-10-11.
 | D102 | C0b: limits | **Approved:** the correction round counts toward the 12 steps and 180 s. An answer that hits a limit during the correction goes out with the note. |
 | D103 | C0b: when to tune | **Approved:** if more than 1 in 10 answers in the full run needs a correction, or the same right figure is flagged more than twice, tune the rules and re-check before the owner's review. |
 | D104 | C0b: prompt | **Approved:** the system prompt and the tool definitions stay unchanged, so runs stay comparable with C0; the correction instruction goes only in the message the server sends when a figure fails. |
+| D105 | C0b: tunings beyond the plan's wording | **Owner (2026-10-16), at review:** keep both. A figure the server recomputes from two figures already checked in the same text (difference, ratio, % change) passes, small counts excepted; `present_answer`'s reply states the table's row count. |
+| D106 | C0b: "about 170 stores" | **Owner:** whole numbers under 1,000 stay exact (D98, D100); the correction gives the range instead. Revisit if the same right figure is flagged more than twice (D103). |
+| D107 | Eval: "nothing found" | **Owner:** Q33 (no buyer contacts, and emails can't be given) accepts `answer` or `cannot_answer`, as D87; Q35 (no Sprouts activity logged) stays `answer`, because the data answers it. |
 
 ### 7.1 Demo track — dropped 2026-10-12 (D3), kept for history
 
@@ -1033,6 +1078,11 @@ Each one is posted with its package, and gets a D number once decided.
 |---|---|---|
 | C0's own decisions: headline rules, `source` required, storage, options as suggestions, feedback reasons | C0 | **Decided:** D79–D88 |
 | C0b with streaming: hold the text until it's checked, or stream it and replace it when the check fails | C0b, C1 | **Decided:** D96, sentence by sentence, typed out (panel 3). |
+| C0b tuning beyond the plan's wording: figures recomputed from two checked figures in the same text (difference, ratio, % change), and `present_answer`'s reply stating the table's row count | C0b review | **Decided:** D105, keep both. |
+| "About 170 stores" when the true average is 168.9: whole numbers under 1,000 are exact today, so it is flagged and corrected to "161–172" | C0b review | **Decided:** D106, keep strict. |
+| Q33 and Q35: the model frames "nothing found" as `cannot_answer` (no buyer contacts and no emails; no Sprouts activity). Twice on 2026-10-16, never before; the texts are right | Eval (owner) | **Decided:** D107. Q33 accepts both kinds (in `golden.yaml` since C0b); Q35 stays `answer`. |
+| Industry terms users say that clash with or are missing from Caboodle's words ("sales", "depletions", "distribution", "TDP", "the plan"/"AOP", "deductions", "MCBs") | Owner, Constance | The owner talks to Constance first. Then: I draft about 50–60 terms with test questions; she marks the ones her clients use and corrects the meanings; the approved terms go to the glossary, the eval and C5. |
+| C0c go or no-go | After C0b's review | One figure-placement or pattern error per full run remains (C0: Q11; C0b: Q29's range). D90: with few left, C0c can move later in the order. |
 | Re-running a step to confirm an answer (instead of a second model check) | Later, after C8 | Decide with real-usage data: which answers go wrong, and which step to re-run (D95). |
 | How much of the run trace organization users see; `done.queries` (raw SQL) goes to everyone today | C1 (before G2) | Organization users get labels, tools, timings, row counts and matched names. SQL, tables, columns, catalog notes and Postgres errors are for platform admins only. |
 | One list of period tokens for pins | C3 (also C0's `period` note) | Merge the two lists; owner picks |
@@ -1068,8 +1118,8 @@ Each one is posted with its package, and gets a D number once decided.
 | FE review | done | — (docs) | 2026-10-15: the owner's Workbench artifact was reviewed for functionality only (D69). The answer contract became package C0, which comes first (D70). C1, C3, C4 and C8 gained the FE's needs, the backend/FE split is D71, the open points are in §7.2, and §10 collects the FE notes. |
 | Plan update | done | — (docs) | 2026-10-15: B9 (catalog completion), B10 (Platform Admin knowledge) and C9 (Caboodle guide) added, plus the C0 guard for app questions. §9 gained a "Plan" column. Decisions D72–D78. |
 | C0 | done | `a102eed1` | 2026-10-15: plan and decisions D79–D89 approved (§4 C0, §7); the IAM branch is unchanged since `b5adb1a1`. Built as in §4 C0 "C0 as built": migration `AddAskCaboodleAnswerPieces` applied locally; solution 6,735 green, Intelligence 398, coverage 97.3 %, DB tests 23 green, build 0 errors.<br>**Paid checks, $3.54:** full run 40/45 counted (B7b 39/45) with the kinds fix, app questions 3/3, $0.035 per answer; the re-checks fixed Q04-DAVID (period), Q19, Q43 and Q44 (fewer rejected calls). Q11, Q29 and Q27 are still failing (see "C0 as built").<br>**Balance:** about $54.03. |
-| C0b | next | | Fact check, step 1: every figure the user sees is checked against the figures the model had. Plan and decisions approved 2026-10-15 (D90, D91, D96, D98–D104): build it. |
-| C0c | planned | | Fact check, step 2: rankings, trends and figures in the wrong place. Right after C0b (placement approved 2026-10-15); go or no-go with C0b's numbers (D90). |
+| C0b | done | `6da28c2d` | 2026-10-16: built as in §4 C0b "as built"; the IAM branch is unchanged since `b5adb1a1`. No migration. Solution 6,813 green, Intelligence 476, coverage 97.8 % unit-only, DB tests 23 green, build 0 errors.<br>**Paid, $3.43:** 4-case check 4/4 ($0.41; Q16 and Q29 now pass); full run 38/45 counted, app questions 3/3, $0.036 per answer ($2.62); 5 of 48 corrected, none sent with the note; no failure caused by the check. D103 tuning, then a re-check of 7 ($0.40): Q04 and Q07 no longer corrected.<br>**At review (D105–D107):** both tunings kept, "about 170" stays strict, Q33 accepts either kind. Still open: C0c go or no-go; the industry-terms list waits for Constance (§7.2).<br>**Balance:** about $50.60. |
+| C0c | next: go or no-go | | Fact check, step 2: rankings, trends and figures in the wrong place. Right after C0b (placement approved 2026-10-15); go or no-go with C0b's numbers (D90): about one such error per full run is left. |
 | B9 | todo | | Catalog completion: fee lines through the calculator, and three CRM tables. |
 | B10 | todo | | Platform Admin knowledge: everything except credentials (D72–D75). |
 | C1 … C8 | todo | | C1 now includes the run-trace events. |
@@ -1181,6 +1231,7 @@ The full contract is in BE `docs/AskCaboodle-FE.md`, "The answer pieces".
 - **The order is fixed:** headline → notes → text → data → options → suggestions → actions. A piece that is missing is simply not shown.
 - **A new `frame` event replaces everything** shown for that answer so far (frame, table, suggestions), because the agent may correct itself (D84).
 - **Figures shown as facts come from the server:** the headline's `display`, the table's `totals` and its highlighted `rows`. The FE only draws visual aids from the rows (D71).
+- **Figures in the text are checked before it is sent (C0b):** a figure that still can't be matched to the data is listed in `text.unverifiedFigures`, and the FE shows the note under the text (BE `docs/AskCaboodle-FE.md`, "Checked figures").
 - **Formats:** every column has one (`count`, `number`, `usd`, `percent`, `date`, `text`). When `chartable` is false, hide the Table/Chart switch.
 - **One component everywhere:** the data block is the same in a live answer, a reopened session and a pin render. Answers saved before C0 come back as `answer` with no headline or notes; render them as text plus data.
 - **Clarify choices:** choosing an option sends its label as the next question in the same session.
@@ -1200,6 +1251,7 @@ The full contract is in BE `docs/AskCaboodle-FE.md`, "The answer pieces".
 
 - **Statuses in history:** `step-limit`, `cancelled` (stopped), `timed-out` and the other statuses from BE `docs/AskCaboodle-FE.md`.
 - **Data:** truncated data ("showing the first 500 rows") and a result that can't be charted (no Table/Chart switch).
+- **Checked figures (C0b):** the note under the text when `unverifiedFigures` isn't empty; the "Correcting figures…" progress step.
 - **Progress:** progress labels during a run, the stopped state, the chosen option after a clarify, and feedback sent.
 - **Usage:** the stopped month ("used this month's allowance, renews on …"), and the organization admin's "X % used" from 50 %.
 
@@ -1219,7 +1271,7 @@ The full contract is in BE `docs/AskCaboodle-FE.md`, "The answer pieces".
 | B9 | Fee lines in promotion answers (one row per fee: name, type, where it applies, amount); markup, region and distributor answers. No new FE pieces. |
 | B10 | No FE change; platform admins get wider answers (organizations, users, modules, imports) |
 | C0 | The `frame` event (kind, headline, notes, options) and its replace rule; the data block's series, formats, totals, highlights and `chartable`; the same pieces in `GET sessions/{id}`; the feedback `reason` (down only) and `feedbackReason` in history |
-| C0b | A note naming the figures that couldn't be checked (rare); a corrected answer may take a few seconds longer |
+| C0b | `text.unverifiedFigures` (and `unverifiedFigures` in `GET sessions/{id}`): when not empty, the note "Some figures in this answer couldn't be checked against the data: …" right under the text (rare). A corrected answer takes a few seconds longer, shows the progress label "Correcting figures that didn't match the data", and may send a new `frame`/`data` that replaces the earlier one |
 | C1 | Streamed text as checked sentences that the FE types out word by word (D96; see the streaming demo), with the "rewriting" pause when a figure fails; live trace events, the trace endpoint, the step limits |
 | C2 | Starters for the empty state |
 | C3 | Pins: create, list, render, delete; broken pins |
