@@ -547,9 +547,9 @@ Decisions D72–D75 (owner, 2026-10-15). Platform admins can ask about the whole
 
 ## 4. Phase 1c — Experience layer (still admin-only)
 
-Since the FE review (2026-10-15, D69–D71), C0 comes first: the FE team builds against it, and pins (C3) depend on it. The order is now **C0 → B9 → B10 → C1 → … → C9** (D77). §10 collects what the FE needs from every package.
+Since the FE review (2026-10-15, D69–D71), C0 comes first: the FE team builds against it, and pins (C3) depend on it. The order is now **C0 → C0b → B9 → B10 → C1 → … → C9** (D77, D90). §10 collects what the FE needs from every package.
 
-### C0 — Answer contract (next; before C1)
+### C0 — Answer contract (done 2026-10-15, commit `a102eed1`)
 **Why:** the FE renders every answer from one fixed set of pieces, so the design never depends on the question. Pins (C3) re-run the same data block later on fresh data, so everything in it is a rule that the server applies again on every run, never a value the model typed.
 
 1. **Frame.** `present_answer` gains `kind`:
@@ -591,7 +591,92 @@ Since the FE review (2026-10-15, D69–D71), C0 comes first: the FE team builds 
     - **Users' words.** Answers about concepts and relationships use screen and business terms, never schema names.
     - **2–3 eval cases:** "How do I create a sandbox promotion?", "What is a promotion family?", "How do banners relate to stores?".
 
-**Decisions to post with the plan:** the headline rules; whether `source` is always required; how the pieces are stored (one JSON column or several); whether the clarify options also appear as suggestions; the feedback reason values.
+**Decisions to post with the plan:** the headline rules; whether `source` is always required; how the pieces are stored (one JSON column or several); whether the clarify options also appear as suggestions; the feedback reason values. *Decided 2026-10-15: D79–D88 (§7).*
+
+**C0 as built (2026-10-15, commit `a102eed1`):**
+- **`present_answer`** takes `kind`, `headline` (label, column, rule, optional label_column, result_id and format), `notes`, `options`, the table (result_id, title, chart, x, y, series, formats, total_columns, highlights) and suggestions. `kind`, `chart` and `title` are required. With no `result_id` the chart defaults to none, and with no table the headline uses the top-level `result_id`.
+  - **What it rejects:** only what would make the answer wrong or misleading (D79, D80). Each rejection costs the model one step.
+  - **What it drops silently:** harmless extras: options or suggestions outside their kind, `needed`/`available` outside `cannot_answer`, and bad axes on a table (it just isn't chartable).
+  - **A later valid call replaces** the frame, the table and the suggestions (D84).
+  - **The computed figures go back to the model:** the tool result lists the headline, totals and highlighted rows, and the prompt says to use them exactly. This is the fix for hand-added totals.
+- **`Answers/AskAnswerRules`:** the headline, totals, highlights, formats and display strings, as plain functions on a result, so C3's pin render can apply the same rules to fresh rows.
+  - **Formats:** a tool's presets win, then the model's; any other column is inferred (numbers, ISO dates, text).
+  - **Cut-off results:** nothing is computed over a result cut at 500 rows.
+- **`Answers/AskSchemaWords`:** finds schema-qualified names and the catalog's compound table and column names (`ISchemaCatalog.IdentifierNames`). It checks the title, label, notes and options, and the eval uses it too.
+- **The calculator** presets its column formats (count, usd, percent).
+- **Events and history:**
+  - a `frame` event before `data`; `data` gains `series`, `formats`, `totals`, `highlights` and `chartable`;
+  - migration `AddAskCaboodleAnswerPieces` (local `caboodle_dev`; D81);
+  - `GET sessions/{id}` returns `kind`, `headline`, `notes`, `options` and `feedbackReason`;
+  - a restored session repeats each earlier answer's headline, notes and options before its text.
+- **Feedback:** `reason`, with a down rating only (D83).
+- **Prompt:**
+  - step 5 rewritten for the pieces; no "Source:" line;
+  - the period note gives the months the figures actually cover, checked against the latest month with data (D80);
+  - one short question for `clarify`; for `cannot_answer`, what can't be answered and what is available;
+  - forecasts stay `cannot_answer` (D86);
+  - app questions: concepts only, no steps, and a screen only when NOT AVAILABLE names it (D78, D88);
+  - the app's words, never table or column names.
+- **Eval:**
+  - the `kind` check counts; the headline and schema-word checks are reported only (D87);
+  - three app cases, Q42–Q44 ("App questions", not counted);
+  - the scorer and the claims check read the headline, notes, options and totals with the text;
+  - the report has a "Shown" column and a "Reported checks" section.
+- **Tests:**
+  - solution 6,735 green across 16 projects; Intelligence 398 (45 new), coverage 97.3 % unit-only;
+  - every new or changed file is at 100 % except `ToolJson` (94.8 %);
+  - DB tests 23 green, including the `jsonb` round trip and the new references;
+  - build: 0 errors, no new warnings in changed files.
+- **Docs:** BE `docs/AskCaboodle-FE.md` ("The answer pieces", history, feedback) and the eval README.
+- **Paid checks, Sonnet 5.5 medium, $3.54 in total** (reports in BE `docs/AskCaboodle-Eval/2026-10-15-*-c0*.md`):
+  - **4-case check ($0.24, 3 of 4):** Q13's headline total was the server's 92,376 (the B8 smoke answer had hand-added 93,376). Q23 showed the approved plan as a headline answer to a forecast question, so forecasts now stay `cannot_answer` (D86). The title went back into `required`.
+  - **Re-check of Q13 and Q23 ($0.11, 2 of 2).**
+  - **Full run ($2.39, 48 cases):**
+    - **As scored:** 36 of the 45 counted cases. Four (Q15, Q19, Q34, Q41) failed only the kind check, and wrongly: each is a partial answer shown as `cannot_answer` with what is available. With the kinds fix (D87), **40/45** against B7b's 39/45. App questions 3 of 3.
+    - **Cost:** **$0.035 per answer**, the same as B7b at the $0.10 cache-read price; output tokens +3 %; 92 % of input read from the cache.
+    - **`present_answer`:** 4 of 54 calls rejected.
+    - **Reported checks:** no database names anywhere; a headline on 4 of the 7 single-figure cases.
+  - **Re-check of 7 ($0.50):** Q16, Q19, Q43 and Q44 passed, after the fixes to the chart default and the kind description. Q04-DAVID failed again: C0 had moved the period into a note, and the model wrote the period asked ("July–September") for data that ends in August. Q11 and Q29 repeated wording slips (a skipped store in a ranking; "three promo windows" for two).
+  - **Re-check of 5 ($0.30, 5 of 5):** after the period rule (D80), Q04-DAVID and Q08-DAVID say "September not uploaded yet"; Q01, Q04 and FU1 are unchanged.
+  - **After the last run, one free fix:** with no table, the headline uses the top-level `result_id` (FU1 had needed one extra step for it).
+  - **Still failing:**
+    - Q11 and Q29: the known pattern and counting weakness. Their figures are right; the counts in the wording are not.
+    - Q27: as in B7b.
+
+### C0b — Fact check (next; before B9)
+**Why:** C0 made the headline, totals and highlighted rows server figures, but the text is still written by the model. A hand-added or miscounted figure can still reach the user: B8's 93,376 for 92,376, "11 flavors" for 10 (Q16), "three promo windows" for two (Q29). C0b checks every figure the user sees against the figures the model actually had, before the answer goes out. This is step 1 of two (D90).
+
+1. **Fact register:** for each answer, every figure the model saw:
+   - the query rows it was shown;
+   - the calculator's figures;
+   - the computed headline, totals and highlights;
+   - the numbers in the user's question, and today's date.
+2. **Number check on everything the user sees:** the text, the headline label, the notes and the options.
+   - **What counts as a figure:** amounts with `$`, `%`, `K` or `M`, plain numbers, and small counting words ("three windows").
+   - **Matching:** within display rounding. The eval's number matcher moves into the app, so the eval and the app read figures the same way.
+   - **Never flagged:** years, dates and months; numbers in the question; numbers inside names the results returned ("8-pack", promotion names).
+3. **One correction round:** figures that aren't in the register go back to the model ("these figures aren't in any result: compute them in SQL or remove them"). An answer that checks out costs no extra model call.
+4. **Still failing after one round (D91):** the answer is sent with a note that some figures couldn't be verified, and logged for C8's triage list.
+5. **Streaming:** whether the text is held until it's checked or streamed and replaced is decided with C1 (§7.2, with the timings).
+6. **Eval:**
+   - a reported check, "unverified figures in the answer";
+   - the correction rate, and false alarms (a right figure flagged);
+   - Q16 and Q29 are the test cases for counting words.
+7. **Tests (free):**
+   - the extractor and the matcher, with each kind of figure and each exception;
+   - the correction round and the note;
+   - the note in the history.
+8. **Cost and paid checks:**
+   - no extra cost when the text checks out; one extra step (about $0.005) when it doesn't;
+   - paid: a 4-case check (about $0.25), a full run (about $2.40) and re-checks, about $3–4 in all, each approved first.
+9. **Docs:** BE `docs/AskCaboodle-FE.md` (the note) and §10 here.
+
+**Decisions to post with the plan:**
+- the exact list of figures that are never flagged;
+- the note's wording, and where it sits in the frame;
+- how many answers may need a correction before the rules are tuned.
+
+**Step 2 (a later package, D90):** rankings and trend words without numbers ("Harmon's comes next", "rose every month"). The server would attach plain facts to each result (the order of rows, the highest and lowest, where a trend breaks) and check those claims against them. Decide after step 1's numbers. It catches many cases but not all, because the wording varies too much.
 
 ### C1 — Token streaming
 - `AnthropicConversation.SendStreamingAsync` using `client.Beta.Messages.CreateStreaming`: accumulate content blocks (text deltas, thinking deltas + signature deltas, tool_use input JSON deltas, server-tool blocks), rebuild the assistant message for the append-only history, stream **text deltas** to the sink as `text-delta` events; final `text` event keeps the full markdown for clients that don't stream.
@@ -642,6 +727,13 @@ Since the FE review (2026-10-15, D69–D71), C0 comes first: the FE team builds 
 - Retrieval with `pg_trgm` similarity + full-text on the normalized question (entity names replaced by type placeholders); top 2–3 injected into the **user** message (keeps the system prefix cached).
 - Phase 2 of C5 (eval-gated): strict short-circuit for near-identical questions with identical re-resolved entities — re-run stored SQL, one short answer call.
 - Invalidate on catalog version change (drift).
+- **Additions (owner, 2026-10-15, D92):**
+  - **Human approval:** a thumbs-up or an eval pass only proposes an example. A platform admin marks it verified, because people also approve wrong answers.
+  - **A starter library before launch:** at least 100 questions, mostly for brands and brokers, the primary users. The brand–broker connection works the same for everyone; only the modules differ. Written with the owner and verified with Constance.
+  - **C0's answer rules** are stored with each example, so a reused answer shows the same headline, totals and notes.
+  - **A nightly re-check, as for pins (C3):** an example whose query breaks after a data or catalog change loses its verified mark.
+  - **Templates with slots** for the retailer, product and period (C3's period tokens), so one verified question serves every retailer and period.
+  - **Size:** about a third more than C5 as first planned.
 
 ### C6 — Public web research
 - Server tools `web_search_20260209` (+ `web_fetch_20260209`), `max_uses` 3, `user_location` US; declared at session start only when `IntelligenceSettings:EnableWebSearch` (later per-org setting) — never toggled mid-session (append-only).
@@ -859,6 +951,23 @@ Owner answers recorded 2026-10-11.
 | D76 | Caboodle guide | **Owner:** C9 covers concepts and relationships first, with how-to steps after the FE rework. Sources: Caboodle's user-documentation GitHub repo (access to come), the catalog and the app's rules. Constance reviews and approves the content. |
 | D77 | Order and B9 contents | **Owner:** C0 → B9 → B10 → C1 → … → C9. B9 adds the promotion fee lines through the calculator, plus `CRM.DistributorRetailers`, `DistributorBrands` and `RetailerRegions`, without loosening security. |
 | D78 | No invented app steps | **Agreed:** until the guide exists, the agent never writes app steps and points to the screen instead (C0, item 11). |
+| D79 | C0: headline rules | **Approved (2026-10-15):** `total`, `first`, `max` or `min` of a numeric column, computed and formatted by the server. Only for `answer`, and only when one figure answers the question. An optional `label_column` names the row for first, max and min; `ties` counts other rows with the same value. The label has at most 60 characters and no digits: the period and scope go in the notes. It may point at another result than the table (a store count is one distinct count). Refused over a result cut at 500 rows (except `first`) and for a total of percentages. |
+| D80 | C0: notes | **Approved:** `source` is required whenever a table, chart or headline is shown; `scope` when it applies; `period` gives the months the figures actually cover, checked against the latest month with data, never just the period asked (added after Q04-DAVID failed twice); `needed` and `available` are required for `cannot_answer` and dropped otherwise. One sentence each (at most 200 characters), in the app's words: schema-qualified and compound catalog names are rejected. The text no longer ends with a "Source:" line. |
+| D81 | C0: storage | **Approved:** one `jsonb` column, `AskMessages.PiecesJson` (kind, headline, notes, options); the table rules go in the existing `DataJson`; `AskFeedback.Reason` (integer, null). Migration `AddAskCaboodleAnswerPieces`, local `caboodle_dev`. |
+| D82 | C0: clarify | **Approved:** 2–5 options, shown as buttons; choosing one sends its label as the next question. Suggestions sent with a clarify are dropped silently, not rejected (a rejection costs a model step). |
+| D83 | C0: feedback reasons | **Approved:** `wrong-number` (5), `wrong-entity` (10), `missing-context` (15), `other` (20). They come from the user, with a down rating only; a new up rating clears the reason. |
+| D84 | C0: a second `present_answer` | **Owner (changed from "reject"):** a later valid call replaces the frame, the table and the suggestions, so a corrected table never sits next to a wrong one. A rejected call changes nothing. The FE clears an answer's pieces on a new `frame` event. |
+| D85 | C0: names on the wire | **Approved:** the new event is `frame`; `chart` keeps its name as the default view, because stored answers and the B3 contract use it. |
+| D86 | C0: cannot_answer | **Approved:** it may carry a table of what is available, never a headline. Added after the 4-case check: a forecast question stays `cannot_answer` even when a plan or past figures could stand in. |
+| D87 | C0: eval | **Approved:** the `kind` check counts (refuse → `cannot_answer`; clarify → `clarify` or a stated reading; otherwise `answer`). **Owner, after the full run:** a case the data answers only in part lists the kinds that fit in `expect.kinds`; Q15, Q19, Q34 and Q41 accept `answer` or `cannot_answer`. The headline check (7 cases marked) and the schema-word check are reported only. The app group (Q42–Q44) is reported on its own line, outside the overall pass rate, until C9 adds a fourth case. |
+| D88 | C0: screens in app answers | **Approved:** only the six screens the catalog names (its NOT AVAILABLE pointers). No new screen names until C9 has a documented source. |
+| D89 | Answer quality bar | **Owner (2026-10-15):** answers must be precise and concise; a wrong figure is worse than none. More answer kinds are welcome when they serve that. |
+| D90 | Order and C0b | **Owner (2026-10-15):** a fact-check package, C0b, comes right after C0: C0 → C0b → B9 → B10 → C1 → … → C9. Its step 2 (rankings and trend words) is a later package, decided with step 1's numbers. |
+| D91 | C0b: figures still unverified after one correction | **Owner:** the answer is sent with a note that some figures couldn't be verified, and logged for C8's triage. |
+| D92 | C5 additions | **Owner:** human approval; a starter library of at least 100 questions, mostly for brands and brokers, verified with Constance; C0's rules stored with each example; a nightly re-check; templates with slots (§4 C5). |
+| D93 | Data problems | **Owner:** the owner fixes them at the source with the brands, later. Until then each one is recorded in the data-issues doc, the warnings stay, and Ask Caboodle never patches data. When one is fixed: re-check it, remove its warning, re-record the eval figures, and mark it fixed. |
+| D94 | Model | **Owner (reconfirmed):** the app stays on Sonnet 5.5 medium for cost (D45). Opus 5.5 at low effort stays only as the eval's claims check (D43). |
+| D95 | A second check per answer | **Owner:** no second model check on every answer. Re-running a specific step to confirm an answer may come later, decided with C8's real-usage data (§7.2). |
 
 ### 7.1 Demo track — dropped 2026-10-12 (D3), kept for history
 
@@ -882,7 +991,9 @@ Each one is posted with its package, and gets a D number once decided.
 
 | Open point | Package | Recommendation so far |
 |---|---|---|
-| C0's own decisions: headline rules, `source` required, storage, options as suggestions, feedback reasons | C0 | Post with C0's plan |
+| C0's own decisions: headline rules, `source` required, storage, options as suggestions, feedback reasons | C0 | **Decided:** D79–D88 |
+| C0b with streaming: hold the text until it's checked, or stream it and replace it when the check fails | C0b, C1 | The check itself takes milliseconds. Holding the text delays its first word by the time the model takes to write it, about 3–6 s on Sonnet; the headline, notes and table still arrive first. A correction adds one model call (about 3–6 s), only when it's needed. Streaming and replacing has no delay, but the user may briefly see a wrong figure. |
+| Re-running a step to confirm an answer (instead of a second model check) | Later, after C8 | Decide with real-usage data: which answers go wrong, and which step to re-run (D95). |
 | How much of the run trace organization users see; `done.queries` (raw SQL) goes to everyone today | C1 (before G2) | Organization users get labels, tools, timings, row counts and matched names. SQL, tables, columns, catalog notes and Postgres errors are for platform admins only. |
 | One list of period tokens for pins | C3 (also C0's `period` note) | Merge the two lists; owner picks |
 | KPI delta against the previous period on a pin | C3 | Optional; costs a second run of the plan, no AI call |
@@ -915,7 +1026,8 @@ Each one is posted with its package, and gets a D number once decided.
 | B8b | done | `b2f00e22` | 2026-10-14: plan and decisions D59–D68 approved (§3 B8, §7). The IAM branch is unchanged since `b5adb1a1`. Built as in §3 B8 "B8b as built": 5 endpoints in two controllers, no migration; solution 6,690 green, Intelligence 353, coverage 96.9 %, DB tests 23 green. No paid run (no model calls), so $0 spent. |
 | FE review | done | — (docs) | 2026-10-15: the owner's Workbench artifact was reviewed for functionality only (D69). The answer contract became package C0, which comes first (D70). C1, C3, C4 and C8 gained the FE's needs, the backend/FE split is D71, the open points are in §7.2, and §10 collects the FE notes. |
 | Plan update | done | — (docs) | 2026-10-15: B9 (catalog completion), B10 (Platform Admin knowledge) and C9 (Caboodle guide) added, plus the C0 guard for app questions. §9 gained a "Plan" column. Decisions D72–D78. |
-| C0 | next | | Answer contract. Post the plan first. |
+| C0 | done | `a102eed1` | 2026-10-15: plan and decisions D79–D89 approved (§4 C0, §7); the IAM branch is unchanged since `b5adb1a1`. Built as in §4 C0 "C0 as built": migration `AddAskCaboodleAnswerPieces` applied locally; solution 6,735 green, Intelligence 398, coverage 97.3 %, DB tests 23 green, build 0 errors.<br>**Paid checks, $3.54:** full run 40/45 counted (B7b 39/45) with the kinds fix, app questions 3/3, $0.035 per answer; the re-checks fixed Q04-DAVID (period), Q19, Q43 and Q44 (fewer rejected calls). Q11, Q29 and Q27 are still failing (see "C0 as built").<br>**Balance:** about $54.03. |
+| C0b | next | | Fact check, step 1: every figure the user sees is checked against the figures the model had (D90, D91). Post the plan first. |
 | B9 | todo | | Catalog completion: fee lines through the calculator, and three CRM tables. |
 | B10 | todo | | Platform Admin knowledge: everything except credentials (D72–D75). |
 | C1 … C8 | todo | | C1 now includes the run-trace events. |
@@ -1022,9 +1134,13 @@ Every package that changes something the user sees adds its line to §10.8.
 | Scope chip ("Northpoint · 4 connected brands") | Everyone | IAM `GET me/access` |
 
 ### 10.5 How an answer renders (C0)
-- **The frame comes from `kind`:** `answer`, `clarify` (option cards) or `cannot_answer` (the "not answerable" box with "needed" and "available"). Treat an unknown kind as `answer`.
+The full contract is in BE `docs/AskCaboodle-FE.md`, "The answer pieces".
+- **The frame comes from `kind`:** `answer`, `clarify` (option cards) or `cannot_answer` (the "not answerable" box with "needed" and "available", and possibly a table of what is available). Treat an unknown kind as `answer`.
 - **The order is fixed:** headline → notes → text → data → options → suggestions → actions. A piece that is missing is simply not shown.
-- **One component everywhere:** the data block is the same in a live answer, a reopened session and a pin render.
+- **A new `frame` event replaces everything** shown for that answer so far (frame, table, suggestions), because the agent may correct itself (D84).
+- **Figures shown as facts come from the server:** the headline's `display`, the table's `totals` and its highlighted `rows`. The FE only draws visual aids from the rows (D71).
+- **Formats:** every column has one (`count`, `number`, `usd`, `percent`, `date`, `text`). When `chartable` is false, hide the Table/Chart switch.
+- **One component everywhere:** the data block is the same in a live answer, a reopened session and a pin render. Answers saved before C0 come back as `answer` with no headline or notes; render them as text plus data.
 - **Clarify choices:** choosing an option sends its label as the next question in the same session.
 - **App questions** ("what is a promotion family?", "how do banners relate to stores?"): these are normal answers. Their `source` note is "Caboodle guide" once C9 ships.
 
@@ -1060,7 +1176,8 @@ Every package that changes something the user sees adds its line to §10.8.
 | B8b | `GET askcaboodle/usage`, `GET askcaboodle/organization-usage`, `askcaboodleadmin/settings`, `usage`, `budgets` |
 | B9 | Fee lines in promotion answers (one row per fee: name, type, where it applies, amount); markup, region and distributor answers. No new FE pieces. |
 | B10 | No FE change; platform admins get wider answers (organizations, users, modules, imports) |
-| C0 | The answer pieces, the data block rules, the feedback reason |
+| C0 | The `frame` event (kind, headline, notes, options) and its replace rule; the data block's series, formats, totals, highlights and `chartable`; the same pieces in `GET sessions/{id}`; the feedback `reason` (down only) and `feedbackReason` in history |
+| C0b | A note on an answer when some figures couldn't be verified; possibly a short hold before the text (§7.2) |
 | C1 | Streamed text, live trace events, the trace endpoint, the step limits |
 | C2 | Starters for the empty state |
 | C3 | Pins: create, list, render, delete; broken pins |

@@ -1,34 +1,35 @@
 # Ask Caboodle — Handoff for the next session
 
-Written 2026-10-15, after B8b and the FE review. Read this first, then §0, §3 (B9, B10), §4 (C0, C1, C9), §7 (D69–D78 and §7.2), §8, §9 and §10 of [`ask-caboodle-be-implementation-plan.md`](ask-caboodle-be-implementation-plan.md).
+Written 2026-10-15, after C0. Read this first, then §0, §3 (B9, B10), §4 (C0 "as built", C0b, C1, C5, C9), §7 (D69–D95 and §7.2), §8, §9 and §10 of [`ask-caboodle-be-implementation-plan.md`](ask-caboodle-be-implementation-plan.md).
 
 ## Starter prompt
 
-> Read `docs/ask-caboodle/ask-caboodle-next-session.md`, then §0, §3 (B9, B10), §4 (C0, C1, C9), §7 (D69–D78 and §7.2), §8, §9 and §10 of `docs/ask-caboodle/ask-caboodle-be-implementation-plan.md` in `D:\Fork\Onboarding-Journey`. The backend is `D:\Fork\Caboodle BE Repository\caboodle.backend`, branch `feature/ask-caboodle` (B8b committed at `b2f00e22`). Start with package C0 (answer contract): post its plan and open decisions first, then wait for my go-ahead.
+> Read `docs/ask-caboodle/ask-caboodle-next-session.md`, then §0, §3 (B9, B10), §4 (C0 "as built", C0b, C1, C5, C9), §7 (D69–D95 and §7.2), §8, §9 and §10 of `docs/ask-caboodle/ask-caboodle-be-implementation-plan.md` in `D:\Fork\Onboarding-Journey`. The backend is `D:\Fork\Caboodle BE Repository\caboodle.backend`, branch `feature/ask-caboodle` (C0 committed at `a102eed1`; working tree clean). Start with package C0b (fact check): read the code it builds on (`Tools/PresentAnswerTool.cs`, `Agent/AskAgent.cs`, `Answers/`, and the eval's `AnswerNumbers.cs`), post its plan and open decisions first, then wait for my go-ahead.
 
 ## Where things stand
 
 | Item | State |
 |---|---|
-| **Backend branch** | `feature/ask-caboodle`, last commit `b2f00e22` (B8b), after B8 `02a256b6` and the IAM merge `4d0830e6`. Origin has the branch only up to B2 (`940365b8`). Never push unless the owner asks. |
+| **Backend branch** | `feature/ask-caboodle`, last commit `a102eed1` (C0), after B8b `b2f00e22`, B8 `02a256b6` and the IAM merge `4d0830e6`. Origin has the branch only up to B2 (`940365b8`). Never push unless the owner asks. |
 | **Docs repo** | `D:\Fork\Onboarding-Journey`, branch `caboodle-access-v2`. Docs commits are one line: `Update - Ask Caboodle docs - …`. |
 | **Model in the app** | **Sonnet 5.5, effort medium** since B7b (D45). Since B8, prices come from the `ModelPrices` table in code, per model and per attempt; the five price settings are gone. Development and Staging settings say `claude-sonnet-5-5`. |
-| **Tests** | Solution 6,690 green across 16 projects (Intelligence 353, coverage 96.9 % unit-only). Build has 0 errors. The 23 free DB tests are green. |
-| **IAM work** | Merge from `origin/feature/CS-1770-iam-service-broker-workspace` (last merged at `b5adb1a1`; no new commits when fetched on 2026-10-14). Its module settings hold Ask Caboodle's three per-organization settings; the two dollar settings are Platform Admin only. Re-fetch and re-check before each merge. |
-| **Golden eval** | 45 questions in `caboodle/tests/Intelligence.Application.Test/Eval/golden.yaml`, asked as if today were 2026-10-12. Reports, README and the B7b comparison are in BE `docs/AskCaboodle-Eval/`. |
-| **Current baseline (B7b)** | **Sonnet 5.5 medium:** 39/45 in the full run; on confirmed results it matches or beats Opus in every group; $0.040 and 14 s per answer. **Opus 5.5 medium**, same prompt: 41/45, $0.112, 26 s. Sonnet's Q06 and Q09 were fixed after the full run and verified on both models. |
-| **Known weaknesses** | Pattern claims ("most months", "rose every month") and hand-added totals, on both models (Q03; Opus also Q10, Q13, Q29). |
+| **Tests** | Solution 6,735 green across 16 projects (Intelligence 398, coverage 97.3 % unit-only). Build has 0 errors. The 23 free DB tests are green. |
+| **IAM work** | Merge from `origin/feature/CS-1770-iam-service-broker-workspace` (last merged at `b5adb1a1`; still no new commits when fetched on 2026-10-15). Its module settings hold Ask Caboodle's three per-organization settings; the two dollar settings are Platform Admin only. Re-fetch and re-check before each merge. |
+| **Golden eval** | 48 questions in `caboodle/tests/Intelligence.Application.Test/Eval/golden.yaml`, asked as if today were 2026-10-12: 45 counted, plus "App questions" (Q42–Q44), reported apart until C9. Since C0: a counted `kind` check, `expect.kinds` for partial answers, and reported headline and database-name checks. Reports and README are in BE `docs/AskCaboodle-Eval/`. |
+| **Current baseline (C0)** | **Sonnet 5.5 medium:** 40/45 counted (B7b: 39/45), app questions 3/3, **$0.035 per answer**, 13 s. Re-checks fixed Q04-DAVID, Q19, Q43 and Q44; still failing: Q11, Q29 (wording slips) and Q27 (as in B7b). Opus 5.5 medium was last measured in B7b: 41/45, $0.112, 26 s. |
+| **Known weaknesses** | Pattern and counting claims in the wording ("three promo windows" for two, a skipped row in a ranking; Q11, Q29). Hand-added totals are fixed where the server computes the headline or totals (C0: Q03 and Q13 now pass). |
 | **Data problems** | DI1–DI10 in [`ask-caboodle-data-issues.md`](ask-caboodle-data-issues.md). The owner's rule: record and maintain them, don't fix them. Add any new one a package finds. DI9 matters for store counts: KeHE zero-case rows count as stores, both in the app and in Ask Caboodle. |
 
 ## Money (read before any paid run)
 
 - **Who pays:** the client (Constance) pays the API bill through the Claude Console. The owner cannot add money themselves.
-- **Balance:** about **$57.57**. B8b spent nothing; B8 spent about $0.075 on two smoke runs; B7b spent $14.14 of the $71.80. The Console has the exact figure: earlier Sonnet estimates used the old $0.20 cache-read price and were slightly high.
+- **Balance:** about **$54.03**. C0 spent $3.54 (4-case check $0.24, re-checks $0.11 + $0.50 + $0.30, full run $2.39); B8b nothing; B8 about $0.075. The Console has the exact figure.
+- **Cache-read price to confirm:** the app's price table and B8 use $0.10 per million tokens for Sonnet 5.5 cache reads; the `claude-api` skill's table says $0.20. If the Console shows $0.20, Sonnet answers cost about 14 % more than the reports say.
 - **Typical costs:**
 
   | What | Cost |
   |---|---|
-  | Full 45-question run, Sonnet 5.5 medium | ≈ $2.60 (≈ $0.80 of it is the claims check) |
+  | Full 48-question run, Sonnet 5.5 medium | ≈ $2.40 (≈ $0.80 of it is the claims check; measured in C0) |
   | Full run, Opus 5.5 medium | ≈ $6.30 (≈ $1.25 claims check) |
   | One question, Sonnet 5.5 medium | ≈ $0.04 + ≈ $0.02 claims check |
   | One question, Opus 5.5 medium | ≈ $0.11 + ≈ $0.03 claims check |
@@ -85,7 +86,7 @@ Two findings to remember:
 ## Done: plan update (2026-10-15, docs only)
 
 Decisions D72–D78:
-- **The order** is now C0 → B9 → B10 → C1 → … → C9.
+- **The order** is now C0 → B9 → B10 → C1 → … → C9 (since D90: C0 → C0b → B9 → …).
 - **B9, catalog completion:** the promotion fee lines through the calculator (still no SQL grant), plus `CRM.DistributorRetailers`, `DistributorBrands` and `RetailerRegions`. `DataHub.DistributorUpcMappings` is optional, decided when B9 starts.
 - **B10, Platform Admin knowledge:** platform admins can ask about everything except credentials, through a second read-only login with its own grants.
   - Personal email and phone data waits for G8 and Constance's agreement (D72).
@@ -99,22 +100,52 @@ Decisions D72–D78:
 - **C0 item 11 (D78):** until the guide exists, the agent never writes app steps; it points to the screen instead.
 - **§9 rework:** it now explains its two lists, carries a "Plan" column on every row, and lists the tables that were missing.
 
-## Next package: C0 — answer contract (post the plan first)
+## Done: C0 — answer contract (commit `a102eed1`, 2026-10-15)
 
-From plan §4 C0:
-- **`present_answer` gains:**
-  - `kind`: `answer`, `clarify` or `cannot_answer`;
-  - a `headline` rule (column + total/first/max/min), whose value the server computes;
-  - `notes`: scope, period and source, or needed/available;
-  - clarify `options`;
-  - data-block rules: default view, axes, series, formats, total columns, best/worst highlights, chartable.
-- **Saved with the message;** returned by `GET sessions/{id}`.
-- **Feedback** gains a `reason`.
-- **Decisions to post:** see C0's list in the plan.
-- **Cost:** about +5 % per answer.
-- **Paid checks:** a 4-case check (≈ $0.25), then a full Sonnet 5.5 medium eval (≈ $2.60), each approved first.
+Decisions D79–D89 are in plan §7; "C0 as built" (§4) has the details and every paid check. In short:
+- **Every answer is one fixed set of pieces:** `kind` (`answer`, `clarify`, `cannot_answer`), headline, notes, options, the table, suggestions. A `frame` event carries the first four; history returns them.
+- **The server computes every figure shown as a fact** (headline, totals, highlighted rows) from rules, in `Answers/AskAnswerRules`, which C3's pins will reuse. Nothing is computed over a result cut at 500 rows. The computed figures go back to the model, which ends hand-added totals in the text.
+- **`present_answer` rejects only what would make the answer wrong or misleading,** because each rejection costs a model step; harmless extras are dropped. A later valid call replaces the earlier one (D84).
+- **Migration `AddAskCaboodleAnswerPieces`** (local only): `AskMessages.PiecesJson`, `AskFeedback.Reason`.
+- **Prompt:**
+  - no "Source:" line; the period note gives the months actually covered (D80);
+  - forecasts stay `cannot_answer` (D86);
+  - app questions: concepts only, no steps (D78, D88);
+  - never table or column names.
+- **The owner's bar (D89):** precise and concise; a wrong figure is worse than none; more answer kinds are welcome if they serve that.
 
-C0 also includes the guard for app questions (item 11). After C0 come B9 and B10 (plan §3), then C1.
+**After C0, the owner decided (D90–D95):**
+- **C0b, a fact check, comes next,** before B9.
+- **C5 grows:** a starter library of at least 100 questions, mostly for brands and brokers, verified with Constance; plus human approval and a nightly re-check (D92).
+- **Data problems:** fixed at the source later by the owner; until then, record them and keep the warnings (D93).
+- **Model:** stay on Sonnet (D94).
+- **No second model check per answer;** re-running a step to confirm an answer is a "later" item in §7.2 (D95).
+
+## Next package: C0b — fact check, step 1 (post the plan first)
+
+From plan §4 C0b:
+- **A fact register per answer:** every figure the model saw (query rows, calculator figures, the headline and totals, the question's numbers, today's date).
+- **A number check on what the user sees** (text, headline label, notes, options), including small counting words. It reuses the eval's number matcher, moved into the app. Years, dates, the question's numbers and numbers inside names are never flagged.
+- **One correction round** when a figure isn't in the register. If it still fails, the answer goes out with a note that some figures couldn't be verified (D91).
+- **Eval:** a reported "unverified figures" check, the correction rate and false alarms. Q16 and Q29 are the test cases.
+- **Decisions to post:** the never-flagged list, the note's wording and field, and the correction rate that triggers tuning.
+- **Streaming (§7.2):** whether to hold the text until checked or stream and replace it. The check takes milliseconds; holding the text delays its first word by about 3–6 s on Sonnet, while the headline and table still arrive first. Decided with C1.
+- **Paid:** about $3–4 in total: a 4-case check, a full run and re-checks, each approved first.
+
+Step 2 (rankings and trend words, e.g. Q11) is a later package, decided with step 1's numbers.
+
+## After C0b: B9 — catalog completion (post the plan first)
+
+From plan §3 B9:
+- **Promotion fee lines through the calculator:** a fee-line breakdown in `get_promotion_performance` (name, type, where it applies, coupon dates, amount), for approved and sandbox promotions. The fee tables stay calculator-only, with no SQL grant. First find where the app computes each fee's amount and reuse that code. Remove `not_available.promotion_fee_lines`.
+- **Three CRM tables** with catalog entries, module tags and examples: `DistributorRetailers` (with markup), `DistributorBrands`, `RetailerRegions`. One grant migration, local only.
+- **Decide at the start:** whether to grant `DataHub.DistributorUpcMappings` (without `ResolutionNotes` and `ResolvedBy`).
+- **§9:** update the rows B9 changes.
+- **Tests:** the grant-vs-catalog and drift tests, every example as `askcaboodle_app`, and a fee-line reconciliation against the screens.
+- **Eval:** 3–4 new cases. Q41 ("fees line by line") will change: today it accepts `answer` or `cannot_answer`; after B9 the fee lines are answerable, so update its notes, checks and kinds.
+- **Paid:** a targeted check of the new cases plus 4 regression cases, about $0.60 on Sonnet 5.5 medium, approved first. A full run (≈ $2.40) only if results differ.
+
+After B9 comes B10 (plan §3), then C1.
 
 ## After B10: C1 — token streaming and the run trace
 
@@ -222,6 +253,9 @@ dotnet test caboodle/tests/Intelligence.Application.Test/Intelligence.Applicatio
 
 ## Lessons from recent sessions
 
+- **Moving words out of the text can drop a check the old wording forced (C0).** The old "Source: …, Jul–Aug 2026" line made the model check how far the data runs. With the period in a note, it wrote the period asked until the rule said "the months actually covered, checked against the latest month".
+- **Every `present_answer` rejection costs a model step.** Default what is harmless (chart none without a result, the headline's result) and reject only what would be wrong. Read `toolCalls[].isError` in the eval JSON after each run.
+- **Expected kinds need judgment.** A question the data answers only in part fits `answer` or `cannot_answer`; list both in `expect.kinds` instead of failing a good answer.
 - **The access context (B8b):**
   - `IAccessContext.GetCurrentAsync` throws "Select an organization." for a user with several memberships and no `OrganizationID` header. A check that needs no organization (is this a platform admin?) should use `GetUserAccessAsync`.
   - `HasOrgPermission` is always true for platform admins, even without an organization, so an org endpoint must still check that one is picked.
@@ -236,4 +270,7 @@ dotnet test caboodle/tests/Intelligence.Application.Test/Intelligence.Applicatio
   - shell edits can leave LF line endings, so convert changed files to CRLF before committing;
   - in YAML, an unquoted `notes:` value containing `": "` breaks the file; use `>-`;
   - the Windows `python` command is a stub, so use node. Write node scripts with the Write tool: a bash heredoc turned `\\` into `\` and broke one;
-  - about 2,200 StyleCop warnings are pre-existing, so count only warnings from changed files.
+  - about 2,200 StyleCop warnings are pre-existing, so count only warnings from changed files. Every migration also gets CA1505;
+  - `dotnet ef database update --no-build` runs the last build, which may predate a migration you just added: C0's first update applied nothing. Run it without `--no-build`, then check the columns in psql;
+  - the connection string's keys have leading spaces (` Password=`), so trim them when reading the password for psql, and pass `-w` so psql never waits for a password prompt;
+  - PowerShell `*>` writes the log as UTF-16; strip the null bytes (`tr -d '\0'`) before grepping it in bash.
