@@ -482,7 +482,7 @@ Decisions D46–D58 (owner, 2026-10-14). The original scope was: a per-user dail
   - **Build:** 0 errors, no warnings in changed files.
 - **Docs:** BE `docs/AskCaboodle-FE.md`, "Usage and limits" section: every endpoint, the fields, who sees what, the periods and the purge caveat (D63).
 
-### B9 — Catalog completion (after C0)
+### B9 — Catalog completion (next; after C0b)
 Decisions D75 and D77 (owner, 2026-10-15). Adds the useful business data that is still missing, without loosening security (§9).
 1. **Promotion fee lines, through the calculator.**
    - `get_promotion_performance` gains a fee-line breakdown, for approved and sandbox promotions. Each fee shows:
@@ -547,7 +547,7 @@ Decisions D72–D75 (owner, 2026-10-15). Platform admins can ask about the whole
 
 ## 4. Phase 1c — Experience layer (still admin-only)
 
-Since the FE review (2026-10-15, D69–D71), C0 comes first: the FE team builds against it, and pins (C3) depend on it. The order is now **C0 → C0b → (C0c) → B9 → B10 → C1 → … → C9** (D77, D90); C0c runs there only if C0b's numbers justify it. §10 collects what the FE needs from every package.
+Since the FE review (2026-10-15, D69–D71), C0 comes first: the FE team builds against it, and pins (C3) depend on it. The order is now **C0 → C0b → B9 → B10 → C1 → … → C9**, with **C0c before G2** (D77, D90, D108). §10 collects what the FE needs from every package.
 
 ### C0 — Answer contract (done 2026-10-15, commit `a102eed1`)
 **Why:** the FE renders every answer from one fixed set of pieces, so the design never depends on the question. Pins (C3) re-run the same data block later on fresh data, so everything in it is a rule that the server applies again on every run, never a value the model typed.
@@ -735,7 +735,7 @@ Since the FE review (2026-10-15, D69–D71), C0 comes first: the FE team builds 
     - Q15 failed again (known borderline). Q33 and Q35 chose `cannot_answer` again; their texts are right (§7.2).
 - **What step 1 leaves for C0c:** across C0 and C0b, the claims check found one figure-placement or pattern error per full run (C0: Q11's ranking; C0b: Q29's range "56–68 units per store", which one week breaks). The other contradictions were wording (Q15, Q27, Q33). This is the number for the C0c go or no-go (D90).
 
-### C0c — Fact check, step 2: rankings, trends and figures in the wrong place (after C0b; placement approved 2026-10-15)
+### C0c — Fact check, step 2: rankings, trends and figures in the wrong place (deferred: before G2, D108)
 **Why:** C0b proves each figure exists in the data, but not that it is attached to the right thing, and it can't read claims without numbers. These are the errors left after C0b: "July: 8,036 cases" when 8,036 is April's; "Harmon's comes next" when another store comes first (Q11); "rose every month" when one month fell (the B6 pattern weakness).
 
 1. **Facts per result:** the server attaches plain facts to each result the model sees and adds them to the register:
@@ -861,6 +861,7 @@ Prerequisites already met: IAM foundation + module work on the branch base; stag
   - **Broker deps change shape:** brokers now inherit their connected brands' modules (BROKER-BRAND-ACCESS-D1). So the broker deps only need the broker-only modules (market-overview, category-review, brand-report, distributor-apl, retail-apl).
 
 ### G2 — Endpoint guard switch
+- **Prerequisite (D108):** C0c is done first, because G2 is what lets organization users ask.
 - Replace the phase-1 `MustHavePermission` with `[RequireModule(ModuleSlugs.AskCaboodle, ModuleSlugs.AskCaboodle, ModuleActions.View, CrossBrand = true)]` on every action of `AskCaboodleController`; owner checks on sessions/pins/prompts (`DemandBrandAsync`, owner id).
 - **Leave two guards unchanged (D59):** `organization-usage` stays on IAM's `organization.update`. `AskCaboodleAdminController` stays on the admin permission plus `IsPlatformAdmin`.
 - API.Test reflection test stays green.
@@ -1053,6 +1054,7 @@ Owner answers recorded 2026-10-11.
 | D105 | C0b: tunings beyond the plan's wording | **Owner (2026-10-16), at review:** keep both. A figure the server recomputes from two figures already checked in the same text (difference, ratio, % change) passes, small counts excepted; `present_answer`'s reply states the table's row count. |
 | D106 | C0b: "about 170 stores" | **Owner:** whole numbers under 1,000 stay exact (D98, D100); the correction gives the range instead. Revisit if the same right figure is flagged more than twice (D103). |
 | D107 | Eval: "nothing found" | **Owner:** Q33 (no buyer contacts, and emails can't be given) accepts `answer` or `cannot_answer`, as D87; Q35 (no Sprouts activity logged) stays `answer`, because the data answers it. |
+| D108 | C0c go or no-go | **Owner (2026-10-16):** deferred, not dropped. About one placement or pattern error per full run is left (about 2 %); only platform admins can ask until G2, so waiting costs real users nothing. C0c is done before G2, sized with C8's data from admin use. The order is C0b → B9 → B10 → C1 → …, with C0c before G2. |
 
 ### 7.1 Demo track — dropped 2026-10-12 (D3), kept for history
 
@@ -1082,7 +1084,7 @@ Each one is posted with its package, and gets a D number once decided.
 | "About 170 stores" when the true average is 168.9: whole numbers under 1,000 are exact today, so it is flagged and corrected to "161–172" | C0b review | **Decided:** D106, keep strict. |
 | Q33 and Q35: the model frames "nothing found" as `cannot_answer` (no buyer contacts and no emails; no Sprouts activity). Twice on 2026-10-16, never before; the texts are right | Eval (owner) | **Decided:** D107. Q33 accepts both kinds (in `golden.yaml` since C0b); Q35 stays `answer`. |
 | Industry terms users say that clash with or are missing from Caboodle's words ("sales", "depletions", "distribution", "TDP", "the plan"/"AOP", "deductions", "MCBs") | Owner, Constance | The owner talks to Constance first. Then: I draft about 50–60 terms with test questions; she marks the ones her clients use and corrects the meanings; the approved terms go to the glossary, the eval and C5. |
-| C0c go or no-go | After C0b's review | One figure-placement or pattern error per full run remains (C0: Q11; C0b: Q29's range). D90: with few left, C0c can move later in the order. |
+| C0c go or no-go | After C0b's review | **Decided:** D108, deferred to before G2. |
 | Re-running a step to confirm an answer (instead of a second model check) | Later, after C8 | Decide with real-usage data: which answers go wrong, and which step to re-run (D95). |
 | How much of the run trace organization users see; `done.queries` (raw SQL) goes to everyone today | C1 (before G2) | Organization users get labels, tools, timings, row counts and matched names. SQL, tables, columns, catalog notes and Postgres errors are for platform admins only. |
 | One list of period tokens for pins | C3 (also C0's `period` note) | Merge the two lists; owner picks |
@@ -1119,8 +1121,8 @@ Each one is posted with its package, and gets a D number once decided.
 | Plan update | done | — (docs) | 2026-10-15: B9 (catalog completion), B10 (Platform Admin knowledge) and C9 (Caboodle guide) added, plus the C0 guard for app questions. §9 gained a "Plan" column. Decisions D72–D78. |
 | C0 | done | `a102eed1` | 2026-10-15: plan and decisions D79–D89 approved (§4 C0, §7); the IAM branch is unchanged since `b5adb1a1`. Built as in §4 C0 "C0 as built": migration `AddAskCaboodleAnswerPieces` applied locally; solution 6,735 green, Intelligence 398, coverage 97.3 %, DB tests 23 green, build 0 errors.<br>**Paid checks, $3.54:** full run 40/45 counted (B7b 39/45) with the kinds fix, app questions 3/3, $0.035 per answer; the re-checks fixed Q04-DAVID (period), Q19, Q43 and Q44 (fewer rejected calls). Q11, Q29 and Q27 are still failing (see "C0 as built").<br>**Balance:** about $54.03. |
 | C0b | done | `6da28c2d` | 2026-10-16: built as in §4 C0b "as built"; the IAM branch is unchanged since `b5adb1a1`. No migration. Solution 6,813 green, Intelligence 476, coverage 97.8 % unit-only, DB tests 23 green, build 0 errors.<br>**Paid, $3.43:** 4-case check 4/4 ($0.41; Q16 and Q29 now pass); full run 38/45 counted, app questions 3/3, $0.036 per answer ($2.62); 5 of 48 corrected, none sent with the note; no failure caused by the check. D103 tuning, then a re-check of 7 ($0.40): Q04 and Q07 no longer corrected.<br>**At review (D105–D107):** both tunings kept, "about 170" stays strict, Q33 accepts either kind. Still open: C0c go or no-go; the industry-terms list waits for Constance (§7.2).<br>**Balance:** about $50.60. |
-| C0c | next: go or no-go | | Fact check, step 2: rankings, trends and figures in the wrong place. Right after C0b (placement approved 2026-10-15); go or no-go with C0b's numbers (D90): about one such error per full run is left. |
-| B9 | todo | | Catalog completion: fee lines through the calculator, and three CRM tables. |
+| C0c | deferred | | Fact check, step 2: rankings, trends and figures in the wrong place. Deferred to before G2 (D108): about one such error per full run is left; sized with C8's data. |
+| B9 | next | | Catalog completion: fee lines through the calculator, and three CRM tables. Post the plan and open decisions first. |
 | B10 | todo | | Platform Admin knowledge: everything except credentials (D72–D75). |
 | C1 … C8 | todo | | C1 now includes the run-trace events. |
 | C9 | todo | | Caboodle guide. Needs the documentation repo and Constance's review. |

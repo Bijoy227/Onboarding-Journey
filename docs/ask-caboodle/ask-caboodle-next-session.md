@@ -1,12 +1,14 @@
 # Ask Caboodle — Handoff for the next session
 
-Written 2026-10-16, after C0b (commit `6da28c2d`). Read this first, then §0, §4 (C0b "as built", C0c, C1), §3 B9, §7 (D90–D107 and §7.2), §8 and §10 of [`ask-caboodle-be-implementation-plan.md`](ask-caboodle-be-implementation-plan.md).
+Written 2026-10-16, after C0b (commit `6da28c2d`) and the C0c decision (D108: deferred to before G2). Read this first, then §0, §3 B9, §4 (C0b "as built"), §7 (D72–D78, D90–D108 and §7.2), §8, §9 and §10 of [`ask-caboodle-be-implementation-plan.md`](ask-caboodle-be-implementation-plan.md).
 
 ## Starter prompt
 
-> Read `docs/ask-caboodle/ask-caboodle-next-session.md`, then §0, §4 (C0b "as built", C0c, C1), §3 B9, §7 (D90–D107 and §7.2), §8 and §10 of `docs/ask-caboodle/ask-caboodle-be-implementation-plan.md` in `D:\Fork\Onboarding-Journey`. The backend is `D:\Fork\Caboodle BE Repository\caboodle.backend`, branch `feature/ask-caboodle` (C0b committed at `6da28c2d`; working tree clean).
+> Read `docs/ask-caboodle/ask-caboodle-next-session.md`, then §0, §3 B9, §4 (C0b "as built"), §7 (D72–D78, D90–D108 and §7.2), §8, §9 and §10 of `docs/ask-caboodle/ask-caboodle-be-implementation-plan.md` in `D:\Fork\Onboarding-Journey`. The backend is `D:\Fork\Caboodle BE Repository\caboodle.backend`, branch `feature/ask-caboodle` (C0b committed at `6da28c2d`; working tree clean).
 >
-> Next is the C0c go or no-go (D90), using C0b's numbers in §4 "C0b as built" and §7.2. Post a short recommendation and wait for my decision. Then post the plan and open decisions for the package that comes next (C0c or B9), and wait for my go-ahead. Also fetch `origin/feature/CS-1770-iam-service-broker-workspace` and tell me whether it has commits after `b5adb1a1`; don't merge without my go-ahead.
+> Start package B9 (catalog completion). C0c is deferred to before G2 (D108), so don't plan it now. First read what B9 builds on: `Tools/PromotionPerformanceTool.cs`, `Promotions/` (the calculator), how the Promotion Details screens compute each fee line (find that code in TradeSpend and TradeSpendSandbox, and reuse it rather than writing a new formula), the catalog (`Catalog/` YAML and the grant migrations), and the eval cases that touch fees (Q41). Also fetch `origin/feature/CS-1770-iam-service-broker-workspace` and tell me whether it has commits after `b5adb1a1`; don't merge without my go-ahead.
+>
+> Then post B9's short plan and its open decisions, and wait for my go-ahead before building. The decisions include whether to grant `DataHub.DistributorUpcMappings` (without `ResolutionNotes` and `ResolvedBy`). Paid runs still need my approval first, with the cost stated.
 
 ## Where things stand
 
@@ -139,12 +141,12 @@ Plan §4 "C0b as built" has the details and every paid run. In short:
 - **Tuned by D103 with a free replay** (`FactCheckReplayTests`, below). At review the owner kept the two tunings beyond the plan's wording (D105: figures recomputed from two checked figures; the row count in `present_answer`'s reply), kept small counts exact (D106), and let Q33 accept either kind (D107).
 - **Paid, $3.43:** Q16 and Q29 now pass; the full run is 38/45 counted (C0: 40/45, flips only), $0.036 per answer; 5 of 48 corrected before the last tuning, none sent with the note.
 
-## Next: C0c go or no-go, then B9
+## Decided: C0c deferred (D108)
 
-- **C0c (plan §4):** rankings, trend words and figures in the wrong place. C0b's numbers: one such error per full run is left (C0: Q11's ranking; C0b: Q29's range "56–68 units per store"). D90: with few left, C0c can move later. Post a recommendation and wait for the owner.
+- **C0c (plan §4):** rankings, trend words and figures in the wrong place. About one such error per full run is left (C0: Q11's ranking; C0b: Q29's range "56–68 units per store"). Only platform admins can ask until G2, so the owner deferred it to before G2, sized with C8's data from admin use. G2 lists it as a prerequisite.
 - **Industry terms (§7.2):** users' day-to-day words can clash with Caboodle's ("sales" = sell-through, "depletions", "distribution" = ACV or TDPs, "the plan" = AOP, "deductions", "MCBs"). The owner is talking to Constance first. When the owner says go: draft about 50–60 terms with test questions (what users mean, how Caboodle maps it, clash or gap, proposed handling); she reviews; approved terms go to the glossary, the eval and C5. Don't start it unasked.
 
-## B9 — catalog completion (post the plan first)
+## Next package: B9 — catalog completion (post the plan first)
 
 From plan §3 B9:
 - **Promotion fee lines through the calculator:** a fee-line breakdown in `get_promotion_performance` (name, type, where it applies, coupon dates, amount), for approved and sandbox promotions. The fee tables stay calculator-only, with no SQL grant. First find where the app computes each fee's amount and reuse that code. Remove `not_available.promotion_fee_lines`.
@@ -153,7 +155,7 @@ From plan §3 B9:
 - **§9:** update the rows B9 changes.
 - **Tests:** the grant-vs-catalog and drift tests, every example as `askcaboodle_app`, and a fee-line reconciliation against the screens.
 - **Eval:** 3–4 new cases. Q41 ("fees line by line") will change: today it accepts `answer` or `cannot_answer`; after B9 the fee lines are answerable, so update its notes, checks and kinds.
-- **Paid:** a targeted check of the new cases plus 4 regression cases, about $0.60 on Sonnet 5.5 medium, approved first. A full run (≈ $2.40) only if results differ.
+- **Paid:** a targeted check of the new cases plus 4 regression cases, about $0.60 on Sonnet 5.5 medium, approved first. A full run (≈ $2.60) only if results differ. B9 changes the catalog, so the fact check now also reads the new tables' results: watch the report's "Fact check" section.
 
 After B9 comes B10 (plan §3), then C1.
 
