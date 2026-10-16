@@ -167,7 +167,7 @@ Decisions D109–D116 are in plan §7; "B9 as built" is in §3 B9. In short:
 - **D117–D123 approved:** B10 is split; B10a builds the second login and the platform-admin audience, plus the IAM, configuration, audit, email-log, brand-link and purge data. B10b (the DataHub pipeline and raw distributor files) comes after.
 - **What B10a found** (plan §3 B10 "What B10 builds on"): everything is single-audience today; Identity lives in the `ApplicationDbContext` snapshot; no audit trail holds a credential; `UserName` is the email address for 317 of 324 users (so it is hidden, D121).
 - **Owner asked (2026-10-16):** track every role, login, script and setting needed for staging and live. Plan §11 holds the checklist; B10a writes it into BE `docs/AskCaboodle-Deployment.md`.
-- **Two open points from the owner (§7.2):** a limit on questions per conversation (suggested: a setting, default 20, error `session_full`), and meaningful session titles (suggested: a 3–6 word title by Haiku 5.5 after the first answer, plus rename). Not decided; don't build them unasked.
+- **Two points from the owner, placed in package C1b (D124, plan §4):** a limit on questions per conversation (suggested: a setting, default 20, error `session_full`), and meaningful session titles (suggested: a 3–6 word title by Haiku 5.5 after the first answer, plus rename). C1b is built right after C1; its details are decided when it starts.
 - **Settled:** Sonnet 5.5 cache reads cost $0.10 per million tokens (live pricing page; docs commit `3b4a449`).
 - **For C9:** the user-documentation repo is public at https://github.com/tauhid-sifat/Caboodle-Documentations. The BA wrote it and the owner hasn't reviewed it: treat it as unverified and discuss it with the owner when C9 starts.
 - **For the owner, not Ask Caboodle:** a Claude API key sits in plain text in the committed `appsettings.Staging.json` and `appsettings.Development.json` (since `cf92952e`, on `master`, `develop`, `staging`). Never print or copy it; plan §11 records it.
@@ -189,7 +189,10 @@ Build exactly as plan §3 B10 "B10a — decided design":
 
 After B10a comes B10b, then C1.
 
-## After B10b: C1 — token streaming and the run trace
+## After B10b: C1 — token streaming and the run trace (then C1b)
+
+Right after C1 comes C1b (plan §4, D124): the conversation limit and generated session titles, with rename.
+
 
 From plan §4 C1 (the run-trace part was added by the FE review):
 - `AnthropicConversation.SendStreamingAsync` with the SDK's streaming call. It collects the content blocks (text, thinking with signatures, tool-use input JSON, server-tool blocks) and rebuilds the assistant message for the history.

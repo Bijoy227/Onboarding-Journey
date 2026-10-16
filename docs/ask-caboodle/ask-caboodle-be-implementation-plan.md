@@ -624,7 +624,7 @@ Decisions D72–D75 (owner, 2026-10-15). Platform admins can ask about the whole
 
 ## 4. Phase 1c — Experience layer (still admin-only)
 
-Since the FE review (2026-10-15, D69–D71), C0 comes first: the FE team builds against it, and pins (C3) depend on it. The order is now **C0 → C0b → B9 → B10 → C1 → … → C9**, with **C0c before G2** (D77, D90, D108). §10 collects what the FE needs from every package.
+Since the FE review (2026-10-15, D69–D71), C0 comes first: the FE team builds against it, and pins (C3) depend on it. The order is now **C0 → C0b → B9 → B10a → B10b → C1 → C1b → C2 → … → C9**, with **C0c before G2** (D77, D90, D108, D117, D124). §10 collects what the FE needs from every package.
 
 ### C0 — Answer contract (done 2026-10-15, commit `a102eed1`)
 **Why:** the FE renders every answer from one fixed set of pieces, so the design never depends on the question. Pins (C3) re-run the same data block later on fresh data, so everything in it is a rule that the server applies again on every run, never a value the model typed.
@@ -841,6 +841,22 @@ Since the FE review (2026-10-15, D69–D71), C0 comes first: the FE team builds 
   - **The step meters** need the limits, so the `session` or `done` event carries `maxSteps` (12) and `wallClockSeconds` (180).
   - **Past answers:** `GET sessions/{id}/messages/{messageId}/trace`, rebuilt from `AskToolCalls` and the stored transcript.
   - **Who sees the detail:** an open decision (§7.2). The recommendation: organization users get labels, tools, timings, row counts and matched names, while SQL, tables and columns, catalog notes and Postgres errors are for platform admins only. Today `done.queries` (raw SQL) goes to everyone; fix it here once decided.
+
+### C1b — Conversation limit and titles (alongside C1)
+Owner, 2026-10-16 (D124): "like other chat apps". A small package built right after C1, because both change the ask flow and the FE contract. Post its short plan and open decisions first, as usual.
+1. **Questions per conversation:**
+   - **Today:** no limit; only the daily pools and monthly budgets (B8). Each follow-up re-sends the whole conversation (cached, but the cost, the time and the fact register grow), and answers get less reliable in very long threads.
+   - **Suggested:** a Platform Admin setting, default 20 questions per session. At the limit, the ask returns a new error code `session_full` before any model call (so it costs nothing and doesn't count toward today's questions), and the FE offers "Start a new conversation", optionally carrying the question over.
+   - `GET sessions/{id}` and the `session` event say how many questions are left in the conversation, so the FE can warn near the end.
+2. **Meaningful titles:**
+   - **Today:** the title is the first question itself, on one line, cut at 200 characters (`AskHistoryMapping.Title`).
+   - **Suggested:** after the first answer, Haiku 5.5 writes a 3–6 word title from the question (and the answer's headline when there is one). About $0.0001 per conversation, off the answer's critical path. On any error, the question stays the title. The new title goes out in a `session` event and into history.
+   - **Rename:** `PATCH sessions/{id}` with a new title; a renamed session is never re-titled.
+   - The title model's cost counts toward the B8 budgets like every other call.
+3. **To decide at the start:** the default limit; whether a platform admin's own conversations have the limit too; carrying the question over; the title prompt and model; whether the title follows the conversation's language.
+4. **Tests (free):** the limit at 19, 20 and 21 questions (error code, no model call, nothing counted); the title job (success, failure fallback, a renamed session left alone); rename validation and ownership; history and `session` events with the new fields.
+5. **Paid:** one smoke question to see a real generated title, about $0.05, approved first.
+6. **Docs:** BE `docs/AskCaboodle-FE.md` (`session_full`, questions left, title updates, rename) and §10.8 here.
 
 ### C2 — Suggested questions (empty state)
 - `GET suggestions` → curated starters (static YAML per org type, later from the gallery/eval set). Zero LLM cost.
@@ -1146,6 +1162,7 @@ Owner answers recorded 2026-10-11.
 | D121 | Columns hidden beyond D72 and D74 | **Agreed:** `Identity.Users."UserName"` and `"NormalizedUserName"` (the email address for 317 of 324 users), `Users."ObjectId"`, `Auditing.AuditEvents."IpAddress"`, `Organization.Domains."VerificationValue"` and `"VerificationHost"`, and the email logs' `ErrorMessage`. Email-log `Subject` is granted: no subject holds an address, and it is the only hint of which email was sent. |
 | D122 | Name search for users and organizations | **Agreed:** not in B10a; SQL name matching is enough. Add `search_entity` types later if the eval shows a need. |
 | D123 | B10a eval data | **Agreed:** "who invited a user" uses the legacy invited users (2 of 51 have an inviter; organization invitations are empty on `caboodle_dev`), and accepts "no inviter recorded" for the rest. |
+| D124 | Conversation limit and titles | **Owner (2026-10-16):** add both in a small package alongside C1: C1b, built right after C1 (§4). The details are decided when it starts. |
 | D116 | A corrected answer mentioning its correction | **Owner (2026-10-16):** users don't need to know how an answer was checked, and the remark misleads them. C0b's correction message (not the system prompt, D104) ends with "Don't mention the correction; write the answer as if it were the first." Built in B9. |
 
 ### 7.1 Demo track — dropped 2026-10-12 (D3), kept for history
@@ -1189,8 +1206,8 @@ Each one is posted with its package, and gets a D number once decided.
 | Grant `DataHub.DistributorUpcMappings` (without notes and "resolved by") | B9 | **Decided:** D109, moved to B10b for platform admins. |
 | A corrected answer mentions its correction to the user (B9 paid check, Q48: "I corrected the Costco and Trader Joe's counts below after checking them against the data") | C0b's correction message (owner) | **Decided:** D116, one sentence added to the correction message; built in B9. |
 | Split B10 into B10a (IAM, organizations, modules, settings, audit) and B10b (data pipeline) | B10 | **Decided:** D117. |
-| A limit on questions per conversation (owner, 2026-10-16: "like other chat apps, e.g. 20 per thread") | Owner; small package before or with C1 | Today there is none: only the daily pools and monthly budgets. Each follow-up re-sends the whole conversation (cached, but cost, time and the fact register grow), and answers get less reliable in very long threads. Suggestion: a Platform Admin setting, default 20 questions per session; at the limit the ask returns a new error code `session_full`, and the FE offers "Start a new conversation" (optionally carrying the question over). Free to build; no paid check needed. |
-| Meaningful session titles (owner, 2026-10-16: "like Claude or ChatGPT, from the first message") | Owner; with the item above | Today the title is the first question itself, on one line, cut at 200 characters. Claude and ChatGPT generate a short title from the first exchange with a model. Suggestion: after the first answer, Haiku 5.5 writes a 3–6 word title (about $0.0001 per session, off the answer's critical path; falls back to the question on any error), sent as a `session` event update and stored; plus a rename endpoint. One smoke question to confirm (≈ $0.05). |
+| A limit on questions per conversation (owner, 2026-10-16: "like other chat apps, e.g. 20 per thread") | C1b (D124) | **Placed:** package C1b, alongside C1 (§4). Its details (default 20, `session_full`) are decided when C1b starts. |
+| Meaningful session titles (owner, 2026-10-16: "like Claude or ChatGPT, from the first message") | C1b (D124) | **Placed:** package C1b, with the limit. Suggested: a 3–6 word title by Haiku 5.5 after the first answer, plus rename; decided when C1b starts. |
 | Organization admins asking about their own organization's members, roles and invitations | Later (after GA) | Optional; scoped to their organization and their IAM permissions |
 | Access to the user-documentation repo, and the review format for Constance | C9 | **Access given (2026-10-16):** public at https://github.com/tauhid-sifat/Caboodle-Documentations (a project working folder: docs, kb, wiki, specs, meetings, jira…). Written by the BA and not yet reviewed by the owner: treat its content as unverified, and discuss it with the owner when C9 starts. The review format is agreed then too. |
 
@@ -1220,7 +1237,7 @@ Each one is posted with its package, and gets a D number once decided.
 | B9 | done | `a8387b82` | 2026-10-16: plan and decisions D109–D116 approved; the IAM branch is unchanged since `b5adb1a1`. Built as in §3 B9 "as built": fee lines through the calculator (`breakdown: "fee"`), `CRM.DistributorBrands` and `CRM.RetailerRegions` (not `DistributorRetailers`, D113), regions from `RetailerRegions` only (D115); migration `AddAskCaboodleCatalogCompletionGrants` applied locally; solution 6,821 green, Intelligence 484, coverage 97.9 %, DB tests 25 green, build 0 errors. DI11 recorded.<br>**Paid, $0.59:** 9 of 9 passed (Q41, Q45–Q48, Q22, Q37, Q39, Q30); 2 corrected (Q48's two wrong hand counts caught; Q45's right total a false alarm, fixed by stating the fee total).<br>**At review:** D116 (a corrected answer never mentions the correction).<br>**Balance:** about $50.01. |
 | B10a | next | | 2026-10-16: plan and decisions D117–D123 approved; the IAM branch is unchanged since `b5adb1a1`. Build as in §3 B10 "B10a — decided design". The owner runs the new admin-login script once the migration is applied. |
 | B10b | todo | | The DataHub pipeline and raw distributor files for platform admins (D109, D117). |
-| C1 … C8 | todo | | C1 now includes the run-trace events. |
+| C1 … C8 | todo | | C1 now includes the run-trace events. C1b (conversation limit and titles, D124) comes right after C1. |
 | C9 | todo | | Caboodle guide. Needs the documentation repo and Constance's review. |
 | G1 … A3 | todo | | |
 
@@ -1371,6 +1388,7 @@ The full contract is in BE `docs/AskCaboodle-FE.md`, "The answer pieces".
 | C0 | The `frame` event (kind, headline, notes, options) and its replace rule; the data block's series, formats, totals, highlights and `chartable`; the same pieces in `GET sessions/{id}`; the feedback `reason` (down only) and `feedbackReason` in history |
 | C0b | `text.unverifiedFigures` (and `unverifiedFigures` in `GET sessions/{id}`): when not empty, the note "Some figures in this answer couldn't be checked against the data: …" right under the text (rare). A corrected answer takes a few seconds longer, shows the progress label "Correcting figures that didn't match the data", and may send a new `frame`/`data` that replaces the earlier one |
 | C1 | Streamed text as checked sentences that the FE types out word by word (D96; see the streaming demo), with the "rewriting" pause when a figure fails; live trace events, the trace endpoint, the step limits |
+| C1b | The `session_full` error with "Start a new conversation", questions left in the conversation, generated titles arriving in a `session` event after the first answer, and rename |
 | C2 | Starters for the empty state |
 | C3 | Pins: create, list, render, delete; broken pins |
 | C4 | Prompt gallery and the `/` picker |
