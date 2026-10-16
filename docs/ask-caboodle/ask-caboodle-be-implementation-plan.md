@@ -548,7 +548,7 @@ Decisions D75 and D77 (owner, 2026-10-15); D109–D114 (owner, 2026-10-16). Adds
 - **Tuned after the paid check:** the fee header now also states the total of all lines ("fee lines: $47,073 in 6 lines · AD/TPR fees … · promotion fees …"). The free replay of the paid run then flags only Q48's two wrong counts.
 - **Correction message (D116):** Q48's corrected answer told the user "I corrected the Costco and Trader Joe's counts below after checking them against the data." The correction message now ends with "Don't mention the correction; write the answer as if it were the first." The system prompt is unchanged (D104).
 
-### B10 — Platform Admin knowledge (B10a done 2026-10-16, commit `26a85f3f`; next: B10b)
+### B10 — Platform Admin knowledge (B10a done 2026-10-16, commit `26a85f3f`; B10b done 2026-10-16, commit pending)
 Decisions D72–D75 (owner, 2026-10-15). Platform admins can ask about the whole system except credentials. Organization users stay on their IAM access (G3–G5).
 1. **A second read-only login.** The group role `askcaboodle_admin_ro` (NOLOGIN) and the login `askcaboodle_admin_app`, created by the owner or ops as in B2, with `default_transaction_read_only` and `statement_timeout` on the login. The connection string goes in the user environment variable `IntelligenceSettings__AdminReadOnlyConnectionString`, never in git.
 2. **What it can read:** everything `askcaboodle_ro` reads, plus:
@@ -658,6 +658,100 @@ Decisions D72–D75 (owner, 2026-10-15). Platform admins can ask about the whole
 - **FE:** no change; no field changed, so `docs/AskCaboodle-FE.md` is unchanged.
 
 **B10b (after B10a):** DataHub's import, export, sync, mapping and data-quality tables (with `DistributorUpcMappings` without `ResolutionNotes` and `ResolvedBy`, D109), and the raw distributor files, for platform admins. Never: S3 keys, upload ids and file URLs; `ThirdPartyCredentials`. Eval: the imports and syncs that failed this week.
+
+**What B10b builds on (read at the start, 2026-10-16):**
+- **The tables on `caboodle_dev`:**
+  - **Sync and imports:** 586 sync runs, 654 imports, 228 exports.
+  - **Unmapped and resolution:** 155 K unmapped KeHE/UNFI rows, 399 resolution audits, 315 manual UPC mappings, 28 K customer-number links, 22.8 K retailer suggestions.
+  - **Store data quality:** 32.8 K store-list issues (4,746 open), 921 merges, 889 K clean-up change logs, 20 brand purges, 23 K geocoded addresses.
+  - **Raw files:** 1.15 M raw KeHE lines, 1.1 M mapped KeHE, 552 K raw UNFI, 516 K mapped UNFI.
+  - **Never written:** `AliasAuditTrail` and `AliasMatchAttempts` have 0 rows and no live writer.
+  - **Legacy:** `DataUpload.DataMappings` was last written in July 2026, and its screen is hidden.
+- **The screens:** all in the admin app: `/data-sync`, `/unmapped-data` (with the Resolution Audit tab), `/mapped-data` (Mapped UPCs; Data Clean Up with the run history), `/store-list-tools` (Issues, Merge Stores) and `/brand-data-cleanup`. The brand app reads only the raw KeHE/UNFI pages, which few brands see.
+- **How the pipeline works:**
+  - **Re-runs:** a run for a brand, distributor and month hard-deletes and reloads that month (raw, mapped, unmapped and distributor sales); older runs stay listed with stale counts (93 runs).
+  - **The row identity:** raw = mapped + unmapped, and mapped = the distributor-sales rows. For Bubbies, KeHE, August 2026: 20,413 = 20,297 + 116.
+  - **`ExportJobs` is also the admin job log** (store clean-up steps, merges, undo, issue actions), and `StoreCleanupChangeLogs."CleanupJobId"` points at it.
+  - **Last scan:** the store-list issue scan runs only from a health check (the nightly scan is off everywhere).
+- **The codes and statuses:**
+  - **Distributor codes differ by table:** sync runs, audits and distributor sales use 1 = UNFI, 2 = KeHE; customer links use 2 = KeHE, 3 = UNFI; UPC mappings store UNFI as 1 (DI14).
+  - **Import statuses:** 15 done, 17 done with rejected rows (none saved = every row rejected), 20 failed.
+  - **Failed syncs:** every failure since 12 Sep shows "A command is already in progress", yet 12 of 13 loaded their rows; 3 Daily Crunch runs are stuck in progress (DI13).
+- **Sensitive columns:**
+  - `DataSyncRuns."SourceFileS3URL"` stores a signed 6-hour file link.
+  - The S3 key, upload id and part-list columns of imports and exports.
+  - A person's email address is typed into one Sprouts store's KeHE city field (DI12).
+  - The resolution notes are mostly system tags; 96 rows hold short admin text.
+
+**B10b — decided design (owner, 2026-10-16: D126–D131):**
+1. **Tables (D126):** 17. Not granted: `MappingSuggestions` (never acted on, and the screen computes its suggestions live), `AliasAuditTrail`, `AliasMatchAttempts` (unused), `DataUpload.DataMappings` (legacy); never `ThirdPartyCredentials` or `SpinsRecords`.
+2. **Hidden columns (D127):** file locations, upload ids and part lists, `ExportJobs."S3PartsETagsJson"` too (admin jobs reuse it for results), the signed file link and the file hash; the UPC mappings' notes and resolver (D109).
+3. **Resolution notes (D128):** granted on the unmapped and mapped rows (D109's hiding stays on the UPC mappings).
+4. **Email addresses typed into distributor files (D129):** granted, masked by the gateway, recorded as DI12.
+5. **Admin block (D130):** names the pipeline, waives the raw-files NOT AVAILABLE entry for platform admins, and keeps shipments on distributor sales.
+6. **Eval (D131):** "last 30 days", not "this week" (nothing failed in the eval week); 6 cases.
+
+**B10b as built (2026-10-16):**
+- **Migration `20261016210000_AddAskCaboodleDataPipelineGrants`** (grant-only, reusing B10a's Designer file; the model is unchanged). Applied on local `caboodle_dev`, and its `Down` was checked: back to B10a's 38 tables, then re-applied with 55.
+  - **USAGE:** on `DataHub` and `DataUpload` to `askcaboodle_admin_ro` (it also inherits it).
+  - **Whole tables (13):** `AddressReferences`, `BrandDataCleanupJobs`, `DistributorCustomerLinks`, `StoreCleanupChangeLogs`, `StoreListIssues`, `StoreMergeHistories`, `UnmappedKeHeRecords`, `UnmappedUNFIRecords`, `UnmappedRecordResolutionAudits`, and DataUpload `KeHeRecords`, `KeHeMappedRecords`, `UnfiRecords`, `UNFIMappedRecords`.
+  - **By column (4):** `DataSyncRuns`, `ImportJobs`, `ExportJobs`, `DistributorUpcMappings`.
+- **Catalog:** 17 entries with `audience: platform-admin` (94 tables in all; standard 39, unchanged), each with the screens' labels and an example. The rules:
+  - the distributor codes per table;
+  - a failed run may have loaded its rows, so check them;
+  - the latest run per month is the one whose rows exist;
+  - stuck = in progress for more than 12 hours;
+  - import 17 with no saved rows = failed;
+  - unmapped UPCs = distinct raw UPCs, KeHE and UNFI together, as on the UPCs tab, never the runs' counters;
+  - shipments, store counts, trends and last-year comparisons always come from distributor sales, and the raw files only for questions about the files;
+  - KeHE's YoY columns are percentages;
+  - UNFI's units, pack and published wholesale exist only on older uploads;
+  - merges from the duplicate clean-up are told apart by the undo data;
+  - issue counts by type list every type (zeros included) and state the last scan;
+  - times are UTC.
+- **Admin block** (`SystemPromptBuilder.AdminInstructions`):
+  - it names the pipeline topics;
+  - the NOT AVAILABLE entries on users and access and on raw distributor files don't apply to platform admins;
+  - shipments, store counts and trends still come from distributor sales;
+  - file locations, download links and distributor logins are never available.
+
+  The shared prompt and the standard catalog are untouched, so organization users' prompt and fingerprint are unchanged; the admin fingerprint changes.
+- **Tests (free):**
+  - Intelligence 565 (6 new), coverage 97.9 % unit-only, unchanged;
+  - solution 6,902 green across 16 projects;
+  - build 0 errors, the only new warning the migration's CA1505;
+  - DB tests 46 green with the owner's admin login:
+    - grant-vs-catalog with 55 admin tables and the hidden columns of the 4 column-granted tables;
+    - the credentials scan, with 29 new reviewed exceptions (store addresses, states, ZIPs, KeHE's `AddressBookNumber`, `IssueKey`, `LocationKey`);
+    - the admin login reads the pipeline, and gets 42501 on every hidden column, `ThirdPartyCredentials`, `MappingSuggestions`, `DataMappings` and `SpinsRecords`;
+    - the standard login is refused all 55 admin tables;
+    - every catalog example (94 tables) runs on the admin login;
+    - the six new golden references match.
+- **Eval (63 cases):** Q54–Q59 in the counted "Platform admin" group, asked as a platform admin:
+  - Q54: 13 failed syncs, 4 brands, 12 still loaded;
+  - Q55: 7 failed imports and 1 with every row rejected;
+  - Q56: Bubbies' August KeHE file 214,052 units against 213,932 in Caboodle, 116 lines waiting;
+  - Q57: 4,746 open issues;
+  - Q58: 921 merges, none undone;
+  - Q59: Genius Gourmet 20 unmapped UPCs.
+- **BE docs:** `AskCaboodle-Deployment.md` §3 and §3.1, plus two check queries (run locally: nothing secret; 55 admin tables); the eval README.
+- **Data issues:** DI12 (an email address in one Sprouts store's KeHE city, 9 brands, January 2025 to September 2026), DI13 (syncs marked failed although loaded; 3 runs stuck), DI14 (UNFI UPC mappings stored as provider 1). DI9 updated: the code now drops zero-unit KeHE lines, but the restored data holds 261 K of them, so the catalog says they are kept.
+- **Found, and handled beyond the plan's wording (for the owner's review):**
+  - **UPC mappings:** `CreatedBy`, `LastModifiedBy` and `DeletedBy` are hidden too. They are empty today (written outside the user's save), but would name the resolver D109 hides once filled.
+  - **The zero-unit KeHE lines:** the catalog says they are kept (DI9).
+  - **Issue counts:** the store-list issue example lists every type with zeros, after the paid check (Q57).
+  - **Q53's notes** now say the recipient count is available and only the addresses are not (a claims-check false fail).
+- **Found outside Ask Caboodle (for the owner; D6, not changed):**
+  - the admin Sync Runs list calls `GET datahub/sync-runs`, but the backend expects a POST;
+  - the trigger labels for file uploads and "map existing data" show "Unknown";
+  - the unmapped-records export polls the brand route;
+  - KeHE's YoY % is shown as dollars;
+  - the sync job sends the decrypted distributor password to the crawler over plain HTTP, and the admin run details show the full signed file URL.
+- **Paid, $0.56** (Sonnet 5.5 medium, no re-runs, all asked as a platform admin; reports BE `docs/AskCaboodle-Eval/2026-10-16-claude-sonnet-5-5-medium-b10b-admin.md` and `…-b10b-recheck.md`):
+  - **Check, $0.48: 7 of 9 passed** (Q54–Q56, Q58, Q59 and the regressions Q01 and Q08: 48,157 cases and 4,872 stores from distributor sales, as before); $0.04 per answer, 12 s, 91 % of input from the cache, no answer corrected.
+  - **Q57** gave every count right, then wrote "Two issue types… have no open issues" (only one has none). The fact check passed the "two" because a 2 is in the results: a right figure in the wrong place, C0c's kind (D108). Fixed by the example above.
+  - **Q53** failed the claims check on its right "13 recipients" (the notes said recipients are not available); B10a's identical answer passed.
+  - **Re-check, $0.08: 2 of 2 passed.** Q57 now says "Store key conflict has none open"; Q53 keeps its 13 recipients.
 
 ---
 
@@ -1210,6 +1304,12 @@ Owner answers recorded 2026-10-11.
 | D124 | Conversation limit and titles | **Owner (2026-10-16):** add both in a small package alongside C1: C1b, built right after C1 (§4). The details are decided when it starts. |
 | D125 | B10a review: beyond the plan's wording | **Accepted (owner, 2026-10-16, by committing B10a):** the inviter is `InvitedUsers."CreatedBy"` (as on the Admin screen); `Identity.Users."ImageUrl"` and `OrganizationBackfillRuns."Report"` are hidden; `SoftDeletePurgeSchemaRetentions` and `SoftDeletePurgeTableRegistries` are granted with the purge settings; the email-log column grants carry `Deleted`; the "Platform admin" eval group counts. |
 | D116 | A corrected answer mentioning its correction | **Owner (2026-10-16):** users don't need to know how an answer was checked, and the remark misleads them. C0b's correction message (not the system prompt, D104) ends with "Don't mention the correction; write the answer as if it were the first." Built in B9. |
+| D126 | B10b: which tables | **Owner (2026-10-16): "Perfect."** 17 pipeline and raw-file tables for platform admins. Left out: `DataHub.MappingSuggestions` (its status never changes and the screen computes suggestions live, so answers from it would disagree with the screen), `AliasAuditTrail` and `AliasMatchAttempts` (0 rows, no live writer), `DataUpload.DataMappings` (legacy, screen hidden): all four "on request" in §9. Never `ThirdPartyCredentials` or `SpinsRecords`. |
+| D127 | B10b: hidden columns | **Agreed:** the S3 keys, upload ids and part lists, `ExportJobs."S3PartsETagsJson"` included (admin jobs reuse it for their results), `DataSyncRuns."SourceFileS3URL"` (a signed link) and `"SourceFileHash"`. |
+| D128 | B10b: resolution notes | **Agreed:** granted on the unmapped and mapped KeHE/UNFI rows: they are the only record of why a row didn't map (mostly system tags; 96 rows hold short admin text). D109's hiding stays on `DistributorUpcMappings`. |
+| D129 | B10b: email addresses typed into distributor files | **Agreed:** grant the store columns and rely on the gateway's `[email]` mask (one Sprouts store's KeHE city holds an address in 266 raw lines; the standard login already reads 257 such distributor-sales rows). Recorded as DI12. |
+| D130 | B10b: admin block wording | **Agreed:** it names the pipeline topics, waives the raw-files NOT AVAILABLE entry for platform admins, keeps shipments on distributor sales, and says file locations and distributor logins are never available. Only the admin fingerprint changes. |
+| D131 | B10b: eval period | **Agreed:** "last 30 days", not "this week": nothing failed in the eval week (the last failures were imports on 4 Oct and syncs on 28 Sep). Six cases, Q54–Q59. |
 
 ### 7.1 Demo track — dropped 2026-10-12 (D3), kept for history
 
@@ -1256,6 +1356,9 @@ Each one is posted with its package, and gets a D number once decided.
 | Meaningful session titles (owner, 2026-10-16: "like Claude or ChatGPT, from the first message") | C1b (D124) | **Placed:** package C1b, with the limit. Suggested: a 3–6 word title by Haiku 5.5 after the first answer, plus rename; decided when C1b starts. |
 | B10a beyond the plan's wording: the inviter is `InvitedUsers."CreatedBy"` (as on the Admin screen; 48 of 51, not 2, so Q50 asks about Chantico Agave's invitations); `Users."ImageUrl"` and the backfill `Report` hidden too; the purge retentions and table registry granted with the purge settings; `Deleted` in the email-log column grants; the admin group counted | B10a review (owner) | **Decided:** D125, accepted as built. |
 | The fact check flags the "8" in "between 8 and 11 September" (B10a paid check, Q53: a false alarm that cost a correction round). Cause: its day-first date pattern joins days only with "–", "-" or "to" | C0b.1 (owner, 2026-10-16) | **Done:** C0b.1 (`5f7e7f84`) (§4): day-first dates also join their days with "and", "&" or commas; month-first unchanged. The replay of 113 stored answers changes only Q53. |
+| B10b beyond the plan's wording: `DistributorUpcMappings."CreatedBy"`, `"LastModifiedBy"` and `"DeletedBy"` hidden too (empty today, they would name the resolver D109 hides); the catalog says zero-unit KeHE lines are kept (the code's new rule drops them, the restored data holds 261 K, DI9); the store-list issue example lists every type with zeros (after Q57's paid-check error); Q53's notes say the recipient count is available | B10b review (owner) | Accept as built. |
+| A right figure in the wrong place passed the fact check again (B10b, Q57: "Two issue types… have no open issues" when one has none; a 2 was in the results) | C0c (D108) | One more case for C0c's sizing; the catalog example was fixed in B10b. |
+| Found outside Ask Caboodle (B10b): the admin Sync Runs list calls `GET datahub/sync-runs` (the backend expects POST); file-upload and "map existing data" triggers show "Unknown"; the unmapped-records export polls the brand route; KeHE's YoY % shown as dollars; the decrypted distributor password goes to the crawler over plain HTTP, and the run details show the full signed file URL | Owner (not Ask Caboodle, D6) | For the app team. |
 | Organization admins asking about their own organization's members, roles and invitations | Later (after GA) | Optional; scoped to their organization and their IAM permissions |
 | Access to the user-documentation repo, and the review format for Constance | C9 | **Access given (2026-10-16):** public at https://github.com/tauhid-sifat/Caboodle-Documentations (a project working folder: docs, kb, wiki, specs, meetings, jira…). Written by the BA and not yet reviewed by the owner: treat its content as unverified, and discuss it with the owner when C9 starts. The review format is agreed then too. |
 
@@ -1285,8 +1388,8 @@ Each one is posted with its package, and gets a D number once decided.
 | C0c | deferred | | Fact check, step 2: rankings, trends and figures in the wrong place. Deferred to before G2 (D108): about one such error per full run is left; sized with C8's data. |
 | B9 | done | `a8387b82` | 2026-10-16: plan and decisions D109–D116 approved; the IAM branch is unchanged since `b5adb1a1`. Built as in §3 B9 "as built": fee lines through the calculator (`breakdown: "fee"`), `CRM.DistributorBrands` and `CRM.RetailerRegions` (not `DistributorRetailers`, D113), regions from `RetailerRegions` only (D115); migration `AddAskCaboodleCatalogCompletionGrants` applied locally; solution 6,821 green, Intelligence 484, coverage 97.9 %, DB tests 25 green, build 0 errors. DI11 recorded.<br>**Paid, $0.59:** 9 of 9 passed (Q41, Q45–Q48, Q22, Q37, Q39, Q30); 2 corrected (Q48's two wrong hand counts caught; Q45's right total a false alarm, fixed by stating the fee total).<br>**At review:** D116 (a corrected answer never mentions the correction).<br>**Balance:** about $50.01. |
 | B10a | done | `26a85f3f` | 2026-10-16: plan and decisions D117–D123 approved; the IAM branch is unchanged since `b5adb1a1`. Built as in §3 B10 "B10a as built": migration `AddAskCaboodleAdminReadOnlyRole` applied locally, login script, the platform-admin audience, 38 catalog entries, BE `docs/AskCaboodle-Deployment.md`; solution 6,886 green, Intelligence 549, coverage 97.9 %, build 0 errors. DB tests 45 green with the owner's admin login. **Paid, $0.44:** 8 of 8 passed (Q49–Q53, plus Q01, Q22, Q48 asked as a platform admin); 1 correction, a fact-check false alarm on a day of the month (§7.2). Found: the inviter is `InvitedUsers."CreatedBy"` (48 of 51, not 2). At review: D125 (the five points beyond the plan accepted as built).<br>**Balance:** about $49.57. |
-| B10b | next | | The DataHub pipeline and raw distributor files for platform admins (D109, D117). |
-| C1 … C8 | todo | | C1 now includes the run-trace events. C1b (conversation limit and titles, D124) comes right after C1. |
+| B10b | done | pending | 2026-10-16: plan and decisions D126–D131 approved; the IAM branch is unchanged since `b5adb1a1`. Built as in §3 B10 "B10b as built": migration `AddAskCaboodleDataPipelineGrants` applied locally (55 admin tables), 17 catalog entries, admin block wording, eval Q54–Q59; solution 6,902 green, Intelligence 565, coverage 97.9 %, DB tests 46 green, build 0 errors. DI12–DI14 recorded, DI9 updated. **Paid, $0.56:** check 7 of 9 ($0.48; Q57 a "wrong place" count, Q53 a claims-check false fail), both fixed and re-checked 2 of 2 ($0.08).<br>**Balance:** about $49.01. |
+| C1 … C8 | todo | | **Next: C1.** C1 now includes the run-trace events. C1b (conversation limit and titles, D124) comes right after C1. |
 | C9 | todo | | Caboodle guide. Needs the documentation repo and Constance's review. |
 | G1 … A3 | todo | | |
 
@@ -1324,11 +1427,12 @@ Kept up to date in every package that changes the catalog or the grants. The age
 | Brokerage-internal Brand Report notes | `Broker.BrandReports.InternalNotes` | Brokerage-only working notes; brands get only the shared ones (D18) | Column grant | **G3/G4**, only if a broker-only audience needs them |
 | Promotion fee tables | `TradeSpend.BrandApprovedPromotionFees`, `TradeSpendSandbox.PromotionFees` | Calculator inputs. Totals since B5, and every fee line since B9 (name, type, where it applies, coupon dates, settings, amount), come from `get_promotion_performance` (`breakdown: "fee"`), so they match the Promotion Details screens. | Not granted; read only through the app's calculator | **Never** as SQL (D77); the lines are answered through the calculator since B9 |
 | Retailer-level distributor and markup | `CRM.DistributorRetailers` | Not how Caboodle links distributors: which distributor serves which retailer, and the one markup, come from `CRM.DistributorBanners` through the banners (D113) | Not granted | **Never** (D113) |
-| Raw distributor files | `DataUpload.KeHeRecords`, `UnfiRecords`, `KeHeMappedRecords`, `UNFIMappedRecords`, `DataMappings` | Already normalized into `DistributorSalesRecords`. The raw-only fields (KeHE prior-year quantity, UNFI published wholesale) are rarely asked about. | Not granted | **B10b** for platform admins; **on request** for everyone else |
+| Raw distributor files | `DataUpload.KeHeRecords`, `UnfiRecords`, `KeHeMappedRecords`, `UNFIMappedRecords`, `DataMappings` | Already normalized into `DistributorSalesRecords`. The raw-only fields (KeHE prior-year quantity, UNFI published wholesale) are rarely asked about. | **Since B10b:** the four KeHE/UNFI tables granted to `askcaboodle_admin_ro` only and catalogued with `audience: platform-admin` (shipments still come from distributor sales); `DataMappings` (legacy) granted to neither | **Platform admins since B10b** (D126); **on request** for everyone else; `DataMappings` **on request** |
 | Legacy SPINS format | `DataUpload.SpinsRecords` | Superseded by Stores Insight and Item Ranking; only DataHub cleanup still references it | Not granted | **Never** |
 | Banner activity types | `CRM.BannerActivityTypes`, `BannerActivities.BannerActivityTypeID` | Never populated or read by the app | Not catalogued | **On request**, if the app starts recording types |
 | Documents | `FileRepository.*` | Files, not data | Not granted | **Never** |
 | Credentials | `Identity.UserTokens`, `UserLogins`, `UserClaims`, `VerificationCodes`; the password hash, stamps, refresh tokens and email codes in `Identity.Users`; invitation and share-link tokens; `DataHub.ThirdPartyCredentials` | Secrets | Granted to neither login. Since B10a, a DB test scans every column each role can read and fails on a secret-like or personal one. | **Never** |
+| File locations and links | `DataHub.ImportJobs` and `ExportJobs` S3 keys, upload ids and part lists; `DataSyncRuns."SourceFileS3URL"` (a signed link) and `"SourceFileHash"` | Where files are stored, and links that open them | Column grants: hidden from `askcaboodle_admin_ro` too (B10b, D127) | **Never** |
 | Users, organizations, roles, access, modules and settings, audit, email logs, purge runs | The `Identity` (minus credentials), `Organization`, `Configuration`, `Auditing`, `Email` and `DataLifecycle` schemas; `Brand.BrandBrokers`, `Brand.BrandSubUsers`; `Broker.BrandReportEmailLogs`, `CategoryReviewEmailLoggers` | Security and IAM data | **Since B10a:** granted to `askcaboodle_admin_ro` only (38 tables, 13 by column) and catalogued with `audience: platform-admin`; the standard login and catalog never see them | **Platform admins only, since B10a** (D75): no credentials; no email addresses, login names, phones, IPs or profile photos before G8 (D72, D121); email-log metadata only (D74); the backfill report hidden (it lists email addresses). **Never** for organization users. |
 | Ask Caboodle's own records | The `Intelligence` schema | Other users' questions and transcripts | Not granted to either login; the guard rejects the schema | **Never** (D73). Usage counts come from the B8b report. |
 | Background jobs and system tables | `hangfire`, `public` | Infrastructure | Not granted; since B10a the guard rejects both schemas on either login | **Never** |
@@ -1337,13 +1441,15 @@ Kept up to date in every package that changes the catalog or the grants. The age
 
 | Tables | What they hold | Plan |
 |---|---|---|
-| `DataHub.DistributorUpcMappings` | Distributor items ↔ Caboodle products, with match status | **B10b**, for platform admins, without `ResolutionNotes` and `ResolvedBy` (D109) |
+| `DataHub.DistributorUpcMappings` | Distributor items ↔ Caboodle products, with match status | **Done in B10b:** platform admins only, without `ResolutionNotes`, `ResolvedBy` (D109) and the audit user columns |
 | `Broker.PromoTabs`, `PromoTabColumns`, `PromoTabRows`, `PromoTabCells` | A brokerage's own Promo Tabs spreadsheets | **G3**, broker audience only, with each brokerage seeing only its own |
 | `Broker.CategoryReviewCalenderDateAssignments`, `BrandReportStatusSettings` | Calendar date assignments and status settings | **On request** (low question value) |
 | `Broker.BrandReportEmailLogs`, `CategoryReviewEmailLoggers` | Notification email logs | **Done in B10a:** metadata only, for platform admins (D74); see 9.1 |
 | `CRM.PipelineActivityFiles` | Attachments on pipeline activities | **Never** (files) |
 | `CRM.DistributionCenters` | Warehouse names | **Never:** replaced by `CRM.DistributorDcs` (the grant was revoked in B4) |
-| The DataHub import, sync, mapping and data-quality tables: `ImportJobs`, `ExportJobs`, `DataSyncRuns`, `MappingSuggestions`, `Unmapped*`, `StoreListIssues`, `StoreMergeHistories`, `StoreCleanupChangeLogs`, `DistributorCustomerLinks`, `AddressReferences`, `AliasAuditTrail`, `AliasMatchAttempts`, `BrandDataCleanupJobs`, `UnmappedRecordResolutionAudits` | The import pipeline's internals | **B10b**, for platform admins only. `UnifiedEntities` and `UnifiedEntityAliases` are already read by the name search (approved aliases only). |
+| The DataHub import, sync, mapping and data-quality tables: `ImportJobs`, `ExportJobs`, `DataSyncRuns`, `Unmapped*`, `StoreListIssues`, `StoreMergeHistories`, `StoreCleanupChangeLogs`, `DistributorCustomerLinks`, `AddressReferences`, `BrandDataCleanupJobs`, `UnmappedRecordResolutionAudits` | The import pipeline's internals | **Done in B10b:** platform admins only (file locations hidden, D127). `UnifiedEntities` and `UnifiedEntityAliases` are already read by the name search (approved aliases only). |
+| `DataHub.MappingSuggestions` | Retailer candidates the sync proposed for unmapped values | **On request** (D126): never acted on, and the Unmapped Data screen computes its suggestions live, so answers from it would disagree with the screen |
+| `DataHub.AliasAuditTrail`, `AliasMatchAttempts` | Alias status changes and match attempts | **On request** (D126): 0 rows, no live writer |
 
 ## 10. Frontend (collected for the final FE document)
 
@@ -1433,7 +1539,7 @@ The full contract is in BE `docs/AskCaboodle-FE.md`, "The answer pieces".
 | B8 | `error.code`, `resetsAt`, `questionsLeftToday` in `done`; tokens for everyone, while $ and the model are for platform admins only (`done` and history) |
 | B8b | `GET askcaboodle/usage`, `GET askcaboodle/organization-usage`, `askcaboodleadmin/settings`, `usage`, `budgets` |
 | B9 | Fee lines in promotion answers: a normal data block, one row per fee (promotion, version, fee, kind, banners, products, events, coupon start and end as dates, settings, amount in usd); markup, region and distributor answers. No new FE pieces. |
-| B10 | No FE change; platform admins get wider answers (organizations, users, modules, imports) |
+| B10 | No FE change; platform admins get wider answers (organizations, users, modules; since B10b also imports, syncs, unmapped rows, store-list issues, merges and clean-ups, and the raw distributor files) |
 | C0 | The `frame` event (kind, headline, notes, options) and its replace rule; the data block's series, formats, totals, highlights and `chartable`; the same pieces in `GET sessions/{id}`; the feedback `reason` (down only) and `feedbackReason` in history |
 | C0b | `text.unverifiedFigures` (and `unverifiedFigures` in `GET sessions/{id}`): when not empty, the note "Some figures in this answer couldn't be checked against the data: …" right under the text (rare). A corrected answer takes a few seconds longer, shows the progress label "Correcting figures that didn't match the data", and may send a new `frame`/`data` that replaces the earlier one |
 | C1 | Streamed text as checked sentences that the FE types out word by word (D96; see the streaming demo), with the "rewriting" pause when a figure fails; live trace events, the trace endpoint, the step limits |
@@ -1461,7 +1567,7 @@ Owner, 2026-10-16: the database roles, logins and settings Ask Caboodle needs mu
 2. The group role `askcaboodle_ro` NOLOGIN. The migration creates it when the migration user can; otherwise it raises a NOTICE and skips its GRANT statements.
 3. Since B10a: the group role `askcaboodle_admin_ro` NOLOGIN and `GRANT askcaboodle_ro TO askcaboodle_admin_ro` (migration `AddAskCaboodleAdminReadOnlyRole`, same rule; the membership grant has its own NOTICE when the migration user can't grant roles).
 
-**Migrations whose grants are skipped with a NOTICE when the role is missing** (re-run their GRANT statements after creating the role): `AddAskCaboodleReadOnlyRole` (B2), `AddAskCaboodleCatalogGrants` (B4), `AddAskCaboodleCatalogCompletionGrants` (B9), and from B10a `AddAskCaboodleAdminReadOnlyRole`. The trigram indexes are built `CONCURRENTLY` outside a transaction (B2, B4).
+**Migrations whose grants are skipped with a NOTICE when the role is missing** (re-run their GRANT statements after creating the role): `AddAskCaboodleReadOnlyRole` (B2), `AddAskCaboodleCatalogGrants` (B4), `AddAskCaboodleCatalogCompletionGrants` (B9), from B10a `AddAskCaboodleAdminReadOnlyRole`, and from B10b `AddAskCaboodleDataPipelineGrants` (17 more tables for `askcaboodle_admin_ro`, 55 in all). The trigram indexes are built `CONCURRENTLY` outside a transaction (B2, B4).
 
 **Logins (created once per environment, password typed in psql and never stored in git):**
 
