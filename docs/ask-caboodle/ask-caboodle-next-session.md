@@ -1,14 +1,12 @@
 # Ask Caboodle — Handoff for the next session
 
-Written 2026-10-16, after B9 (commit `a8387b82`) and B10's planning (decisions D117–D123 approved; docs only). Read this first, then §0, §3 B10 (with "B10a — decided design"), §7 (D72–D75, D109, D117–D123 and §7.2), §8, §9, §10 and §11 of [`ask-caboodle-be-implementation-plan.md`](ask-caboodle-be-implementation-plan.md).
+Written 2026-10-16, after B10a (commit `26a85f3f`). Read this first, then §0, §3 B10 ("B10a as built" and "B10b"), §7 (D109, D117–D125 and §7.2), §8, §9, §10 and §11 of [`ask-caboodle-be-implementation-plan.md`](ask-caboodle-be-implementation-plan.md).
 
 ## Starter prompt
 
-> Read `docs/ask-caboodle/ask-caboodle-next-session.md`, then §0, §3 B10 (with "B10a — decided design"), §7 (D72–D75, D109, D117–D123 and §7.2), §8, §9, §10 and §11 of `docs/ask-caboodle/ask-caboodle-be-implementation-plan.md` in `D:\Fork\Onboarding-Journey`. The backend is `D:\Fork\Caboodle BE Repository\caboodle.backend`, branch `feature/ask-caboodle` (B9 committed at `a8387b82`; working tree clean).
+> Read `docs/ask-caboodle/ask-caboodle-next-session.md`, then §0, §3 B10 ("B10a as built" and "B10b"), §7 (D109, D117–D125 and §7.2), §8, §9, §10 and §11 of `docs/ask-caboodle/ask-caboodle-be-implementation-plan.md` in `D:\Fork\Onboarding-Journey`. The backend is `D:\Fork\Caboodle BE Repository\caboodle.backend`, branch `feature/ask-caboodle` (B10a committed at `26a85f3f`; working tree clean).
 >
-> Build package B10a (Platform Admin knowledge, part 1). Its plan and all its decisions are approved (D117–D123), so build it as written in §3 B10 "B10a — decided design"; ask me only about something the plan doesn't cover. First re-fetch `origin/feature/CS-1770-iam-service-broker-workspace` and tell me whether it has commits after `b5adb1a1`; don't merge without my go-ahead.
->
-> When the migration `AddAskCaboodleAdminReadOnlyRole` is applied on local `caboodle_dev`, give me the exact psql command for `docs/AskCaboodle-AdminReadOnlyLogin.sql` (I set the password myself) and how to set `IntelligenceSettings__AdminReadOnlyConnectionString`, then continue with the DB tests. Write BE `docs/AskCaboodle-Deployment.md` from plan §11, so every role, login, script and setting needed for staging and live is tracked there.
+> Plan package B10b (Platform Admin knowledge, part 2: the DataHub pipeline and the raw distributor files). First re-fetch `origin/feature/CS-1770-iam-service-broker-workspace` and tell me whether it has commits after `b5adb1a1`; don't merge without my go-ahead. Read the tables, their data on `caboodle_dev` and the screens that use them first, then post the plan and the open decisions, and wait for my go-ahead.
 >
 > Run the free launchers yourself (PowerShell). Finish in the usual order: build with 0 errors, all tests green, my review, then a one-line commit. Paid runs still need my approval first, with the cost stated.
 
@@ -16,12 +14,13 @@ Written 2026-10-16, after B9 (commit `a8387b82`) and B10's planning (decisions D
 
 | Item | State |
 |---|---|
-| **Backend branch** | `feature/ask-caboodle`, last commit `a8387b82` (B9), after C0b `6da28c2d`, C0 `a102eed1`, B8b `b2f00e22`, B8 `02a256b6` and the IAM merge `4d0830e6`. `origin/feature/ask-caboodle` is at B8b (`b2f00e22`); C0, C0b and B9 are local only. Never push unless the owner asks. |
+| **Backend branch** | `feature/ask-caboodle`, last commit `26a85f3f` (B10a), after B9 `a8387b82`, C0b `6da28c2d`, C0 `a102eed1`, B8b `b2f00e22`, B8 `02a256b6` and the IAM merge `4d0830e6`. `origin/feature/ask-caboodle` is at B8b (`b2f00e22`); C0, C0b, B9 and B10a are local only. Never push unless the owner asks. |
+| **Logins on `caboodle_dev`** | `askcaboodle_app` (standard) and, since B10a, `askcaboodle_admin_app` (platform admins), both created by the owner; their connection strings are the user variables below. |
 | **Docs repo** | `D:\Fork\Onboarding-Journey`, branch `caboodle-access-v2`. Docs commits are one line: `Update - Ask Caboodle docs - …`. |
 | **Model in the app** | **Sonnet 5.5, effort medium** since B7b (D45). Since B8, prices come from the `ModelPrices` table in code, per model and per attempt; the five price settings are gone. Development and Staging settings say `claude-sonnet-5-5`. |
-| **Tests** | Solution 6,821 green across 16 projects (Intelligence 484, coverage 97.9 % unit-only). Build has 0 errors. The 25 free DB tests are green. |
-| **IAM work** | Merge from `origin/feature/CS-1770-iam-service-broker-workspace` (last merged at `b5adb1a1`; still no new commits when fetched on 2026-10-16, at B9's start). Its module settings hold Ask Caboodle's three per-organization settings; the two dollar settings are Platform Admin only. Re-fetch and re-check before each merge. |
-| **Golden eval** | 52 questions in `caboodle/tests/Intelligence.Application.Test/Eval/golden.yaml`, asked as if today were 2026-10-12: 49 counted, plus "App questions" (Q42–Q44), reported apart until C9. Since C0: a counted `kind` check, `expect.kinds` for partial answers, and reported headline and database-name checks. Since C0b: a "Fact check" section and a reported `unverified_figures` check. Since B9: Q45–Q48 (fees by type, a distributor's markup, banners by region, the brand's distributors), Q41 answers the fee lines, and calculator references return fee-line figures. Reports and README are in BE `docs/AskCaboodle-Eval/`. |
+| **Tests** | With B10a: solution 6,886 green across 16 projects (Intelligence 549, coverage 97.9 % unit-only). Build has 0 errors. The 45 free DB tests are green, the admin-login ones included. |
+| **IAM work** | Merge from `origin/feature/CS-1770-iam-service-broker-workspace` (last merged at `b5adb1a1`; still no new commits when fetched on 2026-10-16, at B10a's start). Its module settings hold Ask Caboodle's three per-organization settings; the two dollar settings are Platform Admin only. Re-fetch and re-check before each merge. |
+| **Golden eval** | 57 questions in `caboodle/tests/Intelligence.Application.Test/Eval/golden.yaml` (since B10a; 52 before), asked as if today were 2026-10-12: 54 counted, plus "App questions" (Q42–Q44), reported apart until C9. Since B10a: a per-case `audience`, the "Platform admin" group Q49–Q53, and `ASK_CABOODLE_EVAL_AUDIENCE=platform-admin`. Since C0: a counted `kind` check, `expect.kinds` for partial answers, and reported headline and database-name checks. Since C0b: a "Fact check" section and a reported `unverified_figures` check. Since B9: Q45–Q48 (fees by type, a distributor's markup, banners by region, the brand's distributors), Q41 answers the fee lines, and calculator references return fee-line figures. Reports and README are in BE `docs/AskCaboodle-Eval/`. |
 | **Current baseline (C0b)** | No full run since C0b. B9 changed the catalog and the tool definitions (D110) and checked 9 cases: 9/9, $0.04 per answer. **C0b's full run, Sonnet 5.5 medium:** 38/45 counted (C0: 40/45; the difference is run-to-run flips, none caused by the check), app questions 3/3, **$0.036 per answer**, 13.5 s. 5 of 48 answers corrected by the fact check before the last tuning (about 3 of 48 expected now), none sent with the note. Failing: Q15 (borderline), Q27 (as since B7b), Q29 (a range claim, C0c's kind), Q35 (`cannot_answer` for "nothing found"; stays `answer` by D107). Q33 now accepts either kind (D107). Opus 5.5 medium was last measured in B7b: 41/45, $0.112, 26 s. |
 | **Known weaknesses** | Figures in the wrong place, rankings and pattern claims ("56–68 units per store" when one week is 40; Q11, Q29): C0c. Wrong figures and counts are now caught by C0b (Q16, Q29's "three promo periods"), and hand-added totals pass only when right. |
 | **Data problems** | DI1–DI11 in [`ask-caboodle-data-issues.md`](ask-caboodle-data-issues.md) (B9 added DI11: six approved Prime fees point at no promotion). The owner's rule: record and maintain them, don't fix them. Add any new one a package finds. DI9 matters for store counts: KeHE zero-case rows count as stores, both in the app and in Ask Caboodle. |
@@ -29,13 +28,13 @@ Written 2026-10-16, after B9 (commit `a8387b82`) and B10's planning (decisions D
 ## Money (read before any paid run)
 
 - **Who pays:** the client (Constance) pays the API bill through the Claude Console. The owner cannot add money themselves.
-- **Balance:** about **$50.01**. B9 spent $0.59 (a 9-case check); C0b $3.43 (4-case check $0.41, full run $2.62, re-check of 7 $0.40); C0 $3.54; B8b nothing; B8 about $0.075. The Console has the exact figure.
+- **Balance:** about **$49.57**. B10a spent $0.44 (an 8-case check); B9 $0.59 (a 9-case check); C0b $3.43 (4-case check $0.41, full run $2.62, re-check of 7 $0.40); C0 $3.54; B8b nothing; B8 about $0.075. The Console has the exact figure.
 - **Cache-read price (settled 2026-10-16):** Sonnet 5.5 cache reads cost $0.10 per million tokens (0.05x input, on the live pricing page), as `ModelPrices` says; the `claude-api` skill's cached $0.20 is out of date.
 - **Typical costs:**
 
   | What | Cost |
   |---|---|
-  | Full run, Sonnet 5.5 medium | ≈ $2.60 for 48 questions (≈ $0.90 of it is the claims check, which since C0b also judges the drafts of corrected answers; measured in C0b); ≈ $2.85 for B9's 52 |
+  | Full run, Sonnet 5.5 medium | ≈ $2.60 for 48 questions (≈ $0.90 of it is the claims check, which since C0b also judges the drafts of corrected answers; measured in C0b); ≈ $2.85 for B9's 52; ≈ $3.10 for B10a's 57 |
   | Full run, Opus 5.5 medium | ≈ $6.30 (≈ $1.25 claims check; B7b) |
   | One question, Sonnet 5.5 medium | ≈ $0.04 + ≈ $0.02 claims check (+ ≈ $0.03 more when the answer was corrected) |
   | The first case of any run | ≈ $0.06–0.10: it writes the 1-hour prompt cache |
@@ -172,22 +171,24 @@ Decisions D109–D116 are in plan §7; "B9 as built" is in §3 B9. In short:
 - **For C9:** the user-documentation repo is public at https://github.com/tauhid-sifat/Caboodle-Documentations. The BA wrote it and the owner hasn't reviewed it: treat it as unverified and discuss it with the owner when C9 starts.
 - **For the owner, not Ask Caboodle:** a Claude API key sits in plain text in the committed `appsettings.Staging.json` and `appsettings.Development.json` (since `cf92952e`, on `master`, `develop`, `staging`). Never print or copy it; plan §11 records it.
 
-## Next package: B10a — Platform Admin knowledge, part 1 (decided; build it)
+## Done: B10a — Platform Admin knowledge, part 1 (commit `26a85f3f`, 2026-10-16)
 
-Build exactly as plan §3 B10 "B10a — decided design":
-1. **Migration `AddAskCaboodleAdminReadOnlyRole`:** the group role `askcaboodle_admin_ro` (inherits `askcaboodle_ro`), USAGE on the admin schemas, and the table and column grants in the plan's table. **Script `docs/AskCaboodle-AdminReadOnlyLogin.sql`** for the login `askcaboodle_admin_app`, modelled on `docs/AskCaboodle-ReadOnlyLogin.sql`. The owner runs it and sets `IntelligenceSettings__AdminReadOnlyConnectionString`.
-2. **The platform-admin audience:**
-   - the gateway picks the login by audience;
-   - the catalog, `get_table_info` and the SQL guard expose the admin tables only to platform admins;
-   - the admin index is a second cached system block, so the shared prompt stays byte-identical;
-   - admin sessions have their own fingerprint;
-   - without the admin connection string, platform admins fall back to the standard login and catalog (D119).
-3. **Catalog entries** with `audience: platform-admin`, `modules: none/none`, rules and examples.
-4. **Tests:** the credentials scan, grant-vs-catalog for both roles, admin DB tests (42501 on the password hash, `UserTokens` and Intelligence), and audience unit tests.
-5. **Eval:** a per-case audience and 5 admin cases (D123). **Paid:** about $0.55, approved first.
-6. **Docs:** §9 rows, BE `docs/AskCaboodle-Deployment.md` from plan §11, BE `docs/AskCaboodle-FE.md` only if a field changes (none expected).
+Plan §3 B10 "B10a as built" has the details. In short:
+- **Migration `AddAskCaboodleAdminReadOnlyRole`** (applied on local `caboodle_dev`; `Down` checked): `askcaboodle_admin_ro`, a member of `askcaboodle_ro`, reads 38 more tables (13 by column). **Script `docs/AskCaboodle-AdminReadOnlyLogin.sql`** creates `askcaboodle_admin_app`; the owner runs it and sets `IntelligenceSettings__AdminReadOnlyConnectionString` (user scope).
+- **The platform-admin audience** lives on the session: login, catalog, `get_table_info`, SQL guard, and a second cached system block. Without the admin connection string, platform admins get the standard audience and a warning is logged (D119). The standard fingerprint is unchanged.
+- **38 catalog entries** with `audience: platform-admin`; eval group "Platform admin" Q49–Q53 (counted).
+- **BE `docs/AskCaboodle-Deployment.md`:** the staging/live runbook (plan §11 is now its summary).
+- **At review, D125:** the five points beyond the plan's wording were accepted as built: the inviter is `InvitedUsers."CreatedBy"` (48 of 51, not 2); `Users."ImageUrl"` and the backfill `Report` hidden too; purge retentions and table registry granted; `Deleted` in the email-log grants; the admin group counted.
+- **Tests:** solution 6,886 green, Intelligence 549 (coverage 97.9 % unit-only), DB tests 45 green with the owner's admin login; build 0 errors, the only new warning the migration's CA1505.
+- **Paid, $0.44:** `eval-run.ps1 -Cases "admin,Q01,Q22,Q48" -Audience platform-admin -Budget 1.20 -Rerun 0 -Model claude-sonnet-5-5 -Effort medium -Label b10a-admin`: 8 of 8 passed, all asked as a platform admin. One correction, a fact-check false alarm on "8 September" (open in plan §7.2: a day written in words isn't matched to a date value).
 
-After B10a comes B10b, then C1.
+## Next package: B10b — Platform Admin knowledge, part 2 (plan it)
+
+The DataHub pipeline and the raw distributor files for platform admins (plan §3 B10 "B10b", D109, D117), on the B10a mechanism: more `audience: platform-admin` catalog entries, grants to `askcaboodle_admin_ro` in a new migration, and the same tests (grant-vs-catalog, credentials scan, admin catalog examples). Never: S3 keys, upload ids and file URLs; `ThirdPartyCredentials`; `DistributorUpcMappings` without `ResolutionNotes` and `ResolvedBy` (D109).
+
+Start by reading what is there, as in B10a: the tables' columns (both snapshots), their data on `caboodle_dev`, the screens and jobs that write them (DataHub import, sync, mapping, data-quality), and every text or jsonb column for addresses (`LIKE '%@%'`). Then post the plan and the open decisions (which tables, which columns hidden, the eval cases: "the imports and syncs that failed this week"), and wait for the go-ahead. Add every new grant to BE `docs/AskCaboodle-Deployment.md` §3.1.
+
+After B10b comes C1.
 
 ## After B10b: C1 — token streaming and the run trace (then C1b)
 
@@ -241,7 +242,7 @@ The FE team is reworking the theme. Plan §10 collects what the FE needs, for th
 - the DB tests and golden references.
 
 **Secrets:**
-- `ANTHROPIC_API_KEY` and `IntelligenceSettings__ReadOnlyConnectionString` are Windows **user** environment variables. VS Code doesn't pass them to the agent's shell.
+- `ANTHROPIC_API_KEY`, `IntelligenceSettings__ReadOnlyConnectionString` and (since B10a) `IntelligenceSettings__AdminReadOnlyConnectionString` are Windows **user** environment variables. VS Code doesn't pass them to the agent's shell. The launchers put the admin one in `ASK_CABOODLE_ADMIN_READONLY_CONNECTION_STRING`.
 - The launchers below read them into the test process only and never print a value. The main dev connection string is in `caboodle/src/Hosts/API/appsettings.Development.json`.
 - Recreate these launchers in the new session's scratchpad and **run them yourself with the PowerShell tool**. They are allowed in auto mode (checked again in B9); the owner doesn't want to run scripts for the agent. Paid runs still need the owner's go-ahead first.
 - **What auto mode blocks:** ad-hoc secret extraction in bash (B9: a script grepping the DB password into `PGPASSWORD` for psql). For an ad-hoc read-only query, use a PowerShell script that reads the password into `PGPASSWORD` inside the same process, like the launchers do.
@@ -260,14 +261,17 @@ param(
     [string]$Rerun = "1",
     [string]$Model = "",
     [string]$Effort = "",
-    [string]$Fallback = "1"
+    [string]$Fallback = "1",
+    [string]$Audience = ""
 )
 $ErrorActionPreference = 'Stop'
 Set-Location "D:\Fork\Caboodle BE Repository\caboodle.backend"
 $settings = Get-Content "caboodle/src/Hosts/API/appsettings.Development.json" -Raw
 $env:ASK_CABOODLE_CONNECTION_STRING = ([regex]'"ConnectionString":\s*"([^"]*)"').Match($settings).Groups[1].Value
 $env:ASK_CABOODLE_READONLY_CONNECTION_STRING = [Environment]::GetEnvironmentVariable('IntelligenceSettings__ReadOnlyConnectionString', 'User')
+$env:ASK_CABOODLE_ADMIN_READONLY_CONNECTION_STRING = [Environment]::GetEnvironmentVariable('IntelligenceSettings__AdminReadOnlyConnectionString', 'User')
 $env:ANTHROPIC_API_KEY = [Environment]::GetEnvironmentVariable('ANTHROPIC_API_KEY', 'User')
+if ($Audience) { $env:ASK_CABOODLE_EVAL_AUDIENCE = $Audience }
 $env:ASK_CABOODLE_EVAL = '1'
 $env:ASK_CABOODLE_EVAL_BUDGET_USD = $Budget
 $env:ASK_CABOODLE_EVAL_RERUN = $Rerun
@@ -281,7 +285,7 @@ dotnet test caboodle/tests/Intelligence.Application.Test/Intelligence.Applicatio
 Remove-Item -Recurse -Force caboodle/tests/*/TestResults -ErrorAction SilentlyContinue
 ```
 
-**Free DB tests** (`dbtests.ps1`): the same first lines (both connection strings, no API key), then:
+**Free DB tests** (`dbtests.ps1`): the same first lines (the three connection strings, no API key), then:
 
 ```powershell
 param([string]$Filter = "FullyQualifiedName~Intelligence.Application.Test.Live|FullyQualifiedName~GoldenReferenceTests")
@@ -306,6 +310,11 @@ dotnet test caboodle/tests/Intelligence.Application.Test/Intelligence.Applicatio
 **Migrations on `caboodle_dev`:** the same PowerShell pattern with `$env:ASPNETCORE_ENVIRONMENT = 'Development'` and `dotnet ef database update --context MainDbContext --project caboodle/src/Database/Migrator/Migrator.csproj --startup-project caboodle/src/Hosts/API/API.csproj --connection $conn` (no `--no-build`). A grant-only migration can reuse the latest migration's Designer file when the model hasn't changed (diff its `BuildTargetModel` against the snapshot first).
 
 ## Lessons from recent sessions
+
+- **Check the column the app's screen uses, even for a decided case (B10a).** D123 counted `InvitedUsers."ParentUserID"` (2 of 51) as the inviter; the Admin "Invited users" screen uses `"CreatedBy"` (48 of 51). Grep the screen's query before writing the rule or the eval case.
+- **Look inside free-text and JSON columns before granting them (B10a).** `OrganizationBackfillRuns."Report"` lists 18 email addresses; a `LIKE '%@%'` count per granted text or jsonb column found it.
+- **YAML flow mappings (B10a):** quote any value with an apostrophe (`''` is unescaped only in single-quoted scalars) and any type with brackets (`'uuid[]'`). `SchemaCatalogTests` now fails on a `''` left in prose.
+- **Count warnings with `dotnet build caboodle.sln --no-incremental` (B10a):** an incremental build doesn't re-emit the warnings of projects it skips, so new warnings can look absent.
 
 - **Look at the data before writing an eval case (B9).** Q45 was first written for `SPROUTS 2026 - MD`, which has no fees at all. The free reference run showed it. Bubbies has one real approved promotion fee (HEB 2026), so the case moved there.
 - **A tool should print every total the model will state (B9).** Q45's right "$47,073" (AD/TPR + promotion fees) was flagged because the tool printed only the two parts. The fee header now states the total. The same idea as D105's row count in `present_answer`.
