@@ -1,0 +1,1445 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Ask Caboodle test page</title>
+<!--
+  C1p (D143): a local test page for the Ask Caboodle API. Functionality only, based on the Workbench screens; the FE team
+  owns the look (D69). Open this file from disk while the API runs locally (CORS allows any origin).
+  Test parameters: ?api=<url>&token=<jwt>&brand=<id>&ask=<question>&session=<id>&trace=1
+-->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root {
+  color-scheme: light;
+  --bg: #f4f6f5;
+  --rail: #eceff0;
+  --surface: #ffffff;
+  --surface-2: #f0f3f2;
+  --line: #d9dfdc;
+  --line-strong: #bfc8c4;
+  --text: #16201c;
+  --text-2: #3c4843;
+  --text-3: #66736d;
+  --accent: #0b6e5a;
+  --accent-soft: #dcefe8;
+  --accent-ink: #ffffff;
+  --ok: #2e7a2c;
+  --ok-soft: #e3f1dd;
+  --err: #a83a22;
+  --err-soft: #fbeee8;
+  --warn: #965800;
+  --warn-soft: #faefd8;
+  --code: #f1f4f3;
+  --shadow: 0 10px 30px -14px rgba(16, 25, 21, 0.3);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --bg: #0f1513;
+    --rail: #131b18;
+    --surface: #18211e;
+    --surface-2: #1e2925;
+    --line: #2a3632;
+    --line-strong: #3a4944;
+    --text: #e3ebe7;
+    --text-2: #b4c1bb;
+    --text-3: #879690;
+    --accent: #5ec3a5;
+    --accent-soft: #16332a;
+    --accent-ink: #062018;
+    --ok: #7bc77a;
+    --ok-soft: #16301a;
+    --err: #f1a493;
+    --err-soft: #2b1915;
+    --warn: #e3a84a;
+    --warn-soft: #32260f;
+    --code: #131b18;
+    --shadow: 0 10px 30px -14px rgba(0, 0, 0, 0.7);
+  }
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body { background: var(--bg); color: var(--text); font: 14px/1.5 "Segoe UI", system-ui, -apple-system, sans-serif; overflow: hidden; }
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+[hidden] { display: none !important; }
+.muted { color: var(--text-3); }
+.mono, code, pre { font-family: Consolas, "Cascadia Mono", ui-monospace, monospace; }
+.btn { border: 1px solid var(--line-strong); background: var(--surface); border-radius: 6px; padding: 5px 10px; font-size: 13px; }
+.btn:hover { border-color: var(--accent); }
+.btn-primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+.btn-link { border: 0; background: none; color: var(--accent); padding: 0; font-size: 12.5px; text-decoration: underline; }
+.field { width: 100%; border: 1px solid var(--line-strong); background: var(--surface); border-radius: 6px; padding: 6px 8px; font-size: 13px; }
+.pill { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; padding: 1px 8px; border-radius: 999px; background: var(--surface-2); color: var(--text-3); white-space: nowrap; }
+.pill.live { background: var(--accent-soft); color: var(--accent); }
+.pill.ok { background: var(--ok-soft); color: var(--ok); }
+.pill.err { background: var(--err-soft); color: var(--err); }
+.pill.warn { background: var(--warn-soft); color: var(--warn); }
+.spin { width: 11px; height: 11px; border-radius: 50%; border: 1.5px solid var(--line-strong); border-top-color: var(--accent); animation: rot 0.75s linear infinite; display: inline-block; flex: none; }
+@keyframes rot { to { transform: rotate(360deg); } }
+@keyframes blink { 50% { opacity: 0.3; } }
+@keyframes flash { from { background: var(--warn-soft); } to { background: transparent; } }
+@keyframes fadeUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+.reveal { animation: fadeUp 0.45s ease both; }
+.reveal-late { animation: fadeUp 0.45s ease 0.25s both; }
+.writing { display: grid; gap: 9px; margin: 4px 0 14px; max-width: 72ch; }
+.writing span { display: block; height: 11px; border-radius: 5px; background: linear-gradient(90deg, var(--line) 25%, var(--line-strong) 50%, var(--line) 75%); background-size: 200% 100%; animation: shimmer 1.6s linear infinite; }
+.writing span:nth-child(2) { width: 88%; }
+.writing span:nth-child(3) { width: 62%; }
+.dt tbody tr { animation: fadeUp 0.35s ease both; }
+
+.app { display: grid; grid-template-columns: 280px minmax(0, 1fr); height: 100%; }
+.app.trace-open { grid-template-columns: 280px minmax(0, 1fr) 440px; }
+
+/* rail */
+.rail { background: var(--rail); border-right: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; }
+.mark { padding: 14px 14px 8px; font-weight: 700; font-size: 15px; display: flex; align-items: center; gap: 8px; }
+.connect { padding: 4px 14px 12px; display: grid; gap: 8px; border-bottom: 1px solid var(--line); font-size: 12.5px; }
+.connect label { display: grid; gap: 3px; color: var(--text-3); }
+.connect form { display: grid; gap: 6px; }
+.row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.row > .grow { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.brand-results { list-style: none; margin: 4px 0 0; padding: 0; max-height: 180px; overflow-y: auto; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
+.brand-results li button { display: block; width: 100%; text-align: left; border: 0; background: none; padding: 5px 8px; font-size: 12.5px; }
+.brand-results li button:hover { background: var(--surface-2); }
+.hist-head { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px 4px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-3); font-weight: 600; }
+.history { list-style: none; margin: 0; padding: 0 8px 14px; overflow-y: auto; flex: 1; min-height: 0; }
+.history li { display: flex; align-items: center; border-radius: 6px; }
+.history li:hover { background: var(--surface-2); }
+.history li.active { background: var(--surface); box-shadow: inset 2px 0 0 var(--accent); }
+.history .open { flex: 1; min-width: 0; border: 0; background: none; text-align: left; padding: 6px 8px; font-size: 13px; }
+.history .open span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.history .open small { color: var(--text-3); font-size: 11px; }
+.history .del { border: 0; background: none; color: var(--text-3); padding: 4px 8px; visibility: hidden; }
+.history li:hover .del { visibility: visible; }
+
+/* main */
+.main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.main-head { display: flex; align-items: center; gap: 12px; padding: 10px 22px; border-bottom: 1px solid var(--line); min-height: 52px; }
+.main-head h1 { font-size: 18px; font-weight: 600; margin: 0; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.main-head label { font-size: 12px; color: var(--text-3); display: flex; gap: 6px; align-items: center; }
+.scroll { flex: 1; overflow-y: auto; min-height: 0; }
+.convo { max-width: 880px; margin: 0 auto; padding: 22px 26px 30px; }
+.empty { padding: 8vh 0 0; max-width: 620px; }
+.empty h2 { font-size: 26px; margin: 0 0 8px; font-weight: 600; }
+.starters { display: grid; gap: 8px; margin-top: 18px; }
+.starter { text-align: left; border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 10px 12px; }
+.starter:hover { border-color: var(--accent); }
+.q { display: flex; justify-content: flex-end; margin: 4px 0 14px; }
+.q div { background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px 12px 3px 12px; padding: 8px 13px; max-width: 78%; white-space: pre-wrap; overflow-wrap: anywhere; }
+.a { margin: 0 0 34px; }
+.a-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12px; color: var(--text-3); margin-bottom: 8px; }
+.a-head strong { color: var(--text-2); }
+.run-chip { margin-left: auto; border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 3px 10px; font-size: 12px; color: var(--text-2); display: inline-flex; gap: 6px; align-items: center; }
+.run-chip:hover { border-color: var(--accent); }
+.run-chip.traced { background: var(--accent-soft); border-color: var(--accent); }
+.timing { display: flex; flex-wrap: wrap; gap: 4px 6px; margin: 0 0 12px; font-size: 11.5px; }
+.timing .t { border: 1px solid var(--line); border-radius: 4px; padding: 1px 7px; color: var(--text-3); background: var(--surface); white-space: nowrap; }
+.timing .t b { color: var(--text); font-weight: 600; }
+.timing .t.hl { border-color: var(--accent); }
+.timing .t.bad { border-color: var(--err); color: var(--err); }
+.headline { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin: 0 0 10px; }
+.hl-val { font-size: 46px; line-height: 1; color: var(--accent); font-weight: 300; font-variant-numeric: tabular-nums; }
+.hl-lbl { color: var(--text-2); font-size: 15px; }
+.notes { border: 1px solid var(--line); border-radius: 8px; background: var(--surface); margin: 0 0 12px; }
+.note { display: grid; grid-template-columns: 74px minmax(0, 1fr); gap: 10px; padding: 6px 12px; font-size: 13px; color: var(--text-2); }
+.note + .note { border-top: 1px solid var(--line); }
+.note b { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-3); font-weight: 600; padding-top: 2px; }
+.cannot { border: 1px solid var(--line-strong); background: var(--surface-2); border-radius: 8px; padding: 10px 14px; margin: 0 0 12px; }
+.cannot h4 { margin: 0 0 6px; font-size: 12px; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.06em; }
+.cannot .need { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 13px; }
+.prose { font-size: 15px; line-height: 1.65; max-width: 72ch; overflow-wrap: anywhere; }
+.prose p { margin: 0 0 10px; }
+.prose ul, .prose ol { margin: 4px 0 12px; padding-left: 22px; }
+.prose li { margin: 4px 0; }
+.prose table { border-collapse: collapse; margin: 8px 0; font-size: 13px; }
+.prose th, .prose td { border: 1px solid var(--line); padding: 4px 8px; }
+.prose.typing > :last-child::after { content: ""; display: inline-block; width: 7px; height: 14px; margin-left: 3px; vertical-align: -2px; background: var(--accent); animation: blink 0.9s step-end infinite; }
+.prose.flash { animation: flash 1.2s ease-out; }
+.pause { display: flex; align-items: center; gap: 8px; color: var(--warn); font-size: 13px; margin: 6px 0; }
+.unverified { border-left: 3px solid var(--warn); background: var(--warn-soft); padding: 6px 10px; font-size: 13px; margin: 8px 0; border-radius: 0 6px 6px 0; }
+.error-box { border: 1px solid var(--err); background: var(--err-soft); color: var(--err); border-radius: 8px; padding: 8px 12px; margin: 8px 0; font-size: 13.5px; }
+.stopped { color: var(--text-3); font-size: 13px; margin: 8px 0; }
+.data { border: 1px solid var(--line); border-radius: 8px; background: var(--surface); margin: 14px 0 6px; overflow: hidden; }
+.data-head { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.data-title { font-weight: 600; font-size: 13px; flex: 1; min-width: 0; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.seg button { border: 0; background: var(--surface-2); padding: 3px 10px; font-size: 12px; color: var(--text-3); }
+.seg button.on { background: var(--surface); color: var(--text); font-weight: 600; }
+.tbl { overflow-x: auto; max-height: 420px; overflow-y: auto; }
+table.dt { border-collapse: collapse; width: 100%; font-size: 13px; }
+.dt th, .dt td { padding: 6px 10px; border-bottom: 1px solid var(--line); text-align: left; white-space: nowrap; }
+.dt thead th { position: sticky; top: 0; background: var(--surface-2); color: var(--text-3); font-weight: 500; font-size: 12px; }
+.dt .n { text-align: right; font-variant-numeric: tabular-nums; }
+.dt tr.best > td { background: var(--ok-soft); }
+.dt tr.worst > td { background: var(--warn-soft); }
+.dt tfoot td { font-weight: 600; background: var(--surface-2); border-top: 1px solid var(--line-strong); }
+.chart-box { padding: 10px 12px; height: 300px; }
+.data-foot { padding: 6px 12px; font-size: 12px; color: var(--text-3); border-top: 1px solid var(--line); }
+.options { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 8px; margin: 10px 0; }
+.option { text-align: left; border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 8px 12px; }
+.option:hover:not(:disabled) { border-color: var(--accent); }
+.option small { display: block; color: var(--text-3); }
+.sugs { display: flex; flex-wrap: wrap; gap: 7px; margin: 12px 0 4px; }
+.sug { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 4px 11px; font-size: 13px; color: var(--text-2); }
+.sug:hover { border-color: var(--accent); color: var(--text); }
+.actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--line); font-size: 12.5px; }
+.act { border: 0; background: none; color: var(--text-3); padding: 3px 7px; border-radius: 5px; }
+.act:hover { background: var(--surface-2); color: var(--text); }
+.act.on { color: var(--accent); background: var(--accent-soft); }
+.fb { display: grid; gap: 6px; margin-top: 8px; padding: 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+.fb .chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.fb .chips button { border: 1px solid var(--line-strong); background: var(--surface); border-radius: 999px; padding: 2px 10px; font-size: 12px; }
+.fb .chips button.on { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+.composer-wrap { padding: 6px 26px 14px; border-top: 1px solid var(--line); }
+.status { display: flex; align-items: center; gap: 8px; min-height: 22px; font-size: 12.5px; color: var(--text-2); max-width: 828px; margin: 0 auto 4px; }
+.status .time { margin-left: auto; color: var(--text-3); }
+.composer { max-width: 828px; margin: 0 auto; display: flex; gap: 8px; align-items: flex-end; border: 1px solid var(--line-strong); background: var(--surface); border-radius: 10px; padding: 6px 6px 6px 12px; }
+.composer textarea { flex: 1; border: 0; outline: none; resize: none; background: transparent; min-height: 24px; max-height: 160px; padding: 5px 0; font-size: 14.5px; }
+
+/* trace drawer */
+.trace { border-left: 1px solid var(--line); background: var(--rail); display: flex; flex-direction: column; min-height: 0; min-width: 0; }
+.trace-head { display: flex; align-items: center; gap: 8px; padding: 10px 12px 10px 16px; border-bottom: 1px solid var(--line); min-height: 52px; }
+.trace-head h2 { margin: 0; font-size: 16px; font-weight: 600; flex: 1; }
+.trace-body { flex: 1; overflow-y: auto; padding: 12px 16px 24px; min-height: 0; font-size: 13px; }
+.trace-q { color: var(--text-2); margin-bottom: 10px; }
+.meters { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); margin-bottom: 14px; }
+.meter-l { display: flex; justify-content: space-between; font-size: 11px; color: var(--text-3); }
+.cells { display: grid; gap: 2px; margin-top: 5px; }
+.cell { height: 5px; background: var(--surface-2); border-radius: 1px; }
+.cell.on { background: var(--text-2); }
+.cell.live { background: var(--accent); }
+.track { height: 5px; background: var(--surface-2); margin-top: 5px; border-radius: 1px; overflow: hidden; }
+.track span { display: block; height: 100%; background: var(--text-2); }
+.steps { list-style: none; margin: 0; padding: 0; }
+.step { position: relative; padding: 0 0 14px 30px; }
+.step::before { content: ""; position: absolute; left: 10px; top: 24px; bottom: 2px; width: 1px; background: var(--line); }
+.step-num { position: absolute; left: 0; top: 0; width: 21px; height: 21px; border-radius: 50%; border: 1px solid var(--line-strong); display: grid; place-items: center; font-size: 11px; background: var(--rail); color: var(--text-3); }
+.step.live .step-num { border-color: var(--accent); color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.step-top { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; min-height: 21px; }
+.step-label { font-weight: 600; }
+.calls { display: grid; gap: 6px; margin-top: 6px; }
+.calls.par { border-left: 2px solid var(--line-strong); padding-left: 8px; }
+.par-tag { font-size: 10.5px; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.06em; }
+.call { border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
+.call.err { border-color: var(--err); }
+.call-h { display: flex; align-items: center; gap: 7px; width: 100%; border: 0; background: none; text-align: left; padding: 6px 8px 2px; }
+.call-tool { flex: 1; min-width: 0; font-family: Consolas, ui-monospace, monospace; font-size: 12px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.call-ms { font-size: 11px; color: var(--text-3); white-space: nowrap; }
+.call-sum { padding: 0 8px 6px 8px; font-size: 12px; color: var(--text-3); overflow-wrap: anywhere; }
+.call-sum .tag { color: var(--ok); border: 1px solid var(--ok); border-radius: 4px; padding: 0 5px; font-size: 10.5px; margin-left: 4px; }
+.call-body { border-top: 1px solid var(--line); padding: 8px 10px; display: grid; gap: 6px; }
+.call-body h5 { margin: 0; font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-3); font-weight: 600; }
+.call-body pre { margin: 0; background: var(--code); border: 1px solid var(--line); border-radius: 4px; padding: 6px 8px; font-size: 11.5px; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 260px; overflow-y: auto; }
+.call-body pre.err { color: var(--err); background: var(--err-soft); }
+.call-body ul { margin: 0; padding-left: 18px; }
+.done-card { border: 1px solid var(--line); border-radius: 6px; background: var(--surface); padding: 8px 12px; display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; font-size: 12px; }
+.done-card dt { color: var(--text-3); font-size: 10.5px; }
+.done-card dd { margin: 0; font-family: Consolas, ui-monospace, monospace; }
+.done-card .wide { grid-column: 1 / -1; }
+@media (max-width: 1100px) {
+  .app.trace-open { grid-template-columns: 280px minmax(0, 1fr); }
+  .trace { position: fixed; right: 0; top: 0; bottom: 0; width: min(440px, 92vw); box-shadow: var(--shadow); z-index: 20; }
+}
+@media (max-width: 760px) {
+  .app, .app.trace-open { grid-template-columns: minmax(0, 1fr); }
+  .rail { display: none; }
+}
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <aside class="rail">
+    <div class="mark">Ask Caboodle <span class="pill">local test</span></div>
+    <section class="connect">
+      <label>API <input class="field" id="apiUrl" spellcheck="false"></label>
+      <div id="signedOut">
+        <form id="loginForm">
+          <input class="field" id="email" type="email" placeholder="Email" autocomplete="username" required>
+          <input class="field" id="password" type="password" placeholder="Password" autocomplete="current-password" required>
+          <button class="btn btn-primary" type="submit">Sign in</button>
+        </form>
+        <details>
+          <summary class="muted">Or paste a token</summary>
+          <textarea class="field" id="tokenInput" rows="3" spellcheck="false"></textarea>
+          <button class="btn" id="useToken" type="button">Use token</button>
+        </details>
+      </div>
+      <div id="signedIn" class="row" hidden><span class="grow" id="userName"></span><button class="btn-link" id="signOut" type="button">Sign out</button></div>
+      <div class="row"><span class="muted">Brand</span><span class="grow" id="brandName"></span><button class="btn-link" id="changeBrand" type="button">Change</button></div>
+      <div id="brandPicker" hidden>
+        <input class="field" id="brandSearch" placeholder="Search brands, or paste a BrandID">
+        <ul class="brand-results" id="brandResults"></ul>
+        <button class="btn-link" id="noBrand" type="button">No brand</button>
+      </div>
+      <details>
+        <summary class="muted">Organization (only if you belong to several)</summary>
+        <input class="field" id="orgId" placeholder="OrganizationID" spellcheck="false">
+      </details>
+      <div class="muted" id="usage"></div>
+    </section>
+    <div class="hist-head"><span>Conversations</span><button class="btn-link" id="newChat" type="button">New</button></div>
+    <ul class="history" id="history"></ul>
+  </aside>
+
+  <main class="main">
+    <header class="main-head">
+      <h1 id="convTitle">New conversation</h1>
+      <label>Typing
+        <select id="typing">
+          <option value="natural">natural</option>
+          <option value="fast">fast</option>
+          <option value="instant">instant</option>
+        </select>
+      </label>
+      <button class="btn" id="traceToggle" type="button">Run trace</button>
+    </header>
+    <div class="scroll" id="scroll"><div class="convo" id="convo"></div></div>
+    <footer class="composer-wrap">
+      <div class="status" id="status"></div>
+      <form class="composer" id="composer">
+        <textarea id="question" rows="1" placeholder="Ask about your Caboodle data"></textarea>
+        <button class="btn btn-primary" id="send" type="submit">Ask</button>
+        <button class="btn" id="stop" type="button" hidden>Stop</button>
+      </form>
+    </footer>
+  </main>
+
+  <aside class="trace" id="trace" hidden>
+    <header class="trace-head"><h2>Run trace</h2><span id="traceStatus"></span><button class="btn" id="traceClose" type="button">Close</button></header>
+    <div class="trace-body" id="traceBody"></div>
+  </aside>
+</div>
+
+<script>
+const DEFAULT_API = 'http://localhost:5000';
+const DEFAULT_BRAND = { id: '0303a5ee-9913-47ef-ba6d-cdea180a723f', name: 'Bubbies' };
+const CORRECTING = "Correcting figures that didn't match the data";
+const WORDS_PER_SECOND = { natural: 38, fast: 140 };
+const REASONS = { 'wrong-number': 'Wrong number', 'wrong-entity': 'Wrong entity', 'missing-context': 'Missing context', other: 'Other' };
+const PALETTE = ['#0b6e5a', '#c17b0c', '#2a66a6', '#a64f88', '#6b8f2a', '#8a5a2b', '#3d5670'];
+const STARTERS = [
+  'How many cases did we ship to Sprouts through KeHE each month this year?',
+  'Which retailers took the most cases last quarter?',
+  'What did we spend on TPRs at Sprouts in Q4?',
+  'Which banners carry our products?',
+];
+
+const params = new URLSearchParams(location.search);
+const store = {
+  get(key) { try { return sessionStorage.getItem(key); } catch { return null; } },
+  set(key, value) { try { if (value == null || value === '') sessionStorage.removeItem(key); else sessionStorage.setItem(key, value); } catch { } },
+};
+
+const state = {
+  api: params.get('api') || store.get('api') || DEFAULT_API,
+  token: params.get('token') || store.get('token'),
+  userName: store.get('userName') || '',
+  brandId: (params.get('brand') ?? store.get('brandId') ?? DEFAULT_BRAND.id).replace(/^none$/, ''),
+  brandName: params.get('brand') ? '' : store.get('brandName') ?? DEFAULT_BRAND.name,
+  orgId: store.get('orgId') || '',
+  sessionId: null,
+  maxSteps: 12,
+  wallClockSeconds: 180,
+  answers: [],
+  traced: null,
+  running: null,
+  typing: store.get('typing') || 'natural',
+  isAdmin: false,
+};
+
+const $ = selector => document.querySelector(selector);
+const esc = value => String(value ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]);
+const seconds = value => value == null ? '–' : `${value.toFixed(1)} s`;
+const markdown = text => DOMPurify.sanitize(marked.parse(text || '', { gfm: true }));
+const utc = value => new Date(/(Z|[+-]\d\d:?\d\d)$/.test(value) ? value : `${value}Z`);
+
+class ApiError extends Error {
+  constructor(status, message) {
+    super(message);
+    this.status = status;
+  }
+}
+
+async function readError(response) {
+  const text = await response.text();
+  try {
+    const data = JSON.parse(text);
+    const parts = [data.messages, data.message, data.title, data.detail, data.errors && Object.values(data.errors).flat()].flat().filter(Boolean);
+    return parts.length ? parts.join(' ') : text;
+  } catch {
+    return text || response.statusText;
+  }
+}
+
+async function api(path, { method = 'GET', body, signal, accept } = {}) {
+  const headers = {};
+  if (state.token) headers.Authorization = `Bearer ${state.token}`;
+  if (state.brandId) headers.BrandID = state.brandId;
+  if (state.orgId) headers.OrganizationID = state.orgId;
+  if (body) headers['Content-Type'] = 'application/json';
+  if (accept) headers.Accept = accept;
+  const response = await fetch(`${state.api.replace(/\/+$/, '')}/api/v1/${path}`, { method, headers, body: body ? JSON.stringify(body) : undefined, signal });
+  if (!response.ok) {
+    if (response.status === 401) setSignedOut('Signed out: the token was refused. Sign in again.');
+    throw new ApiError(response.status, `${response.status}: ${await readError(response)}`);
+  }
+
+  return response;
+}
+
+async function* readEvents(response) {
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, '\n');
+    let end;
+    while ((end = buffer.indexOf('\n\n')) >= 0) {
+      const raw = buffer.slice(0, end);
+      buffer = buffer.slice(end + 2);
+      let name = 'message';
+      let data = '';
+      for (const line of raw.split('\n')) {
+        if (line.startsWith('event:')) name = line.slice(6).trim();
+        else if (line.startsWith('data:')) data += line.slice(5).trimStart();
+      }
+
+      if (data) yield { name, payload: JSON.parse(data) };
+    }
+  }
+}
+
+/* ---------- connection ---------- */
+
+function setSignedIn(name) {
+  state.userName = name;
+  store.set('userName', name);
+  $('#signedOut').hidden = true;
+  $('#signedIn').hidden = false;
+  $('#userName').textContent = name || 'Signed in';
+  loadHistory();
+  loadUsage();
+}
+
+function setSignedOut(message) {
+  state.token = null;
+  store.set('token', null);
+  $('#signedOut').hidden = false;
+  $('#signedIn').hidden = true;
+  $('#history').innerHTML = '';
+  $('#usage').textContent = message || '';
+}
+
+async function signIn(email, password) {
+  const response = await fetch(`${state.api.replace(/\/+$/, '')}/api/v1/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password }),
+  });
+  if (!response.ok) throw new Error(await readError(response));
+  const result = await response.json();
+  state.token = result.tokenInfo?.token;
+  if (!state.token) throw new Error('The login response had no token.');
+  store.set('token', state.token);
+  const user = result.userInfo || {};
+  setSignedIn([user.firstName, user.lastName].filter(Boolean).join(' ') || user.email || email);
+}
+
+function showBrand() {
+  $('#brandName').textContent = state.brandId ? (state.brandName || state.brandId) : 'No brand';
+}
+
+function chooseBrand(id, name) {
+  state.brandId = id;
+  state.brandName = name;
+  store.set('brandId', id || 'none');
+  store.set('brandName', name || '');
+  showBrand();
+  $('#brandPicker').hidden = true;
+  newConversation();
+  loadHistory();
+}
+
+let brandSearchTimer;
+async function searchBrands(text) {
+  const list = $('#brandResults');
+  if (/^[0-9a-f-]{36}$/i.test(text.trim())) {
+    list.innerHTML = `<li><button type="button" data-id="${esc(text.trim())}" data-name="">Use BrandID ${esc(text.trim())}</button></li>`;
+    return;
+  }
+
+  try {
+    const response = await api(`brands?brandName=${encodeURIComponent(text)}&PageSize=20`);
+    const page = await response.json();
+    const brands = page.data || page.items || [];
+    list.innerHTML = brands.length
+      ? brands.map(brand => `<li><button type="button" data-id="${esc(brand.id)}" data-name="${esc(brand.name)}">${esc(brand.name)}</button></li>`).join('')
+      : '<li class="muted" style="padding:5px 8px">No brand found</li>';
+  } catch (error) {
+    list.innerHTML = `<li class="muted" style="padding:5px 8px">${esc(error.message)}</li>`;
+  }
+}
+
+async function loadUsage() {
+  try {
+    const usage = await (await api('askcaboodle/usage')).json();
+    const left = usage.questionsLeftToday == null ? 'no daily limit' : `${usage.questionsLeftToday} questions left today`;
+    const cost = usage.costUsd == null ? '' : ` · $${Number(usage.costUsd).toFixed(2)} this month`;
+    if (usage.costUsd != null) state.isAdmin = true;
+    $('#usage').textContent = left + cost;
+  } catch (error) {
+    $('#usage').textContent = error.message;
+  }
+}
+
+/* ---------- history ---------- */
+
+async function loadHistory() {
+  if (!state.token) return;
+  try {
+    const page = await (await api('askcaboodle/sessions?pageSize=40&currentPage=1')).json();
+    const sessions = page.data || [];
+    $('#history').innerHTML = sessions.map(session => `
+      <li class="${session.id === state.sessionId ? 'active' : ''}">
+        <button class="open" type="button" data-session="${esc(session.id)}" title="${esc(session.title)}">
+          <span>${esc(session.title)}</span><small>${esc(utc(session.lastActivityOn).toLocaleString())} ·${session.messageCount} question${session.messageCount === 1 ? '' : 's'}</small>
+        </button>
+        <button class="del" type="button" data-delete="${esc(session.id)}" title="Delete">✕</button>
+      </li>`).join('') || '<li class="muted" style="padding:6px 8px;font-size:12.5px">No conversations yet</li>';
+  } catch (error) {
+    $('#history').innerHTML = `<li class="muted" style="padding:6px 8px;font-size:12.5px">${esc(error.message)}</li>`;
+  }
+}
+
+async function openSession(id) {
+  if (state.running) return;
+  try {
+    const session = await (await api(`askcaboodle/sessions/${id}`)).json();
+    resetConversation();
+    state.sessionId = session.id;
+    $('#convTitle').textContent = session.title;
+    for (const message of session.messages) {
+      const answer = createAnswer(message.question, false);
+      fillFromHistory(answer, message);
+      state.answers.push(answer);
+      mountAnswer(answer);
+      renderAll(answer);
+    }
+
+    loadHistory();
+    if (params.get('trace') === '1' && state.answers.length) showTrace(state.answers[state.answers.length - 1]);
+  } catch (error) {
+    toast(error.message);
+  }
+}
+
+async function deleteSession(id) {
+  if (!confirm('Delete this conversation?')) return;
+  try {
+    await api(`askcaboodle/sessions/${id}`, { method: 'DELETE' });
+    if (state.sessionId === id) newConversation();
+    loadHistory();
+  } catch (error) {
+    toast(error.message);
+  }
+}
+
+function fillFromHistory(answer, message) {
+  answer.messageId = message.id;
+  answer.frame = { kind: message.kind, headline: message.headline, notes: message.notes, options: message.options || [] };
+  answer.data = (message.data || [])[0] || null;
+  answer.suggestions = message.suggestions || [];
+  answer.unverified = message.unverifiedFigures || [];
+  answer.rating = message.rating;
+  answer.feedbackReason = message.feedbackReason;
+  const answered = message.status === 'answered' || message.status === 'step-limit';
+  answer.status = answered ? 'done' : message.status === 'cancelled' ? 'stopped' : 'error';
+  answer.finalText = answered ? message.answer || '' : '';
+  answer.sentences = [answer.finalText];
+  answer.target = answer.finalText;
+  answer.shownChars = answer.target.length;
+  if (!answered && message.status !== 'cancelled') answer.error = { message: message.errorMessage || 'No answer.', code: message.status };
+  answer.done = { toolCalls: message.toolCalls, tokensIn: message.tokensIn, tokensOut: message.tokensOut, totalTokens: message.totalTokens, estimatedCostUsd: message.costUsd, model: message.model };
+  answer.askedOn = message.askedOn;
+}
+
+/* ---------- answers ---------- */
+
+function createAnswer(question, live) {
+  return {
+    question, live, t0: performance.now(), times: {}, events: [], status: live ? 'running' : 'done',
+    steps: new Map(), currentStep: null, frame: null, data: null, suggestions: [], sentences: [], target: '',
+    shownChars: 0, renderedText: null, wordCredit: 0, lastTick: null, finalText: null, unverified: [], rewinds: 0,
+    orderProblems: 0, mismatch: false, correcting: false, done: null, error: null, messageId: null, rating: null,
+    feedbackReason: null, feedbackOpen: false, openCalls: new Set(), chart: null, view: null, traceLoaded: live,
+    progressLabel: null, revealed: !live, animateReveal: false, el: {},
+  };
+}
+
+function mountAnswer(answer) {
+  const empty = $('#convo .empty');
+  if (empty) empty.remove();
+  const turn = document.createElement('article');
+  turn.innerHTML = `
+    <div class="q"><div></div></div>
+    <section class="a">
+      <header class="a-head"><strong>Ask Caboodle</strong><span data-el="state"></span><button class="run-chip" type="button" data-el="chip"></button></header>
+      <div class="timing" data-el="timing"></div>
+      <div data-el="frame"></div>
+      <div class="prose" data-el="prose"></div>
+      <div data-el="pause"></div>
+      <div data-el="unverified"></div>
+      <div data-el="error"></div>
+      <div data-el="data"></div>
+      <div data-el="options"></div>
+      <div class="sugs" data-el="sugs"></div>
+      <div data-el="actions"></div>
+    </section>`;
+  turn.querySelector('.q div').textContent = answer.question;
+  for (const element of turn.querySelectorAll('[data-el]')) answer.el[element.dataset.el] = element;
+  answer.el.turn = turn;
+  answer.el.chip.addEventListener('click', () => showTrace(answer));
+  $('#convo').appendChild(turn);
+}
+
+function mark(answer, key, time) {
+  if (answer.times[key] == null) answer.times[key] = time;
+}
+
+function stepOf(answer, number) {
+  let step = answer.steps.get(number);
+  if (!step) {
+    step = { step: number, label: 'Thinking', calls: [] };
+    answer.steps.set(number, step);
+  }
+
+  return step;
+}
+
+function onEvent(answer, name, payload) {
+  const time = (performance.now() - answer.t0) / 1000;
+  answer.events.push({ time, name });
+  switch (name) {
+    case 'session':
+      state.sessionId = payload.sessionId;
+      state.maxSteps = payload.maxSteps ?? state.maxSteps;
+      state.wallClockSeconds = payload.wallClockSeconds ?? state.wallClockSeconds;
+      answer.maxSteps = state.maxSteps;
+      answer.wallClockSeconds = state.wallClockSeconds;
+      break;
+    case 'progress':
+      answer.progressLabel = payload.label;
+      if (payload.label === CORRECTING) answer.correcting = true;
+      break;
+    case 'step':
+      stepOf(answer, payload.step).label = payload.label;
+      answer.currentStep = payload.step;
+      mark(answer, 'firstStep', time);
+      if (payload.label === 'Writing the answer') mark(answer, 'writing', time);
+      break;
+    case 'tool-start':
+      stepOf(answer, payload.step).calls.push({ callId: payload.callId, tool: payload.tool, summary: payload.summary, selfCorrection: payload.selfCorrection, ok: undefined });
+      break;
+    case 'tool-end': {
+      const call = [...answer.steps.values()].flatMap(step => step.calls).find(item => item.callId === payload.callId);
+      if (call) Object.assign(call, { ok: payload.ok, rowCount: payload.rowCount, durationMs: payload.durationMs, detail: payload.detail });
+      mark(answer, 'firstTool', time);
+      break;
+    }
+    case 'frame':
+      answer.frame = payload;
+      answer.data = null;
+      answer.suggestions = [];
+      mark(answer, 'frame', time);
+      renderFrame(answer);
+      renderData(answer);
+      renderSuggestions(answer);
+      break;
+    case 'data':
+      answer.data = payload;
+      mark(answer, 'data', time);
+      renderData(answer);
+      break;
+    case 'suggestions':
+      answer.suggestions = payload.suggestions || [];
+      renderSuggestions(answer);
+      break;
+    case 'text-sentence':
+      answer.correcting = false;
+      if (payload.index !== answer.sentences.length) {
+        answer.orderProblems++;
+        answer.sentences.length = Math.min(answer.sentences.length, payload.index);
+      }
+
+      answer.sentences[payload.index] = payload.text;
+      answer.target = answer.sentences.join('');
+      mark(answer, 'firstSentence', time);
+      answer.times.lastSentence = time;
+      break;
+    case 'text-rewind':
+      answer.sentences = answer.sentences.slice(0, payload.keep);
+      answer.target = answer.sentences.join('');
+      answer.shownChars = Math.min(answer.shownChars, answer.target.length);
+      answer.rewinds++;
+      renderProse(answer);
+      answer.el.prose.classList.remove('flash');
+      void answer.el.prose.offsetWidth;
+      answer.el.prose.classList.add('flash');
+      break;
+    case 'text':
+      answer.correcting = false;
+      answer.finalText = payload.text;
+      answer.unverified = payload.unverifiedFigures || [];
+      mark(answer, 'text', time);
+      if (answer.shownChars >= answer.target.length) finishText(answer);
+      break;
+    case 'done':
+      answer.done = payload;
+      answer.messageId = payload.messageId;
+      if (payload.model != null) state.isAdmin = true;
+      mark(answer, 'done', time);
+      break;
+    case 'error':
+      answer.error = payload;
+      mark(answer, 'error', time);
+      break;
+  }
+
+  renderStatus();
+  renderProse(answer);
+  renderPause(answer);
+  renderTiming(answer);
+  renderChip(answer);
+  if (state.traced === answer) renderTrace();
+}
+
+// The table or chart, the clarify options and the suggestions come after the text has been typed, not before it.
+function reveal(answer) {
+  if (answer.revealed) return;
+  answer.revealed = true;
+  answer.animateReveal = true;
+  renderFrame(answer);
+  renderData(answer);
+  renderSuggestions(answer);
+  renderActions(answer);
+  answer.animateReveal = false;
+}
+
+async function ask(question) {
+  question = question.trim();
+  if (!question || state.running) return;
+  if (!state.token) {
+    toast('Sign in first.');
+    return;
+  }
+
+  if (!state.sessionId) $('#convTitle').textContent = question;
+  const answer = createAnswer(question, true);
+  answer.maxSteps = state.maxSteps;
+  answer.wallClockSeconds = state.wallClockSeconds;
+  state.answers.push(answer);
+  mountAnswer(answer);
+  renderAll(answer);
+  if (!$('#trace').hidden) showTrace(answer);
+  scrollToEnd(true);
+
+  const controller = new AbortController();
+  state.running = { answer, controller };
+  renderComposer();
+  try {
+    const response = await api('askcaboodle/ask', { method: 'POST', body: { question, sessionId: state.sessionId }, signal: controller.signal, accept: 'text/event-stream' });
+    if (!(response.headers.get('content-type') || '').includes('text/event-stream')) throw new Error(`Expected an event stream, got ${response.headers.get('content-type')}: ${await response.text()}`);
+    for await (const event of readEvents(response)) onEvent(answer, event.name, event.payload);
+    answer.status = answer.error ? 'error' : answer.done ? 'done' : 'ended';
+  } catch (error) {
+    if (error.name === 'AbortError') {
+      answer.status = 'stopped';
+    } else {
+      answer.status = 'error';
+      answer.error = answer.error || { message: error.message, code: error instanceof ApiError ? `http ${error.status}` : 'network' };
+    }
+  } finally {
+    state.running = null;
+    if (answer.finalText != null && answer.shownChars >= answer.target.length) finishText(answer);
+    if (answer.status !== 'done' || answer.finalText == null) reveal(answer);
+    renderAll(answer);
+    renderComposer();
+    loadHistory();
+    loadUsage();
+  }
+}
+
+/* ---------- typing ---------- */
+
+function advanceWords(text, from, count) {
+  let index = from;
+  for (let word = 0; word < count && index < text.length; word++) {
+    while (index < text.length && /\s/.test(text[index])) index++;
+    while (index < text.length && !/\s/.test(text[index])) index++;
+  }
+
+  return index;
+}
+
+function typingTick() {
+  const now = performance.now();
+  for (const answer of state.answers) {
+    if (answer.shownChars < answer.target.length) {
+      if (state.typing === 'instant') {
+        answer.shownChars = answer.target.length;
+      } else {
+        const elapsed = answer.lastTick == null ? 0 : Math.min(0.25, (now - answer.lastTick) / 1000);
+        const backlog = answer.target.slice(answer.shownChars).split(/\s+/).filter(Boolean).length;
+        const speed = WORDS_PER_SECOND[state.typing] * Math.max(1, backlog / 120);
+        answer.wordCredit += elapsed * speed;
+        const words = Math.floor(answer.wordCredit);
+        if (words > 0) {
+          answer.wordCredit -= words;
+          answer.shownChars = advanceWords(answer.target, answer.shownChars, words);
+        }
+      }
+
+      answer.lastTick = now;
+      renderProse(answer);
+      if (answer.shownChars >= answer.target.length) {
+        answer.times.typed = (now - answer.t0) / 1000;
+        if (answer.finalText != null) finishText(answer);
+        renderTiming(answer);
+      }
+    } else {
+      answer.lastTick = null;
+      answer.wordCredit = 0;
+    }
+  }
+}
+
+function finishText(answer) {
+  if (answer.finalText == null || answer.textFinished) return;
+  answer.textFinished = true;
+  if (answer.target !== answer.finalText) {
+    answer.mismatch = answer.live && answer.sentences.length > 0;
+    answer.sentences = [answer.finalText];
+    answer.target = answer.finalText;
+    answer.shownChars = answer.target.length;
+  }
+
+  renderProse(answer);
+  renderUnverified(answer);
+  renderTiming(answer);
+  reveal(answer);
+}
+
+/* ---------- rendering ---------- */
+
+function renderAll(answer) {
+  renderFrame(answer);
+  renderProse(answer);
+  renderPause(answer);
+  renderUnverified(answer);
+  renderError(answer);
+  renderData(answer);
+  renderSuggestions(answer);
+  renderActions(answer);
+  renderTiming(answer);
+  renderChip(answer);
+  if (state.traced === answer) renderTrace();
+}
+
+function renderProse(answer) {
+  const shown = answer.target.slice(0, answer.shownChars);
+  const typing = answer.shownChars < answer.target.length || (answer.status === 'running' && answer.finalText == null && answer.target.length > 0);
+  const waiting = answer.live && answer.status === 'running' && !answer.correcting && answer.target.length === 0 && (answer.frame != null || answer.times.writing != null);
+  const key = waiting ? '\u0000writing' : shown;
+  answer.el.prose.classList.toggle('typing', typing);
+  if (key === answer.renderedText) return;
+  answer.renderedText = key;
+  answer.el.prose.innerHTML = waiting ? '<div class="writing reveal"><span></span><span></span><span></span></div>' : markdown(typing ? closeOpenMarkers(shown) : shown);
+  scrollToEnd(false);
+}
+
+// Text cut mid-way can hold an opening ** or ` whose closing one hasn't been typed yet; close it so it renders as bold or code.
+function closeOpenMarkers(text) {
+  let closed = text;
+  if ((closed.match(/\*\*/g) || []).length % 2 === 1) closed += '**';
+  if ((closed.match(/`/g) || []).length % 2 === 1) closed += '`';
+  return closed;
+}
+
+function renderPause(answer) {
+  answer.el.pause.innerHTML = answer.correcting && answer.status === 'running'
+    ? `<div class="pause"><span class="spin"></span>${esc(CORRECTING)} · rewriting</div>`
+    : '';
+}
+
+function renderUnverified(answer) {
+  answer.el.unverified.innerHTML = answer.unverified.length && (answer.textFinished || !answer.live)
+    ? `<div class="unverified ${answer.live ? 'reveal' : ''}">Some figures in this answer couldn't be checked against the data: ${esc(answer.unverified.join(', '))}.</div>`
+    : '';
+}
+
+function renderError(answer) {
+  let html = '';
+  if (answer.error) {
+    const resets = answer.error.resetsAt ? ` Resets ${esc(new Date(answer.error.resetsAt).toLocaleString())}.` : '';
+    html = `<div class="error-box"><b>${esc(answer.error.code || 'error')}</b> · ${esc(answer.error.message)}${resets}</div>`;
+  } else if (answer.status === 'stopped') {
+    html = '<div class="stopped">Stopped. The question is saved as cancelled and counts toward today\'s questions.</div>';
+  } else if (answer.status === 'ended') {
+    html = '<div class="error-box">The stream ended without a done event.</div>';
+  }
+
+  answer.el.error.innerHTML = html;
+}
+
+function renderFrame(answer) {
+  const frame = answer.frame;
+  if (!frame) {
+    answer.frameHtml = null;
+    answer.el.frame.innerHTML = '';
+    answer.el.options.innerHTML = '';
+    return;
+  }
+
+  let html = '';
+  const headline = frame.headline;
+  if (headline) {
+    const row = headline.rowLabel ? ` · ${esc(headline.rowLabel)}` : '';
+    const ties = headline.ties ? ` (tied with ${headline.ties} other row${headline.ties === 1 ? '' : 's'})` : '';
+    html += `<div class="headline"><div class="hl-val">${esc(headline.display)}</div><div class="hl-lbl">${esc(headline.label)}${row}${ties}</div></div>`;
+  }
+
+  const notes = frame.notes || {};
+  if (frame.kind === 'cannot_answer') {
+    html += `<div class="cannot"><h4>Not answerable</h4><div class="need"><div><b>Needed</b><br>${esc(notes.needed || '–')}</div><div><b>Available</b><br>${esc(notes.available || '–')}</div></div></div>`;
+  }
+
+  const rows = [['Scope', notes.scope], ['Period', notes.period], ['Source', notes.source]].filter(([, value]) => value);
+  if (rows.length) html += `<div class="notes">${rows.map(([key, value]) => `<div class="note"><b>${key}</b><span>${esc(value)}</span></div>`).join('')}</div>`;
+  if (answer.frameHtml !== html) {
+    answer.frameHtml = html;
+    answer.el.frame.innerHTML = answer.live ? `<div class="reveal">${html}</div>` : html;
+  }
+
+  const options = frame.kind === 'clarify' && answer.revealed ? frame.options || [] : [];
+  answer.el.options.innerHTML = options.length
+    ? `<div class="options ${answer.animateReveal ? 'reveal' : ''}">${options.map(option => `<button class="option" type="button" data-option="${esc(option.label)}"><b>${esc(option.label)}</b>${option.detail ? `<small>${esc(option.detail)}</small>` : ''}</button>`).join('')}</div>`
+    : '';
+  for (const button of answer.el.options.querySelectorAll('[data-option]')) {
+    button.addEventListener('click', () => ask(button.dataset.option));
+  }
+}
+
+function formatValue(value, format) {
+  if (value == null || value === '') return '–';
+  const number = Number(value);
+  switch (format) {
+    case 'count': return number.toLocaleString('en-US', { maximumFractionDigits: 0 });
+    case 'number': return number.toLocaleString('en-US', { maximumFractionDigits: 2 });
+    case 'usd': return `${number < 0 ? '-' : ''}$${Math.abs(number).toLocaleString('en-US', Math.abs(number) < 100 ? { minimumFractionDigits: 2, maximumFractionDigits: 2 } : { maximumFractionDigits: 0 })}`;
+    case 'percent': return `${number.toLocaleString('en-US', { maximumFractionDigits: 1 })}%`;
+    default: return String(value);
+  }
+}
+
+const isNumeric = format => ['count', 'number', 'usd', 'percent'].includes(format);
+
+function renderData(answer) {
+  const data = answer.revealed ? answer.data : null;
+  const formats = data?.formats || {};
+  const chartable = data ? data.chartable ?? (data.x != null && (data.y || []).length > 0) : false;
+  const view = answer.view || (chartable && data.chart !== 'table' ? 'chart' : 'table');
+  if (answer.renderedData === data && answer.renderedView === view) return;
+  answer.renderedData = data;
+  answer.renderedView = view;
+  if (answer.chart) {
+    answer.chart.destroy();
+    answer.chart = null;
+  }
+
+  if (!data) {
+    answer.el.data.innerHTML = '';
+    return;
+  }
+
+  const tones = new Map();
+  for (const highlight of data.highlights || []) for (const row of highlight.rows) tones.set(row, highlight.tone);
+  const head = data.columns.map(column => `<th class="${isNumeric(formats[column]) ? 'n' : ''}">${esc(column)}</th>`).join('');
+  const body = data.rows.map((row, index) => `<tr class="${tones.get(index) || ''}" style="animation-delay:${Math.min(index * 35, 500)}ms">${row.map((cell, column) => `<td class="${isNumeric(formats[data.columns[column]]) ? 'n' : ''}">${esc(formatValue(cell, formats[data.columns[column]]))}</td>`).join('')}</tr>`).join('');
+  const totals = data.totals && Object.keys(data.totals).length
+    ? `<tfoot><tr>${data.columns.map((column, index) => `<td class="${isNumeric(formats[column]) ? 'n' : ''}">${data.totals[column] ? esc(data.totals[column].display) : index === 0 ? 'Total' : ''}</td>`).join('')}</tr></tfoot>`
+    : '';
+  const switcher = chartable
+    ? `<span class="seg"><button type="button" data-view="table" class="${view === 'table' ? 'on' : ''}">Table</button><button type="button" data-view="chart" class="${view === 'chart' ? 'on' : ''}">Chart</button></span>`
+    : '';
+  const rowCount = data.truncated ? `showing the first ${data.rows.length} of more than ${data.rowCount} rows` : `${data.rowCount} row${data.rowCount === 1 ? '' : 's'}`;
+  answer.el.data.innerHTML = `
+    <div class="data ${answer.animateReveal ? 'reveal' : ''}">
+      <div class="data-head"><span class="data-title">${esc(data.title)}</span><span class="muted" style="font-size:12px">${esc(rowCount)}</span>${switcher}</div>
+      ${view === 'chart' ? '<div class="chart-box"><canvas></canvas></div>' : `<div class="tbl"><table class="dt"><thead><tr>${head}</tr></thead><tbody>${body}</tbody>${totals}</table></div>`}
+    </div>`;
+  for (const button of answer.el.data.querySelectorAll('[data-view]')) {
+    button.addEventListener('click', () => {
+      answer.view = button.dataset.view;
+      renderData(answer);
+    });
+  }
+
+  if (view === 'chart' && window.Chart) answer.chart = drawChart(answer.el.data.querySelector('canvas'), data);
+}
+
+function drawChart(canvas, data) {
+  const xIndex = data.columns.indexOf(data.x);
+  const formats = data.formats || {};
+  const label = row => formatValue(row[xIndex], formats[data.x] === 'date' ? 'text' : formats[data.x]);
+  let labels;
+  let datasets;
+  if (data.series && data.columns.includes(data.series)) {
+    const seriesIndex = data.columns.indexOf(data.series);
+    const yIndex = data.columns.indexOf(data.y[0]);
+    labels = [...new Set(data.rows.map(label))];
+    const groups = [...new Set(data.rows.map(row => String(row[seriesIndex])))];
+    datasets = groups.map((group, index) => ({
+      label: group,
+      data: labels.map(x => {
+        const row = data.rows.find(item => label(item) === x && String(item[seriesIndex]) === group);
+        return row ? Number(row[yIndex]) : null;
+      }),
+      backgroundColor: PALETTE[index % PALETTE.length],
+      borderColor: PALETTE[index % PALETTE.length],
+    }));
+  } else {
+    labels = data.rows.map(label);
+    datasets = data.y.map((column, index) => ({
+      label: column,
+      data: data.rows.map(row => Number(row[data.columns.indexOf(column)])),
+      backgroundColor: data.chart === 'pie' ? data.rows.map((_, row) => PALETTE[row % PALETTE.length]) : PALETTE[index % PALETTE.length],
+      borderColor: PALETTE[index % PALETTE.length],
+    }));
+  }
+
+  return new Chart(canvas, {
+    type: data.chart === 'line' ? 'line' : data.chart === 'pie' ? 'pie' : 'bar',
+    data: { labels, datasets },
+    options: { responsive: true, maintainAspectRatio: false, animation: { duration: 900, easing: 'easeOutQuart', delay: context => context.type === 'data' ? context.dataIndex * 45 : 0 }, plugins: { legend: { display: datasets.length > 1 || data.chart === 'pie' } } },
+  });
+}
+
+function renderSuggestions(answer) {
+  const suggestions = answer.revealed ? answer.suggestions : [];
+  if (answer.renderedSuggestions === suggestions) return;
+  answer.renderedSuggestions = suggestions;
+  answer.el.sugs.innerHTML = suggestions.map(suggestion => `<button class="sug ${answer.animateReveal ? 'reveal-late' : ''}" type="button">${esc(suggestion)}</button>`).join('');
+  answer.el.sugs.querySelectorAll('.sug').forEach((button, index) => button.addEventListener('click', () => ask(answer.suggestions[index])));
+}
+
+function renderActions(answer) {
+  if (!answer.messageId || answer.status === 'running' || !answer.revealed) {
+    answer.el.actions.innerHTML = '';
+    return;
+  }
+
+  const reason = answer.feedbackReason ? ` (${REASONS[answer.feedbackReason] || answer.feedbackReason})` : '';
+  answer.el.actions.innerHTML = `
+    <div class="actions ${answer.animateReveal ? 'reveal-late' : ''}">
+      <button class="act ${answer.rating === 'up' ? 'on' : ''}" type="button" data-act="up">▲ Helpful</button>
+      <button class="act ${answer.rating === 'down' ? 'on' : ''}" type="button" data-act="down">▼ Not right${answer.rating === 'down' ? esc(reason) : ''}</button>
+      <button class="act" type="button" data-act="copy">Copy</button>
+      <button class="act" type="button" data-act="trace">Trace</button>
+    </div>
+    ${answer.feedbackOpen ? `
+      <div class="fb">
+        <div class="chips">${Object.entries(REASONS).map(([key, text]) => `<button type="button" data-reason="${key}" class="${answer.pendingReason === key ? 'on' : ''}">${text}</button>`).join('')}</div>
+        <textarea class="field" rows="2" placeholder="What was wrong? (optional)" data-note></textarea>
+        <div class="row"><button class="btn btn-primary" type="button" data-act="send-down">Send</button><button class="btn-link" type="button" data-act="cancel">Cancel</button></div>
+      </div>` : ''}`;
+  answer.el.actions.querySelectorAll('[data-act]').forEach(button => button.addEventListener('click', () => onAction(answer, button.dataset.act)));
+  answer.el.actions.querySelectorAll('[data-reason]').forEach(button => button.addEventListener('click', () => {
+    answer.pendingReason = button.dataset.reason;
+    const note = answer.el.actions.querySelector('[data-note]').value;
+    renderActions(answer);
+    answer.el.actions.querySelector('[data-note]').value = note;
+  }));
+}
+
+async function onAction(answer, action) {
+  if (action === 'copy') {
+    try { await navigator.clipboard.writeText(answer.finalText || answer.target); toast('Copied.'); } catch { toast('Copy failed.'); }
+  } else if (action === 'trace') {
+    showTrace(answer);
+  } else if (action === 'down') {
+    answer.feedbackOpen = !answer.feedbackOpen;
+    renderActions(answer);
+  } else if (action === 'cancel') {
+    answer.feedbackOpen = false;
+    renderActions(answer);
+  } else if (action === 'up' || action === 'send-down') {
+    const rating = action === 'up' ? 'up' : 'down';
+    const reason = rating === 'down' ? answer.pendingReason || null : null;
+    const note = rating === 'down' ? answer.el.actions.querySelector('[data-note]')?.value || null : null;
+    try {
+      await api('askcaboodle/feedback', { method: 'POST', body: { messageId: answer.messageId, rating, reason, note } });
+      answer.rating = rating;
+      answer.feedbackReason = reason;
+      answer.feedbackOpen = false;
+      renderActions(answer);
+      toast('Feedback saved.');
+    } catch (error) {
+      toast(error.message);
+    }
+  }
+}
+
+function renderTiming(answer) {
+  if (!answer.live) {
+    answer.el.timing.innerHTML = answer.askedOn ? `<span class="t">asked ${esc(utc(answer.askedOn).toLocaleString())}</span>` : '';
+    return;
+  }
+
+  const t = answer.times;
+  const items = [
+    ['first step', t.firstStep],
+    ['first tool done', t.firstTool],
+    ['headline + table', t.frame, true],
+    ['writing the answer', t.writing],
+    ['first sentence', t.firstSentence, true],
+    ['last sentence', t.lastSentence],
+    ['typed', t.typed],
+    ['done', t.done ?? t.error],
+  ].filter(([, value]) => value != null).sort((left, right) => left[1] - right[1]);
+  let html = items.map(([label, value, highlight]) => `<span class="t ${highlight ? 'hl' : ''}">${label} <b>${seconds(value)}</b></span>`).join('');
+  if (answer.rewinds) html += `<span class="t">rewound ${answer.rewinds}×</span>`;
+  if (answer.textFinished && answer.live) {
+    html += answer.mismatch || answer.orderProblems
+      ? '<span class="t bad">sentences ≠ final text</span>'
+      : '<span class="t">sentences = final text ✓</span>';
+  }
+
+  answer.el.timing.innerHTML = html;
+}
+
+function renderChip(answer) {
+  const done = answer.done;
+  const steps = done?.steps ?? (answer.steps.size || null);
+  const calls = done?.toolCalls ?? [...answer.steps.values()].reduce((total, step) => total + step.calls.length, 0);
+  const elapsed = done?.elapsedMilliseconds != null ? done.elapsedMilliseconds / 1000 : answer.live ? (answer.times.done ?? (performance.now() - answer.t0) / 1000) : null;
+  const parts = [];
+  if (answer.status === 'running') parts.push('<span class="spin"></span>');
+  if (steps) parts.push(`${steps} step${steps === 1 ? '' : 's'}`);
+  parts.push(`${calls} tool call${calls === 1 ? '' : 's'}`);
+  if (elapsed != null) parts.push(seconds(elapsed));
+  if (done?.totalTokens != null) parts.push(`${(done.totalTokens / 1000).toFixed(1)}K tokens`);
+  if (done?.estimatedCostUsd != null) parts.push(`$${Number(done.estimatedCostUsd).toFixed(4)}`);
+  if (done?.model) parts.push(esc(done.model));
+  answer.el.chip.innerHTML = parts.join(' · ');
+  answer.el.chip.classList.toggle('traced', state.traced === answer && !$('#trace').hidden);
+  answer.el.state.innerHTML = {
+    running: '<span class="pill live">answering</span>',
+    error: '<span class="pill err">error</span>',
+    stopped: '<span class="pill warn">stopped</span>',
+    ended: '<span class="pill err">cut</span>',
+  }[answer.status] || '';
+}
+
+function renderStatus() {
+  const running = state.running?.answer;
+  if (!running) {
+    $('#status').innerHTML = '';
+    return;
+  }
+
+  const label = running.correcting ? `${CORRECTING} · rewriting` : running.progressLabel || 'Starting';
+  $('#status').innerHTML = `<span class="spin"></span><span>${esc(label)}</span><span class="time">${seconds((performance.now() - running.t0) / 1000)}</span>`;
+}
+
+function renderComposer() {
+  $('#send').hidden = !!state.running;
+  $('#stop').hidden = !state.running;
+  renderStatus();
+}
+
+/* ---------- trace drawer ---------- */
+
+async function showTrace(answer) {
+  state.traced = answer;
+  $('#trace').hidden = false;
+  $('#app').classList.add('trace-open');
+  state.answers.forEach(renderChip);
+  renderTrace();
+  if (answer && !answer.live && !answer.traceLoaded && answer.messageId && state.sessionId) {
+    answer.traceLoaded = true;
+    try {
+      const trace = await (await api(`askcaboodle/sessions/${state.sessionId}/messages/${answer.messageId}/trace`)).json();
+      answer.maxSteps = trace.maxSteps;
+      answer.wallClockSeconds = trace.wallClockSeconds;
+      answer.traceElapsed = trace.elapsedMilliseconds / 1000;
+      for (const step of trace.steps) answer.steps.set(step.step, { step: step.step, label: step.label, calls: step.calls });
+    } catch (error) {
+      answer.traceError = error.message;
+    }
+
+    if (state.traced === answer) renderTrace();
+  }
+}
+
+function hideTrace() {
+  $('#trace').hidden = true;
+  $('#app').classList.remove('trace-open');
+  state.answers.forEach(renderChip);
+}
+
+function callStatus(call) {
+  if (call.ok === undefined) return '<span class="spin"></span>';
+  if (call.ok === null) return '<span class="pill">not finished</span>';
+  return call.ok ? '<span class="pill ok">ok</span>' : '<span class="pill err">error</span>';
+}
+
+function callDetail(call) {
+  const detail = call.detail;
+  if (!detail) return '<div class="muted">No detail for this call.</div>';
+  let html = '';
+  if (detail.matches) html += `<h5>Matched names</h5>${detail.matches.length ? `<ul>${detail.matches.map(match => `<li>${esc(match.name)} <span class="muted">${esc(match.type)}</span></li>`).join('')}</ul>` : '<div class="muted">No match.</div>'}`;
+  if (detail.tables) html += `<h5>Tables</h5><div class="mono">${detail.tables.map(esc).join(', ')}</div>`;
+  if (detail.sql) html += `<h5>SQL</h5><pre>${esc(detail.sql)}</pre>`;
+  if (detail.error) html += `<h5>Error</h5><pre class="err">${esc(detail.error)}</pre>`;
+  if (detail.catalog) html += `<details><summary class="muted">Catalog text (${detail.catalog.length.toLocaleString()} characters)</summary><pre>${esc(detail.catalog)}</pre></details>`;
+  return html || '<div class="muted">No detail for this call.</div>';
+}
+
+function renderTrace() {
+  const answer = state.traced;
+  const body = $('#traceBody');
+  if (!answer) {
+    body.innerHTML = '<p class="muted">Ask a question, or open an answer\'s run chip.</p>';
+    $('#traceStatus').innerHTML = '';
+    return;
+  }
+
+  const scrollTop = body.scrollTop;
+  const running = answer.status === 'running';
+  $('#traceStatus').innerHTML = running ? '<span class="pill live">live</span>' : answer.error ? '<span class="pill err">error</span>' : '<span class="pill ok">done</span>';
+  const steps = [...answer.steps.values()].sort((left, right) => left.step - right.step);
+  const maxSteps = answer.maxSteps || state.maxSteps;
+  const wallClock = answer.wallClockSeconds || state.wallClockSeconds;
+  const used = answer.done?.steps ?? steps.length;
+  const cells = Array.from({ length: maxSteps }, (_, index) => `<span class="cell ${index < used ? (running && index === used - 1 ? 'live' : 'on') : ''}"></span>`).join('');
+  const elapsed = elapsedOf(answer);
+
+  let html = `<div class="trace-q"><span class="muted">Question</span><br>${esc(answer.question)}</div>
+    <div class="meters">
+      <div><div class="meter-l"><span>Steps</span><span class="mono">${used} / ${maxSteps}</span></div><div class="cells" style="grid-template-columns:repeat(${maxSteps},1fr)">${cells}</div></div>
+      <div><div class="meter-l"><span>Time</span><span class="mono" id="traceTime">${seconds(elapsed)} / ${wallClock} s</span></div><div class="track"><span id="traceTrack" style="width:${Math.min(100, (elapsed / wallClock) * 100)}%"></span></div></div>
+    </div>`;
+  if (answer.traceError) html += `<div class="error-box">${esc(answer.traceError)}</div>`;
+  if (!steps.length && !answer.traceError) html += `<p class="muted">${answer.live ? 'Waiting for the first step…' : 'Loading the trace…'}</p>`;
+  html += '<ol class="steps">';
+  for (const step of steps) {
+    const live = running && step.step === answer.currentStep;
+    const calls = step.calls.map(call => {
+      const key = `${step.step}:${call.callId}`;
+      const open = answer.openCalls.has(key);
+      const meta = [call.rowCount != null ? `${call.rowCount} rows` : '', call.durationMs != null ? `${call.durationMs} ms` : ''].filter(Boolean).join(' · ');
+      return `<div class="call ${call.ok === false ? 'err' : ''}">
+        <button class="call-h" type="button" data-call="${esc(key)}"><span class="call-tool">${esc(call.tool)}</span><span class="call-ms">${esc(meta)}</span>${callStatus(call)}</button>
+        <div class="call-sum">${esc(call.summary || '')}${call.selfCorrection ? '<span class="tag">self-correction</span>' : ''}</div>
+        ${open ? `<div class="call-body">${callDetail(call)}</div>` : ''}
+      </div>`;
+    }).join('');
+    html += `<li class="step ${live ? 'live' : ''}"><span class="step-num">${step.step}</span>
+      <div class="step-top"><span class="step-label">${esc(step.label)}</span>${live ? '<span class="spin"></span>' : ''}</div>
+      ${step.calls.length ? `<div class="calls ${step.calls.length > 1 ? 'par' : ''}">${step.calls.length > 1 ? `<span class="par-tag">${step.calls.length} calls in parallel</span>` : ''}${calls}</div>` : ''}
+    </li>`;
+  }
+
+  html += '</ol>';
+  const done = answer.done;
+  if (done) {
+    const rows = [
+      ['Steps', done.steps], ['Tool calls', done.toolCalls], ['Tokens in', done.tokensIn?.toLocaleString()], ['Tokens out', done.tokensOut?.toLocaleString()],
+      ['Elapsed', done.elapsedMilliseconds != null ? seconds(done.elapsedMilliseconds / 1000) : null], ['Questions left today', done.questionsLeftToday],
+      ['Cost', done.estimatedCostUsd != null ? `$${Number(done.estimatedCostUsd).toFixed(4)}` : null], ['Model', done.model],
+      ['Cache read', done.cacheReadTokens?.toLocaleString()], ['Cache write', done.cacheWriteTokens?.toLocaleString()],
+    ].filter(([, value]) => value != null);
+    html += `<dl class="done-card">${rows.map(([key, value]) => `<div><dt>${key}</dt><dd>${esc(value)}</dd></div>`).join('')}
+      ${done.queries ? `<div class="wide"><dt>Queries (platform admins only)</dt><dd>${done.queries.length}</dd></div>` : ''}</dl>`;
+  }
+
+  body.innerHTML = html;
+  body.scrollTop = scrollTop;
+  for (const button of body.querySelectorAll('[data-call]')) {
+    button.addEventListener('click', () => {
+      const key = button.dataset.call;
+      if (answer.openCalls.has(key)) answer.openCalls.delete(key); else answer.openCalls.add(key);
+      renderTrace();
+    });
+  }
+}
+
+function elapsedOf(answer) {
+  if (answer.done?.elapsedMilliseconds != null) return answer.done.elapsedMilliseconds / 1000;
+  if (!answer.live) return answer.traceElapsed ?? 0;
+  if (answer.status === 'running') return (performance.now() - answer.t0) / 1000;
+  return answer.events.length ? answer.events[answer.events.length - 1].time : 0;
+}
+
+function liveClock() {
+  renderStatus();
+  const answer = state.traced;
+  if (answer && answer.status === 'running' && !$('#trace').hidden) {
+    const elapsed = elapsedOf(answer);
+    const wallClock = answer.wallClockSeconds || state.wallClockSeconds;
+    const time = $('#traceTime');
+    const track = $('#traceTrack');
+    if (time) time.textContent = `${seconds(elapsed)} / ${wallClock} s`;
+    if (track) track.style.width = `${Math.min(100, (elapsed / wallClock) * 100)}%`;
+  }
+
+  if (state.running) renderChip(state.running.answer);
+}
+
+/* ---------- conversation ---------- */
+
+function resetConversation() {
+  for (const answer of state.answers) answer.chart?.destroy();
+  state.answers = [];
+  state.sessionId = null;
+  state.traced = null;
+  $('#convo').innerHTML = '';
+  renderTrace();
+}
+
+function newConversation() {
+  if (state.running) return;
+  resetConversation();
+  $('#convTitle').textContent = 'New conversation';
+  $('#convo').innerHTML = `<div class="empty"><h2>Ask about your Caboodle data</h2><p class="muted">Each question is a real one: about $0.04, counted in today's questions.</p>
+    <div class="starters">${STARTERS.map(starter => `<button class="starter" type="button">${esc(starter)}</button>`).join('')}</div></div>`;
+  $('#convo').querySelectorAll('.starter').forEach((button, index) => button.addEventListener('click', () => ask(STARTERS[index])));
+  loadHistory();
+}
+
+function scrollToEnd(force) {
+  const scroll = $('#scroll');
+  if (force || scroll.scrollHeight - scroll.scrollTop - scroll.clientHeight < 160) scroll.scrollTop = scroll.scrollHeight;
+}
+
+let toastTimer;
+function toast(message) {
+  let element = $('#toast');
+  if (!element) {
+    element = document.createElement('div');
+    element.id = 'toast';
+    element.style.cssText = 'position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--text);color:var(--bg);padding:7px 14px;border-radius:6px;font-size:13px;z-index:50;max-width:80vw';
+    document.body.appendChild(element);
+  }
+
+  element.textContent = message;
+  element.hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { element.hidden = true; }, 3500);
+}
+
+/* ---------- wiring ---------- */
+
+$('#apiUrl').value = state.api;
+$('#apiUrl').addEventListener('change', () => {
+  state.api = $('#apiUrl').value.trim() || DEFAULT_API;
+  store.set('api', state.api);
+});
+$('#orgId').value = state.orgId;
+$('#orgId').addEventListener('change', () => {
+  state.orgId = $('#orgId').value.trim();
+  store.set('orgId', state.orgId);
+});
+$('#typing').value = state.typing;
+$('#typing').addEventListener('change', () => {
+  state.typing = $('#typing').value;
+  store.set('typing', state.typing);
+});
+$('#loginForm').addEventListener('submit', async event => {
+  event.preventDefault();
+  try {
+    await signIn($('#email').value.trim(), $('#password').value);
+    $('#password').value = '';
+  } catch (error) {
+    $('#usage').textContent = `Sign-in failed: ${error.message}`;
+  }
+});
+$('#useToken').addEventListener('click', () => {
+  state.token = $('#tokenInput').value.trim().replace(/^Bearer\s+/i, '');
+  store.set('token', state.token);
+  $('#tokenInput').value = '';
+  setSignedIn('Signed in with a token');
+});
+$('#signOut').addEventListener('click', () => {
+  if (state.token) fetch(`${state.api.replace(/\/+$/, '')}/api/v1/auth/logout`, { method: 'POST', headers: { Authorization: `Bearer ${state.token}` } }).catch(() => {});
+  setSignedOut('Signed out.');
+});
+$('#changeBrand').addEventListener('click', () => {
+  $('#brandPicker').hidden = !$('#brandPicker').hidden;
+  if (!$('#brandPicker').hidden) {
+    $('#brandSearch').focus();
+    searchBrands('');
+  }
+});
+$('#brandSearch').addEventListener('input', () => {
+  clearTimeout(brandSearchTimer);
+  brandSearchTimer = setTimeout(() => searchBrands($('#brandSearch').value), 250);
+});
+$('#brandResults').addEventListener('click', event => {
+  const button = event.target.closest('[data-id]');
+  if (button) chooseBrand(button.dataset.id, button.dataset.name);
+});
+$('#noBrand').addEventListener('click', () => chooseBrand('', ''));
+$('#history').addEventListener('click', event => {
+  const open = event.target.closest('[data-session]');
+  const remove = event.target.closest('[data-delete]');
+  if (remove) deleteSession(remove.dataset.delete);
+  else if (open) openSession(open.dataset.session);
+});
+$('#newChat').addEventListener('click', newConversation);
+$('#traceToggle').addEventListener('click', () => {
+  if ($('#trace').hidden) showTrace(state.traced || state.answers[state.answers.length - 1] || null); else hideTrace();
+});
+$('#traceClose').addEventListener('click', hideTrace);
+$('#composer').addEventListener('submit', event => {
+  event.preventDefault();
+  const question = $('#question').value;
+  $('#question').value = '';
+  ask(question);
+});
+$('#question').addEventListener('keydown', event => {
+  if (event.key === 'Enter' && !event.shiftKey) {
+    event.preventDefault();
+    $('#composer').requestSubmit();
+  }
+});
+$('#stop').addEventListener('click', () => state.running?.controller.abort());
+
+setInterval(typingTick, 30);
+setInterval(liveClock, 250);
+showBrand();
+newConversation();
+if (state.token) {
+  store.set('token', state.token);
+  setSignedIn(state.userName || 'Signed in');
+}
+
+if (params.get('trace') === '1' && !params.get('session')) showTrace(null);
+if (params.get('session')) openSession(params.get('session'));
+else if (params.get('ask')) ask(params.get('ask'));
+
+window.askCaboodleTest = {
+  state,
+  shown: index => state.answers[index] ? state.answers[index].target.slice(0, state.answers[index].shownChars) : null,
+};
+</script>
+</body>
+</html>

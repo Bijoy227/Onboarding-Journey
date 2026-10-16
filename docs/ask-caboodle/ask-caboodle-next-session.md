@@ -1,14 +1,30 @@
 # Ask Caboodle — Handoff for the next session
 
-Written 2026-10-17, after B10b (commit `e26a5f52`) and C1's planning (decisions D133–D143). Read this first, then §0, §4 C1 ("What C1 builds on" and "C1 — decided design"), C1p and C1b, §7 (D96, D101–D105, D133–D143 and §7.2), §8 and §10 of [`ask-caboodle-be-implementation-plan.md`](ask-caboodle-be-implementation-plan.md).
+Written 2026-10-17, after C1 (commit `a01dfc13`) and the C1p test page. Read this first, then §0, §4 C1b ("C1b — decided"), "C1 as built" and "C1p as built", §7 (D140–D142 and §7.2), §8 and §10 of [`ask-caboodle-be-implementation-plan.md`](ask-caboodle-be-implementation-plan.md).
 
-## Starter prompt
+## Starter prompt (next: C1b)
 
-> Read `docs/ask-caboodle/ask-caboodle-next-session.md`, then §0, §4 C1 ("What C1 builds on" and "C1 — decided design"), C1p and C1b, §7 (D96, D101–D105, D133–D143 and §7.2), §8 and §10 of `docs/ask-caboodle/ask-caboodle-be-implementation-plan.md` in `D:\Fork\Onboarding-Journey`. The backend is `D:\Fork\Caboodle BE Repository\caboodle.backend`, branch `feature/ask-caboodle` (last commit B10b `e26a5f52`; working tree clean).
+> Read `docs/ask-caboodle/ask-caboodle-next-session.md`, then §0, §4 C1b ("C1b — decided"), "C1 as built" and "C1p as built", §7 (D140–D142 and §7.2), §8 and §10 of `docs/ask-caboodle/ask-caboodle-be-implementation-plan.md` in `D:\Fork\Onboarding-Journey`. The backend is `D:\Fork\Caboodle BE Repository\caboodle.backend`, branch `feature/ask-caboodle` (last commit C1 `a01dfc13`; working tree clean).
 >
-> Build package C1 (checked text streaming and the run trace) from its decided design; the decisions D133–D139 are approved, so don't re-post them. First re-fetch `origin/feature/CS-1770-iam-service-broker-workspace` and tell me whether it has commits after `b5adb1a1`; don't merge without my go-ahead. Load the `claude-api` skill (read `csharp/claude-api/streaming.md`) before touching the SDK code. If the code shows that a decided point can't work as written, stop and ask.
+> Next is package C1b (20 questions per conversation and generated titles); its decisions D140–D142 are taken, so don't re-post them. First re-fetch `origin/feature/CS-1770-iam-service-broker-workspace` and tell me whether it has commits after `b5adb1a1`; don't merge without my go-ahead. Then post C1b's short plan (the setting and its migration on `Intelligence.AskPlatformSettings`, `session_full`, questions left, the Haiku 5.5 title job and when its event arrives, rename) and wait for my go-ahead. Load the `claude-api` skill before the title call (C#), and check that `ModelPrices` prices `claude-haiku-5-5`. Add C1b's features to the C1p test page (`docs/ask-caboodle/test-page/ask-caboodle-test.html`). The items under "Parked for later" wait until I bring them up.
 >
 > Run the free launchers yourself (PowerShell). Finish in the usual order: build with 0 errors, all tests green, my review, then a one-line commit. Paid runs still need my approval first, with the cost stated.
+
+## Parked for later (owner, 2026-10-17)
+
+The owner will bring these up; don't start them unasked.
+1. **More visuals to cover the wait.** The owner liked C1p's reveal order (headline and notes, a "writing" placeholder, the text typed, then the table or chart) and thinks a few more visuals can cover most of the waiting. Ideas to bring: the current step's label in the answer area, a skeleton of the table once `present_answer` runs, small motion while the trace works. FE-side; try them on the C1p page first.
+2. **Pricing.** Measured: about $0.036 for a new question, $0.05–0.09 for follow-ups deep in a conversation, plus about $0.05 for the hourly prompt-cache write when no one has asked for an hour (shared by every organization). One organization at 100 questions a day: about $110–240 a month (8 to 5 on working days, or around the clock); the hours barely matter. **The defaults don't match:** a $25 monthly budget with "stop at 100 %" stops an organization using its 100-a-day pool after about 5 days (plan §7.2). Decide with Constance.
+3. **Speed and cost improvements,** each measured with the eval (6-case check ≈ $0.35 first, a full run ≈ $3.45 only for winners, approved each time):
+   - one model call fewer per answer: `present_answer` carries the text (changes C0's contract; about 2–3 s less per answer);
+   - fewer rejected `present_answer` calls (Q01 called it three times, about 2.4 s each);
+   - effort `low` instead of `medium` (never measured);
+   - a smaller system prompt (catalog index, tool descriptions): it drives the hourly cache write and every read;
+   - a cost breakdown on the trace's done card for platform admins (cache write, read, output), offered and not yet answered.
+4. **Tables and charts only when they help** (owner's idea): the agent decides, or a figure is built on request from the previous answer's result. Options are in plan §7.2.
+5. **Sonnet 5.5 sends after-tool text in one burst** (plan §7.2): recommended to accept it for now and ask Anthropic whether a setting lifts it.
+6. **C1's ten points beyond the plan's wording** (plan §4 "C1 as built"): committed at the owner's request, listed for the owner to object to.
+7. **A separate Python service** (owner's question): it would not fix the burst, which comes from the API. Revisit only if the phase-2 analysis (A1–A3) calls for it.
 
 ## Where things stand
 
@@ -255,6 +271,10 @@ Plan §4 "C1 as built" has the details. In short:
 - **Committed at the owner's request;** the ten points beyond the plan's wording are listed in plan §4 for the owner to object to if needed.
 - **Found:** the final text arrives in one burst. Cause (checked, $0.044): Sonnet 5.5 holds back text written right after a tool result until it is finished, whatever the request says; Sonnet 5 and a first reply stream normally. Options and the recommendation are in plan §7.2; the owner decides. Timing scripts: `burst-check.mjs`, `after-tool.mjs` (raw HTTP, the key read in the process only).
 - **Launchers:** `smoke.ps1` now prints each event's time and the streamed usage; the eval report has a "Streaming (C1)" line and two timing rows.
+
+## Done: C1p — local test page (docs repo, 2026-10-17)
+
+`docs/ask-caboodle/test-page/ask-caboodle-test.html` (plan §4 "C1p as built"): open it from disk with the local API running (`dotnet run --project caboodle/src/Hosts/API/API.csproj --launch-profile Caboodle.Api.Development`), sign in with the `caboodle_dev` login. Each question is real: about $0.04, or about $0.10 for a platform admin's first question of an hour (the admin prompt is 15.5K tokens), billed to the key in `appsettings.Development.json`. The owner tried it live (3 questions: $0.102, $0.049, $0.087) and asked for the reveal order now built: the table or chart after the typed text. "It's looking great now." Tested free against a mock in headless Edge (scratchpad `c1p-test/mock-api.mjs`, `drive.mjs`, `drive-reveal.mjs`; recreate them if needed: the mock replays the smoke run's events from `smoke.log`).
 
 ## Working agreement (owner)
 
