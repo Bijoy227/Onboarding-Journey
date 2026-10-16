@@ -1,12 +1,12 @@
 # Ask Caboodle — Handoff for the next session
 
-Written 2026-10-16, after B10b (commit `e26a5f52`). Read this first, then §0, §3 B10 ("B10b as built"), §4 C1 and C1b, §7 (D124, D126–D132 and §7.2), §8, §10 and §11 of [`ask-caboodle-be-implementation-plan.md`](ask-caboodle-be-implementation-plan.md).
+Written 2026-10-17, after B10b (commit `e26a5f52`) and C1's planning (decisions D133–D143). Read this first, then §0, §4 C1 ("What C1 builds on" and "C1 — decided design"), C1p and C1b, §7 (D96, D101–D105, D133–D143 and §7.2), §8 and §10 of [`ask-caboodle-be-implementation-plan.md`](ask-caboodle-be-implementation-plan.md).
 
 ## Starter prompt
 
-> Read `docs/ask-caboodle/ask-caboodle-next-session.md`, then §0, §3 B10 ("B10b as built"), §4 C1 and C1b, §7 (D124, D126–D132 and §7.2), §8, §10 and §11 of `docs/ask-caboodle/ask-caboodle-be-implementation-plan.md` in `D:\Fork\Onboarding-Journey`. The backend is `D:\Fork\Caboodle BE Repository\caboodle.backend`, branch `feature/ask-caboodle` (last commit B10b `e26a5f52`, after C0b.1 `5f7e7f84`; working tree clean).
+> Read `docs/ask-caboodle/ask-caboodle-next-session.md`, then §0, §4 C1 ("What C1 builds on" and "C1 — decided design"), C1p and C1b, §7 (D96, D101–D105, D133–D143 and §7.2), §8 and §10 of `docs/ask-caboodle/ask-caboodle-be-implementation-plan.md` in `D:\Fork\Onboarding-Journey`. The backend is `D:\Fork\Caboodle BE Repository\caboodle.backend`, branch `feature/ask-caboodle` (last commit B10b `e26a5f52`; working tree clean).
 >
-> Plan package C1 (token streaming and the run trace). First re-fetch `origin/feature/CS-1770-iam-service-broker-workspace` and tell me whether it has commits after `b5adb1a1`; don't merge without my go-ahead. Load the `claude-api` skill and read the conversation, agent and event code first, then post the plan and the open decisions, and wait for my go-ahead.
+> Build package C1 (checked text streaming and the run trace) from its decided design; the decisions D133–D139 are approved, so don't re-post them. First re-fetch `origin/feature/CS-1770-iam-service-broker-workspace` and tell me whether it has commits after `b5adb1a1`; don't merge without my go-ahead. Load the `claude-api` skill (read `csharp/claude-api/streaming.md`) before touching the SDK code. If the code shows that a decided point can't work as written, stop and ask.
 >
 > Run the free launchers yourself (PowerShell). Finish in the usual order: build with 0 errors, all tests green, my review, then a one-line commit. Paid runs still need my approval first, with the cost stated.
 
@@ -220,34 +220,28 @@ Decisions D126–D132 are in plan §7; "B10b as built" is in §3 B10. In short:
 
   Also the bugs found outside Ask Caboodle: the Sync Runs list API, trigger labels, the export route, YoY % shown as dollars, the crawler's plain HTTP.
 
-## Next package: C1 — token streaming and the run trace (plan it; then C1b)
+## Decided: C1, C1p and C1b planning (2026-10-17, docs only)
 
-Right after C1 comes C1b (plan §4, D124): the conversation limit and generated session titles, with rename.
+Planned in the B10b session; the owner took every decision there and starts the build in a new session.
+- **C1 (D133–D139), build next:** plan §4 "What C1 builds on" and "C1 — decided design" are the spec.
+  - **Checked sentences, typed out (D96):** `text-sentence {index, text}` and `text-rewind {keep}`; the final `text` stays; no raw deltas.
+  - **When text goes out:** live release only after `present_answer` (D134).
+  - **A corrected answer** keeps the sentences it repeats word for word (D135).
+  - **The run trace:** live `step`, `tool-start` and `tool-end` events, and `GET sessions/{id}/messages/{messageId}/trace`, rebuilt from the transcript (no migration).
+  - **Organization users get the trace with no database detail**; `done.queries` is for platform admins only; built now, checked in G2 (D136, D138).
+  - **The agent always streams**, the eval included (D137).
+  - **A cut stream** counts its `message_start` usage (D139).
+  - **Paid check:** about $0.35, capped at $1.00, approved first.
+- **C1p (D143), right after C1:** a live local test page for the owner. One HTML file in this docs repo, against the local API with the owner's token (plan §4 C1p). Post its short plan first.
+- **C1b (D140–D142), after C1p:** 20 questions per conversation for everyone (a Platform Admin setting, `session_full`); Haiku 5.5 titles plus rename. Post its short plan first; its decisions are taken.
 
+**Points found at planning that the build must handle** (plan §4 C1):
+- **A mid-stream fallback** keeps the declined partial: when echoing that turn back, drop the thinking, redacted thinking and tool-use blocks before the last `fallback` block.
+- **The splitter must equal `AskFigures.Sentences`:** test it on every answer in the eval reports, fed in random chunks.
+- **The skill picks TypeScript when started from the docs repo;** the backend is C# (`csharp/claude-api/streaming.md`).
+- **SDK names:** check the SDK's aggregator call (`BetaMessageContentAggregator`, `SseAggregatorExtensions`) with the compiler. Git Bash has no `strings`, so search the DLL with PowerShell.
 
-From plan §4 C1 (the run-trace part was added by the FE review):
-- `AnthropicConversation.SendStreamingAsync` with the SDK's streaming call. It collects the content blocks (text, thinking with signatures, tool-use input JSON, server-tool blocks) and rebuilds the assistant message for the history.
-- `text-delta` events go to the sink. The final `text` event keeps the full markdown.
-- Optional: thinking `display: "updates"` (a beta) as `progress` notes.
-- Tests on stubbed SSE responses: a text-only turn, a tool-use turn, and thinking with a signature.
-- Update BE `docs/AskCaboodle-FE.md`.
-- **The run trace:**
-  - live step and tool-call events;
-  - `GET sessions/{id}/messages/{messageId}/trace` for past answers;
-  - `maxSteps` and `wallClockSeconds` for the meters;
-  - the role filter for SQL and schema detail.
-
-Load the `claude-api` skill before touching the SDK code; don't work from memory.
-
-**Decisions to post** (suggestions; check them against the code first):
-- the event name and payload of the deltas, and whether `text` stays the final event;
-- whether to use the thinking-updates beta now or later;
-- whether the eval harness and the claims check keep the non-streaming call, so the reports stay comparable;
-- what a client disconnect mid-stream stores. B8 already counts such questions as cancelled, with their cost.
-
-**Paid check:** probably one smoke question on Sonnet 5.5 medium, about $0.05, to confirm a real stream. State the cost and wait for approval.
-
-After C1 the order is C2–C9, G1–G8 and A1–A3 (A only if the demand gate says so). In GA, G1 finishes the `ask-caboodle` module's dependencies and G2 switches the endpoint to IAM's module guard: only then can organization users ask.
+After C1, C1p and C1b the order is C2–C9, G1–G8 and A1–A3 (A only if the demand gate says so). In GA, G1 finishes the `ask-caboodle` module's dependencies and G2 switches the endpoint to IAM's module guard: only then can organization users ask.
 
 The FE team is reworking the theme. Plan §10 collects what the FE needs, for the final FE document.
 

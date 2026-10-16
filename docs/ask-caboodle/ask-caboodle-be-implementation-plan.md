@@ -757,7 +757,7 @@ Decisions D72–D75 (owner, 2026-10-15). Platform admins can ask about the whole
 
 ## 4. Phase 1c — Experience layer (still admin-only)
 
-Since the FE review (2026-10-15, D69–D71), C0 comes first: the FE team builds against it, and pins (C3) depend on it. The order is now **C0 → C0b → B9 → B10a → B10b → C1 → C1b → C2 → … → C9**, with **C0c before G2** (D77, D90, D108, D117, D124). §10 collects what the FE needs from every package.
+Since the FE review (2026-10-15, D69–D71), C0 comes first: the FE team builds against it, and pins (C3) depend on it. The order is now **C0 → C0b → B9 → B10a → B10b → C1 → C1p → C1b → C2 → … → C9**, with **C0c before G2** (D77, D90, D108, D117, D124). §10 collects what the FE needs from every package.
 
 ### C0 — Answer contract (done 2026-10-15, commit `a102eed1`)
 **Why:** the FE renders every answer from one fixed set of pieces, so the design never depends on the question. Pins (C3) re-run the same data block later on fresh data, so everything in it is a rule that the server applies again on every run, never a value the model typed.
@@ -981,6 +981,69 @@ Since the FE review (2026-10-15, D69–D71), C0 comes first: the FE team builds 
   - **Past answers:** `GET sessions/{id}/messages/{messageId}/trace`, rebuilt from `AskToolCalls` and the stored transcript.
   - **Who sees the detail:** an open decision (§7.2). The recommendation: organization users get labels, tools, timings, row counts and matched names, while SQL, tables and columns, catalog notes and Postgres errors are for platform admins only. Today `done.queries` (raw SQL) goes to everyone; fix it here once decided.
 
+**What C1 builds on (read at planning, 2026-10-16):**
+- **The call:** `AnthropicConversation.SendAsync` makes one non-streaming `client.Beta.Messages.Create` call and turns the `BetaMessage` into the turn: the history blocks (text, thinking with signature, redacted thinking, tool use, fallback), the tool calls, the stop reason, and the usage per attempt (`usage.iterations` after a fallback).
+- **The SDK:** `Anthropic` 12.55.0 (netstandard2.0) has `client.Beta.Messages.CreateStreaming(parameters, cancellationToken)` (an async stream of `BetaRawMessageStreamEvent`; `TryPickStart`, `TryPickDelta`, `TryPickStop`, `TryPickContentBlockStart`, `TryPickContentBlockDelta`, `TryPickContentBlockStop`) and a stream aggregator (`BetaMessageContentAggregator`, `SseAggregatorExtensions`): check its exact call with the compiler, and use it to rebuild the final `BetaMessage` so the existing turn code stays. Load the `claude-api` skill and read `csharp/claude-api/streaming.md` (the skill picks TypeScript when started from the docs repo).
+- **A fallback mid-stream** keeps the declined partial and continues on the same stream, marked by a `fallback` content block. When echoing such a turn back, drop the thinking, redacted thinking and tool-use blocks that come before the last `fallback` block (text blocks stay); `message_start` names the model that answers. (Non-streaming calls omitted the partial, so the current code never met this.)
+- **The text:** the fact check runs once on the finished text plus the frame (`AskFactCheck.Check`), sentence by sentence through `AskTextCheck.Next`, which keeps state across sentences (D105's derived figures). Sentences come from `AskFigures.Sentences`: lines, then `(?<=[.!?])\s+(?=\S)`, with list markers kept. A boundary needs the next sentence's first character, so boundaries in a growing buffer never move. `present_answer` comes before the final text (system prompt step 5), so the frame is known when the text starts. Text in a turn that also calls a tool is never shown today.
+- **What's stored:** `AskToolCalls` has no step number, but the stored transcript has one assistant message per step, with its `tool_use` blocks in the order the calls were sequenced, so the trace of a past answer can be rebuilt without a migration.
+- **The SQL leak:** `done.queries` (raw SQL) goes to everyone, and the `get_table_info` progress label names the tables.
+- **The tests:** `AnthropicConversationTests` stubs the API with an `HttpMessageHandler`, so streaming tests can return recorded SSE bodies. The 27 eval reports in BE `docs/AskCaboodle-Eval/*.json` hold several hundred final answers, a free corpus for the splitter.
+
+**C1 — decided design (owner, 2026-10-17: D133–D139):**
+1. **Streaming call:** `SendAsync` streams. It passes each text delta to the agent as it arrives and builds the turn from the aggregated message. The request differs only by `stream: true`, so the caching, the fingerprints and a restored session's byte-identical replay stay the same. Apply the fallback echo rule above. `eager_input_streaming` stays off: the tool inputs are short, and leaving it off keeps the API's input validation.
+2. **Sentence splitter:** an incremental splitter mirrors `AskFigures.Sentences`. A sentence is complete when the next one starts, its line ends, or the stream ends. It keeps each sentence's exact markdown slice (with the whitespace and newlines before it), so the slices join into the final text.
+3. **Release (D134):**
+   - **Live release** only after `present_answer` has set the frame in this exchange. The frame's figures (notes, options, table title) are checked when the text starts; a failing frame holds the whole text for the correction round.
+   - **Each sentence** is checked as soon as it completes, in order, with one `AskTextCheck` per text, and released if it passes.
+   - **Text before `present_answer`** is held, and released only if its turn ends without a tool call (as today).
+4. **A failed figure (D135):**
+   - **The pause:** the release stops and the "Correcting figures that didn't match the data" progress goes out at once. The draft still finishes, so the correction message lists every bad figure, as in C0b.
+   - **The corrected answer** keeps the already-released sentences it repeats word for word, and rewinds from the first one that differs.
+   - **Still failing (D101):** its figures are released and listed in the note.
+   - **A limit, refusal or service error during the correction (D102):** the rest of the draft is released, with the note.
+   - **A final refusal** rewinds to 0 before the error.
+5. **Text events (D133):**
+   - `text-sentence {index, text}`, where `text` is the exact markdown slice;
+   - `text-rewind {keep}`;
+   - the final `text {text, unverifiedFigures}` stays, the authoritative full answer for history and for clients that don't stream;
+   - no raw token deltas, since they would show figures before they're checked.
+6. **The run trace, live:**
+   - `step {step, label}` when each model call starts ("Thinking", or "Writing the answer" for a text turn);
+   - `tool-start {callId, step, tool, summary}` and `tool-end {callId, step, tool, ok, rowCount, durationMs, detail}`;
+   - parallel calls share a step;
+   - a failed `run_sql` followed by another `run_sql` is marked `selfCorrection`;
+   - `session` gains `maxSteps` (12) and `wallClockSeconds` (180);
+   - `progress` events stay as they are (their `step` is a progress counter, not the model step).
+7. **The trace of a past answer:** `GET sessions/{id}/messages/{messageId}/trace`, with the same ownership check as `GET sessions/{id}` (your own sessions only; D73). It is rebuilt from the stored transcript and `AskToolCalls`, with no migration, so it works for answers saved before C1 too.
+8. **Who sees what (D136, D138):**
+   - **Organization users** get the trace too, with no database detail: labels, tools, timings, row counts and matched names.
+   - **Platform admins** also get SQL, tables and columns, catalog notes and Postgres errors.
+   - **Applied to:** the live trace, the trace endpoint, `done.queries` (platform admins only) and the progress labels (organization users see "Reading the data catalog", not table names).
+   - **When:** built in C1. G2, when organization users can ask, checks it end to end (G7's matrix).
+9. **No thinking progress notes (D136):** `thinking.display: "updates"` (beta) is not used: the notes are model-written and unchecked. Revisit in C8, or for platform admins' trace.
+10. **The eval (D137):** the agent always streams, the eval included; the claims check stays non-streaming.
+11. **A client disconnect (D139):** the stream stops and the question is saved as cancelled, as today. The cut call's input and cache tokens are counted from the stream's opening usage (`message_start`); its output tokens are unknown, counted as 0 and logged.
+12. **Tests (free):**
+    - **Stubbed SSE responses:** a text-only turn, a tool-use turn, thinking with a signature, a mid-stream fallback (history echo rule), a cut stream (usage from `message_start`), and a byte-identical replay with streaming.
+    - **The splitter on every stored eval answer**, fed in random chunks: it must give the same sentences as `AskFigures.Sentences`, and the slices must join into the exact text.
+    - **The agent's paths, with a fake conversation:** release, the frame hold, the pause and correction, keep and rewind, the second-round note, a limit during the correction, a refusal rewind.
+    - **The trace:** events per step, parallel calls, self-correction, the endpoint (unit and DB), the role filter on every surface, `done.queries` admin-only.
+13. **Docs:** BE `docs/AskCaboodle-FE.md` (the new events, the trace endpoint, `queries` admin-only, the role filter) and §10.8.
+14. **Paid (approve first):** one smoke question to see a real stream (≈ $0.05), plus a 6-case check on the streaming path, `eval-run.ps1 -Cases "Q01,Q08,Q22,Q48,Q53,Q57" -Budget 1.00 -Rerun 0 -Model claude-sonnet-5-5 -Effort medium -Label c1` (≈ $0.30; Q48 was corrected in B9). About $0.35 in all, capped at $1.00.
+
+### C1p — Local test page (right after C1)
+Owner, 2026-10-17 (D143): "a little FE so that I can see how it will feel in real life". Post its short plan first, as usual.
+1. **What:** one HTML file in this docs repo (e.g. `docs/ask-caboodle/test-page/`), with no FE-repo or app changes. It opens in the owner's browser and talks to the local API (`POST api/v1/askcaboodle/ask`, SSE) with the owner's login token and the `BrandID` header.
+2. **It shows:**
+   - the frame (kind, headline, notes, options), the data table (and a simple chart), and the checked sentences typed out word by word, with the rewind;
+   - the run trace drawer (live events, and the trace endpoint for past answers);
+   - the history list, feedback and the step meters ($ and the model for platform admins).
+3. **Functionality only (D69):** it is not the FE team's design. Base it on the Workbench artifact's screens.
+4. **To check at its start:** the local API's URL and port; whether the dev CORS settings accept the page's origin (if not, serve it from a small local static server on an allowed origin, with no app change); how the owner gets a token.
+5. **Cost:** each question is a real one, about $0.04, within the owner's daily limit (50) and the budgets.
+6. **C1b's features** (questions left, titles, rename) are added to the page when C1b is built.
+
 ### C1b — Conversation limit and titles (alongside C1)
 Owner, 2026-10-16 (D124): "like other chat apps". A small package built right after C1, because both change the ask flow and the FE contract. Post its short plan and open decisions first, as usual.
 1. **Questions per conversation:**
@@ -996,6 +1059,16 @@ Owner, 2026-10-16 (D124): "like other chat apps". A small package built right af
 4. **Tests (free):** the limit at 19, 20 and 21 questions (error code, no model call, nothing counted); the title job (success, failure fallback, a renamed session left alone); rename validation and ownership; history and `session` events with the new fields.
 5. **Paid:** one smoke question to see a real generated title, about $0.05, approved first.
 6. **Docs:** BE `docs/AskCaboodle-FE.md` (`session_full`, questions left, title updates, rename) and §10.8 here.
+
+**C1b — decided (owner, 2026-10-17: D140–D142):**
+- **Limit (D140, D141):** 20 questions per conversation, for everyone, platform admins included. It is a Platform Admin setting in `askcaboodleadmin/settings`, which needs a migration on `Intelligence.AskPlatformSettings`.
+- **At the limit:** `session_full`, before any model call: nothing is spent or counted.
+- **Questions left:** in `GET sessions/{id}` and the `session` event.
+- **Titles (D142):** Haiku 5.5 writes a 3–6 word title after the first answer, plus rename (`PATCH sessions/{id}`; a renamed session is never re-titled). On any error the question stays the title. The cost counts toward the B8 budgets; check that `ModelPrices` prices `claude-haiku-5-5`.
+- **Defaults stated at planning (not objected to):**
+  - "Start a new conversation" carrying the question over is FE-only (the FE pre-fills it);
+  - the title follows the question's language and stays under 60 characters;
+  - the title arrives in a `session` event when ready before the stream closes, otherwise in history.
 
 ### C2 — Suggested questions (empty state)
 - `GET suggestions` → curated starters (static YAML per org type, later from the gallery/eval set). Zero LLM cost.
@@ -1311,6 +1384,17 @@ Owner answers recorded 2026-10-11.
 | D130 | B10b: admin block wording | **Agreed:** it names the pipeline topics, waives the raw-files NOT AVAILABLE entry for platform admins, keeps shipments on distributor sales, and says file locations and distributor logins are never available. Only the admin fingerprint changes. |
 | D131 | B10b: eval period | **Agreed:** "last 30 days", not "this week": nothing failed in the eval week (the last failures were imports on 4 Oct and syncs on 28 Sep). Six cases, Q54–Q59. |
 | D132 | B10b review: beyond the plan's wording | **Owner (2026-10-16):** (1) agreed: `DistributorUpcMappings."CreatedBy"`, `"LastModifiedBy"` and `"DeletedBy"` stay hidden with the resolver. (2) The zero-unit KeHE lines will be dropped: the rule isn't in production yet, and once it is they are gone, so Ask Caboodle doesn't need to handle them; the catalog's "they are kept" sentence was removed before the commit. (3) Accepted: the store-list issue example lists every type with zeros; record any store-list issue that comes up (§7.2). (4) Accepted: Q53's notes. The concerns are listed in §7.2, to be visited one by one later. |
+| D133 | C1: text events | **Agreed (2026-10-17):** `text-sentence {index, text}` (the exact markdown slice) and `text-rewind {keep}`, with the final `text` kept as the authoritative answer. No raw token deltas: they would show figures before they're checked (D96). |
+| D134 | C1: when text is released live | **Agreed:** only after `present_answer` has set the frame in the exchange. Text before it is shown only if its turn ends without a tool call, as today. |
+| D135 | C1: a corrected answer | **Agreed:** it keeps the released sentences it repeats word for word, and rewinds from the first one that differs. Still failing: released with the note (D101). A limit during the correction: the rest of the draft, with the note (D102). |
+| D136 | C1: thinking progress notes (`display: "updates"`, beta) | **Agreed: not now** (model-written and unchecked). **Owner:** organization users need the run trace too, and their trace must not contain database-level information (SQL, tables, columns, Postgres errors). |
+| D137 | C1: streaming in the eval | **Agreed:** one code path, so the agent always streams, the eval included; the claims check stays non-streaming. |
+| D138 | C1: who sees the trace detail (§7.2) | **Agreed:** organization users get labels, tools, timings, row counts and matched names; platform admins also SQL, tables and columns, catalog notes and Postgres errors. Applied to the live trace, the trace endpoint, `done.queries` and the progress labels. **Owner:** organization users are the real customers; G2 implements this for them end to end. Built in C1 (the trace contract carries it) and checked with real organization users in G2. |
+| D139 | C1: disconnect accounting | **Agreed:** a cut stream counts its input and cache tokens from `message_start`; its output tokens count as 0 and are logged. |
+| D140 | C1b: questions per conversation | **Owner (2026-10-17):** 20, as a Platform Admin setting; `session_full` before any model call. |
+| D141 | C1b: platform admins | **Owner:** the same limit applies to platform admins' own conversations. |
+| D142 | C1b: titles | **Owner:** Haiku 5.5 writes a 3–6 word title after the first answer, plus rename (`PATCH sessions/{id}`); the question stays the title on any error. |
+| D143 | A test FE for the owner | **Owner (2026-10-17):** a live local test page: one HTML file in the docs repo, against the local API with the owner's token, showing the checked text typed out, the frame and table, the run trace and history. Package C1p, right after C1 (§4); the order is C1 → C1p → C1b. |
 
 ### 7.1 Demo track — dropped 2026-10-12 (D3), kept for history
 
@@ -1342,7 +1426,7 @@ Each one is posted with its package, and gets a D number once decided.
 | Industry terms users say that clash with or are missing from Caboodle's words ("sales", "depletions", "distribution", "TDP", "the plan"/"AOP", "deductions", "MCBs") | Owner, Constance | The owner talks to Constance first. Then: I draft about 50–60 terms with test questions; she marks the ones her clients use and corrects the meanings; the approved terms go to the glossary, the eval and C5. |
 | C0c go or no-go | After C0b's review | **Decided:** D108, deferred to before G2. |
 | Re-running a step to confirm an answer (instead of a second model check) | Later, after C8 | Decide with real-usage data: which answers go wrong, and which step to re-run (D95). |
-| How much of the run trace organization users see; `done.queries` (raw SQL) goes to everyone today | C1 (before G2) | Organization users get labels, tools, timings, row counts and matched names. SQL, tables, columns, catalog notes and Postgres errors are for platform admins only. |
+| How much of the run trace organization users see; `done.queries` (raw SQL) goes to everyone today | C1 (before G2) | **Decided:** D136, D138. Organization users get the trace without database detail; built in C1, checked end to end in G2. |
 | One list of period tokens for pins | C3 (also C0's `period` note) | Merge the two lists; owner picks |
 | KPI delta against the previous period on a pin | C3 | Optional; costs a second run of the plan, no AI call |
 | Personal or shareable pins | C3 | — |
@@ -1353,8 +1437,8 @@ Each one is posted with its package, and gets a D number once decided.
 | Grant `DataHub.DistributorUpcMappings` (without notes and "resolved by") | B9 | **Decided:** D109, moved to B10b for platform admins. |
 | A corrected answer mentions its correction to the user (B9 paid check, Q48: "I corrected the Costco and Trader Joe's counts below after checking them against the data") | C0b's correction message (owner) | **Decided:** D116, one sentence added to the correction message; built in B9. |
 | Split B10 into B10a (IAM, organizations, modules, settings, audit) and B10b (data pipeline) | B10 | **Decided:** D117. |
-| A limit on questions per conversation (owner, 2026-10-16: "like other chat apps, e.g. 20 per thread") | C1b (D124) | **Placed:** package C1b, alongside C1 (§4). Its details (default 20, `session_full`) are decided when C1b starts. |
-| Meaningful session titles (owner, 2026-10-16: "like Claude or ChatGPT, from the first message") | C1b (D124) | **Placed:** package C1b, with the limit. Suggested: a 3–6 word title by Haiku 5.5 after the first answer, plus rename; decided when C1b starts. |
+| A limit on questions per conversation (owner, 2026-10-16: "like other chat apps, e.g. 20 per thread") | C1b (D124) | **Decided:** D140, D141: 20, platform admins included. |
+| Meaningful session titles (owner, 2026-10-16: "like Claude or ChatGPT, from the first message") | C1b (D124) | **Decided:** D142: Haiku 5.5, plus rename. |
 | B10a beyond the plan's wording: the inviter is `InvitedUsers."CreatedBy"` (as on the Admin screen; 48 of 51, not 2, so Q50 asks about Chantico Agave's invitations); `Users."ImageUrl"` and the backfill `Report` hidden too; the purge retentions and table registry granted with the purge settings; `Deleted` in the email-log column grants; the admin group counted | B10a review (owner) | **Decided:** D125, accepted as built. |
 | The fact check flags the "8" in "between 8 and 11 September" (B10a paid check, Q53: a false alarm that cost a correction round). Cause: its day-first date pattern joins days only with "–", "-" or "to" | C0b.1 (owner, 2026-10-16) | **Done:** C0b.1 (`5f7e7f84`) (§4): day-first dates also join their days with "and", "&" or commas; month-first unchanged. The replay of 113 stored answers changes only Q53. |
 | B10b beyond the plan's wording: `DistributorUpcMappings."CreatedBy"`, `"LastModifiedBy"` and `"DeletedBy"` hidden too (empty today, they would name the resolver D109 hides); the catalog says zero-unit KeHE lines are kept (the code's new rule drops them, the restored data holds 261 K, DI9); the store-list issue example lists every type with zeros (after Q57's paid-check error); Q53's notes say the recipient count is available | B10b review (owner) | **Decided:** D132. All accepted; the zero-unit sentence was removed. |
@@ -1396,7 +1480,10 @@ Each one is posted with its package, and gets a D number once decided.
 | B9 | done | `a8387b82` | 2026-10-16: plan and decisions D109–D116 approved; the IAM branch is unchanged since `b5adb1a1`. Built as in §3 B9 "as built": fee lines through the calculator (`breakdown: "fee"`), `CRM.DistributorBrands` and `CRM.RetailerRegions` (not `DistributorRetailers`, D113), regions from `RetailerRegions` only (D115); migration `AddAskCaboodleCatalogCompletionGrants` applied locally; solution 6,821 green, Intelligence 484, coverage 97.9 %, DB tests 25 green, build 0 errors. DI11 recorded.<br>**Paid, $0.59:** 9 of 9 passed (Q41, Q45–Q48, Q22, Q37, Q39, Q30); 2 corrected (Q48's two wrong hand counts caught; Q45's right total a false alarm, fixed by stating the fee total).<br>**At review:** D116 (a corrected answer never mentions the correction).<br>**Balance:** about $50.01. |
 | B10a | done | `26a85f3f` | 2026-10-16: plan and decisions D117–D123 approved; the IAM branch is unchanged since `b5adb1a1`. Built as in §3 B10 "B10a as built": migration `AddAskCaboodleAdminReadOnlyRole` applied locally, login script, the platform-admin audience, 38 catalog entries, BE `docs/AskCaboodle-Deployment.md`; solution 6,886 green, Intelligence 549, coverage 97.9 %, build 0 errors. DB tests 45 green with the owner's admin login. **Paid, $0.44:** 8 of 8 passed (Q49–Q53, plus Q01, Q22, Q48 asked as a platform admin); 1 correction, a fact-check false alarm on a day of the month (§7.2). Found: the inviter is `InvitedUsers."CreatedBy"` (48 of 51, not 2). At review: D125 (the five points beyond the plan accepted as built).<br>**Balance:** about $49.57. |
 | B10b | done | `e26a5f52` | 2026-10-16: plan and decisions D126–D131 approved, and D132 at review (the review points accepted; the zero-unit KeHE sentence removed); the IAM branch is unchanged since `b5adb1a1`. Built as in §3 B10 "B10b as built": migration `AddAskCaboodleDataPipelineGrants` applied locally (55 admin tables), 17 catalog entries, admin block wording, eval Q54–Q59; solution 6,902 green, Intelligence 565, coverage 97.9 %, DB tests 46 green, build 0 errors. DI12–DI14 recorded, DI9 updated. **Paid, $0.56:** check 7 of 9 ($0.48; Q57 a "wrong place" count, Q53 a claims-check false fail), both fixed and re-checked 2 of 2 ($0.08).<br>**Balance:** about $49.01. |
-| C1 … C8 | todo | | **Next: C1.** C1 now includes the run-trace events. C1b (conversation limit and titles, D124) comes right after C1. |
+| C1 | next (build) | | 2026-10-17: planned; decisions D133–D139 approved (§4 "C1 — decided design"); the IAM branch is unchanged since `b5adb1a1` (fetched 2026-10-16). Build in the next session from the decided design. |
+| C1p | todo | | Local test page (D143), right after C1 (§4 C1p). |
+| C1b | todo | | Decided (D140–D142): 20 questions per conversation for everyone, Haiku 5.5 titles plus rename. After C1p. |
+| C2 … C8 | todo | | |
 | C9 | todo | | Caboodle guide. Needs the documentation repo and Constance's review. |
 | G1 … A3 | todo | | |
 
@@ -1549,8 +1636,8 @@ The full contract is in BE `docs/AskCaboodle-FE.md`, "The answer pieces".
 | B10 | No FE change; platform admins get wider answers (organizations, users, modules; since B10b also imports, syncs, unmapped rows, store-list issues, merges and clean-ups, and the raw distributor files) |
 | C0 | The `frame` event (kind, headline, notes, options) and its replace rule; the data block's series, formats, totals, highlights and `chartable`; the same pieces in `GET sessions/{id}`; the feedback `reason` (down only) and `feedbackReason` in history |
 | C0b | `text.unverifiedFigures` (and `unverifiedFigures` in `GET sessions/{id}`): when not empty, the note "Some figures in this answer couldn't be checked against the data: …" right under the text (rare). A corrected answer takes a few seconds longer, shows the progress label "Correcting figures that didn't match the data", and may send a new `frame`/`data` that replaces the earlier one |
-| C1 | Streamed text as checked sentences that the FE types out word by word (D96; see the streaming demo), with the "rewriting" pause when a figure fails; live trace events, the trace endpoint, the step limits |
-| C1b | The `session_full` error with "Start a new conversation", questions left in the conversation, generated titles arriving in a `session` event after the first answer, and rename |
+| C1 | Streamed text as checked sentences that the FE types out word by word (D96; see the streaming demo): `text-sentence {index, text}` (markdown slices that join into the text) and `text-rewind {keep}` (drop what follows `keep` when a corrected answer differs, or on a refusal), with the "rewriting" pause when a figure fails; the final `text` stays authoritative (D133–D135). Live trace events `step`, `tool-start`, `tool-end` (parallel calls share a step; `selfCorrection`), the trace endpoint `GET sessions/{id}/messages/{messageId}/trace`, `maxSteps` and `wallClockSeconds` on `session`. Organization users' trace has no database detail; `done.queries` only for platform admins (D136, D138) |
+| C1b | The `session_full` error (at 20 questions, D140) with "Start a new conversation" (the FE pre-fills the question), questions left in the conversation, generated titles arriving in a `session` event after the first answer, and rename |
 | C2 | Starters for the empty state |
 | C3 | Pins: create, list, render, delete; broken pins |
 | C4 | Prompt gallery and the `/` picker |
