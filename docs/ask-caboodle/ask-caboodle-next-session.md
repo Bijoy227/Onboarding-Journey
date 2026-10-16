@@ -1,10 +1,10 @@
 # Ask Caboodle — Handoff for the next session
 
-Written 2026-10-16, after B10a (commit `26a85f3f`). Read this first, then §0, §3 B10 ("B10a as built" and "B10b"), §7 (D109, D117–D125 and §7.2), §8, §9, §10 and §11 of [`ask-caboodle-be-implementation-plan.md`](ask-caboodle-be-implementation-plan.md).
+Written 2026-10-16, after B10a (commit `26a85f3f`) and C0b.1 (commit `5f7e7f84`). Read this first, then §0, §3 B10 ("B10a as built" and "B10b"), §7 (D109, D117–D125 and §7.2), §8, §9, §10 and §11 of [`ask-caboodle-be-implementation-plan.md`](ask-caboodle-be-implementation-plan.md).
 
 ## Starter prompt
 
-> Read `docs/ask-caboodle/ask-caboodle-next-session.md`, then §0, §3 B10 ("B10a as built" and "B10b"), §7 (D109, D117–D125 and §7.2), §8, §9, §10 and §11 of `docs/ask-caboodle/ask-caboodle-be-implementation-plan.md` in `D:\Fork\Onboarding-Journey`. The backend is `D:\Fork\Caboodle BE Repository\caboodle.backend`, branch `feature/ask-caboodle` (B10a committed at `26a85f3f`; working tree clean).
+> Read `docs/ask-caboodle/ask-caboodle-next-session.md`, then §0, §3 B10 ("B10a as built" and "B10b"), §7 (D109, D117–D125 and §7.2), §8, §9, §10 and §11 of `docs/ask-caboodle/ask-caboodle-be-implementation-plan.md` in `D:\Fork\Onboarding-Journey`. The backend is `D:\Fork\Caboodle BE Repository\caboodle.backend`, branch `feature/ask-caboodle` (last commit C0b.1 `5f7e7f84`, after B10a `26a85f3f`; working tree clean).
 >
 > Plan package B10b (Platform Admin knowledge, part 2: the DataHub pipeline and the raw distributor files). First re-fetch `origin/feature/CS-1770-iam-service-broker-workspace` and tell me whether it has commits after `b5adb1a1`; don't merge without my go-ahead. Read the tables, their data on `caboodle_dev` and the screens that use them first, then post the plan and the open decisions, and wait for my go-ahead.
 >
@@ -14,7 +14,7 @@ Written 2026-10-16, after B10a (commit `26a85f3f`). Read this first, then §0, �
 
 | Item | State |
 |---|---|
-| **Backend branch** | `feature/ask-caboodle`, last commit `26a85f3f` (B10a), after B9 `a8387b82`, C0b `6da28c2d`, C0 `a102eed1`, B8b `b2f00e22`, B8 `02a256b6` and the IAM merge `4d0830e6`. `origin/feature/ask-caboodle` is at B8b (`b2f00e22`); C0, C0b, B9 and B10a are local only. Never push unless the owner asks. |
+| **Backend branch** | `feature/ask-caboodle`, last commit `5f7e7f84` (C0b.1), after B10a `26a85f3f`, B9 `a8387b82`, C0b `6da28c2d`, C0 `a102eed1`, B8b `b2f00e22`, B8 `02a256b6` and the IAM merge `4d0830e6`. `origin/feature/ask-caboodle` is at B8b (`b2f00e22`); C0, C0b, B9, B10a and C0b.1 are local only. Never push unless the owner asks. |
 | **Logins on `caboodle_dev`** | `askcaboodle_app` (standard) and, since B10a, `askcaboodle_admin_app` (platform admins), both created by the owner; their connection strings are the user variables below. |
 | **Docs repo** | `D:\Fork\Onboarding-Journey`, branch `caboodle-access-v2`. Docs commits are one line: `Update - Ask Caboodle docs - …`. |
 | **Model in the app** | **Sonnet 5.5, effort medium** since B7b (D45). Since B8, prices come from the `ModelPrices` table in code, per model and per attempt; the five price settings are gone. Development and Staging settings say `claude-sonnet-5-5`. |
@@ -180,7 +180,11 @@ Plan §3 B10 "B10a as built" has the details. In short:
 - **BE `docs/AskCaboodle-Deployment.md`:** the staging/live runbook (plan §11 is now its summary).
 - **At review, D125:** the five points beyond the plan's wording were accepted as built: the inviter is `InvitedUsers."CreatedBy"` (48 of 51, not 2); `Users."ImageUrl"` and the backfill `Report` hidden too; purge retentions and table registry granted; `Deleted` in the email-log grants; the admin group counted.
 - **Tests:** solution 6,886 green, Intelligence 549 (coverage 97.9 % unit-only), DB tests 45 green with the owner's admin login; build 0 errors, the only new warning the migration's CA1505.
-- **Paid, $0.44:** `eval-run.ps1 -Cases "admin,Q01,Q22,Q48" -Audience platform-admin -Budget 1.20 -Rerun 0 -Model claude-sonnet-5-5 -Effort medium -Label b10a-admin`: 8 of 8 passed, all asked as a platform admin. One correction, a fact-check false alarm on "8 September" (open in plan §7.2: a day written in words isn't matched to a date value).
+- **Paid, $0.44:** `eval-run.ps1 -Cases "admin,Q01,Q22,Q48" -Audience platform-admin -Budget 1.20 -Rerun 0 -Model claude-sonnet-5-5 -Effort medium -Label b10a-admin`: 8 of 8 passed, all asked as a platform admin. One correction, a fact-check false alarm on "between 8 and 11 September" (fixed in C0b.1).
+
+## Done: C0b.1 — days listed before their month (commit `5f7e7f84`, 2026-10-16)
+
+Plan §4 "C0b.1": the fact check's day-first date pattern joined days only with "–", "-" or "to", so in "between 8 and 11 September" the "8" was read as a count. Day-first dates now also join their days with "and", "&" or commas; month-first dates are unchanged ("Aug 30–Sep 6, 68–88%" keeps its figures). The free replay of 113 stored answers (C0, C0b, B9, B10a) changes only B10a's Q53. $0 spent. Replay launcher: `replay.ps1 -Report <absolute path to a run's .json> [-Audience platform-admin]` (the report path must be absolute).
 
 ## Next package: B10b — Platform Admin knowledge, part 2 (plan it)
 
@@ -301,7 +305,7 @@ dotnet test caboodle/tests/Intelligence.Application.Test/Intelligence.Applicatio
 
 **Free fact-check replay** (`replay.ps1`, no model calls; C0b):
 - It starts with the same first lines as `dbtests.ps1` (both connection strings, no API key).
-- It sets `ASK_CABOODLE_FACTCHECK_REPLAY` to a stored run's `.json` (for example `docs/AskCaboodle-Eval/2026-10-16-claude-sonnet-5-5-medium-c0b.json`), optionally `ASK_CABOODLE_EVAL_CASES` and `ASK_CABOODLE_FACTCHECK_VERBOSE=1` (prints what each tool returned).
+- It sets `ASK_CABOODLE_FACTCHECK_REPLAY` to a stored run's `.json` as an **absolute** path (a relative one is read from the test's `bin` folder), for example `D:\Fork\Caboodle BE Repository\caboodle.backend\docs\AskCaboodle-Eval\2026-10-16-claude-sonnet-5-5-medium-c0b.json`; optionally `ASK_CABOODLE_EVAL_CASES`, `ASK_CABOODLE_FACTCHECK_VERBOSE=1` (prints what each tool returned) and, for a run asked as a platform admin, `ASK_CABOODLE_EVAL_AUDIENCE=platform-admin` with the admin connection string.
 - It runs `dotnet test … --no-build --filter "FullyQualifiedName~FactCheckReplayTests" --logger "console;verbosity=detailed"`.
 - It prints, per case, what the current rules flag first (the first draft, else the answer) next to that run's claims-check findings.
 
