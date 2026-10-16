@@ -1,10 +1,10 @@
 # Ask Caboodle — Handoff for the next session
 
-Written 2026-10-16, after B10b (commit pending). Read this first, then §0, §3 B10 ("B10b as built"), §4 C1 and C1b, §7 (D124, D126–D131 and §7.2), §8, §10 and §11 of [`ask-caboodle-be-implementation-plan.md`](ask-caboodle-be-implementation-plan.md).
+Written 2026-10-16, after B10b (commit `e26a5f52`). Read this first, then §0, §3 B10 ("B10b as built"), §4 C1 and C1b, §7 (D124, D126–D132 and §7.2), §8, §10 and §11 of [`ask-caboodle-be-implementation-plan.md`](ask-caboodle-be-implementation-plan.md).
 
 ## Starter prompt
 
-> Read `docs/ask-caboodle/ask-caboodle-next-session.md`, then §0, §3 B10 ("B10b as built"), §4 C1 and C1b, §7 (D124, D126–D131 and §7.2), §8, §10 and §11 of `docs/ask-caboodle/ask-caboodle-be-implementation-plan.md` in `D:\Fork\Onboarding-Journey`. The backend is `D:\Fork\Caboodle BE Repository\caboodle.backend`, branch `feature/ask-caboodle` (last commit B10b, after C0b.1 `5f7e7f84`; working tree clean).
+> Read `docs/ask-caboodle/ask-caboodle-next-session.md`, then §0, §3 B10 ("B10b as built"), §4 C1 and C1b, §7 (D124, D126–D132 and §7.2), §8, §10 and §11 of `docs/ask-caboodle/ask-caboodle-be-implementation-plan.md` in `D:\Fork\Onboarding-Journey`. The backend is `D:\Fork\Caboodle BE Repository\caboodle.backend`, branch `feature/ask-caboodle` (last commit B10b `e26a5f52`, after C0b.1 `5f7e7f84`; working tree clean).
 >
 > Plan package C1 (token streaming and the run trace). First re-fetch `origin/feature/CS-1770-iam-service-broker-workspace` and tell me whether it has commits after `b5adb1a1`; don't merge without my go-ahead. Load the `claude-api` skill and read the conversation, agent and event code first, then post the plan and the open decisions, and wait for my go-ahead.
 >
@@ -14,7 +14,7 @@ Written 2026-10-16, after B10b (commit pending). Read this first, then §0, §3 
 
 | Item | State |
 |---|---|
-| **Backend branch** | `feature/ask-caboodle`, last commit B10b (pending), after C0b.1 `5f7e7f84`, B10a `26a85f3f`, B9 `a8387b82`, C0b `6da28c2d`, C0 `a102eed1`, B8b `b2f00e22`, B8 `02a256b6` and the IAM merge `4d0830e6`. `origin/feature/ask-caboodle` is at B8b (`b2f00e22`); C0, C0b, B9, B10a, C0b.1 and B10b are local only. Never push unless the owner asks. |
+| **Backend branch** | `feature/ask-caboodle`, last commit `e26a5f52` (B10b), after C0b.1 `5f7e7f84`, B10a `26a85f3f`, B9 `a8387b82`, C0b `6da28c2d`, C0 `a102eed1`, B8b `b2f00e22`, B8 `02a256b6` and the IAM merge `4d0830e6`. `origin/feature/ask-caboodle` is at B8b (`b2f00e22`); C0, C0b, B9, B10a, C0b.1 and B10b are local only. Never push unless the owner asks. |
 | **Logins on `caboodle_dev`** | `askcaboodle_app` (standard) and, since B10a, `askcaboodle_admin_app` (platform admins), both created by the owner; their connection strings are the user variables below. |
 | **Docs repo** | `D:\Fork\Onboarding-Journey`, branch `caboodle-access-v2`. Docs commits are one line: `Update - Ask Caboodle docs - …`. |
 | **Model in the app** | **Sonnet 5.5, effort medium** since B7b (D45). Since B8, prices come from the `ModelPrices` table in code, per model and per attempt; the five price settings are gone. Development and Staging settings say `claude-sonnet-5-5`. |
@@ -186,9 +186,9 @@ Plan §3 B10 "B10a as built" has the details. In short:
 
 Plan §4 "C0b.1": the fact check's day-first date pattern joined days only with "–", "-" or "to", so in "between 8 and 11 September" the "8" was read as a count. Day-first dates now also join their days with "and", "&" or commas; month-first dates are unchanged ("Aug 30–Sep 6, 68–88%" keeps its figures). The free replay of 113 stored answers (C0, C0b, B9, B10a) changes only B10a's Q53. $0 spent. Replay launcher: `replay.ps1 -Report <absolute path to a run's .json> [-Audience platform-admin]` (the report path must be absolute).
 
-## Done: B10b — Platform Admin knowledge, part 2 (commit pending, 2026-10-16)
+## Done: B10b — Platform Admin knowledge, part 2 (commit `e26a5f52`, 2026-10-16)
 
-Decisions D126–D131 are in plan §7; "B10b as built" is in §3 B10. In short:
+Decisions D126–D132 are in plan §7; "B10b as built" is in §3 B10. In short:
 - **Migration `20261016210000_AddAskCaboodleDataPipelineGrants`** (grant-only; applied on local `caboodle_dev`; `Down` checked): `askcaboodle_admin_ro` reads 17 more tables, 55 in all.
   - **Whole tables (13):** `AddressReferences`, `BrandDataCleanupJobs`, `DistributorCustomerLinks`, `StoreCleanupChangeLogs`, `StoreListIssues`, `StoreMergeHistories`, the two `Unmapped*Records`, `UnmappedRecordResolutionAudits`, and the four raw and mapped KeHE/UNFI tables.
   - **By column (4):** `DataSyncRuns`, `ImportJobs`, `ExportJobs`, `DistributorUpcMappings`. Hidden: file locations, upload ids and part lists, the signed file link and hash (D127); the UPC mappings' notes, resolver and audit user columns (D109).
@@ -206,12 +206,19 @@ Decisions D126–D131 are in plan §7; "B10b as built" is in §3 B10. In short:
   - Q57 wrote "two issue types have none open" when one has none (C0c's kind), fixed by an example that lists every type with zeros;
   - Q53 was a claims-check false fail on its right "13 recipients", fixed in the notes;
   - the re-check passed 2 of 2 ($0.08).
-- **For the owner's review (§7.2):**
-  - the UPC mappings' audit user columns are hidden too;
-  - the catalog says zero-unit KeHE lines are kept (DI9);
-  - the issue example lists every type with zeros;
-  - Q53's notes changed;
-  - the bugs found outside Ask Caboodle (the Sync Runs list API, trigger labels, the export route, YoY % shown as dollars, the crawler's plain HTTP).
+- **At review (D132):**
+  - the UPC mappings' audit user columns stay hidden;
+  - the zero-unit KeHE lines will be dropped once that change reaches production, so the catalog no longer describes them (the sentence was removed before the commit);
+  - the issue example that lists every type with zeros is accepted;
+  - Q53's notes are accepted.
+- **Concerns to visit one by one later (plan §7.2, "B10b concern 1–6"):**
+  - the hard-coded store-list issue types;
+  - re-recording the references when the zero-unit drop reaches the data;
+  - the catalog rules once DI14 and DI13 are fixed;
+  - the mask as the only guard on DI12's address;
+  - checking the pipeline on staging before go-live.
+
+  Also the bugs found outside Ask Caboodle: the Sync Runs list API, trigger labels, the export route, YoY % shown as dollars, the crawler's plain HTTP.
 
 ## Next package: C1 — token streaming and the run trace (plan it; then C1b)
 
