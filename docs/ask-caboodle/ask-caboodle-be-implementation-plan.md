@@ -482,8 +482,8 @@ Decisions D46–D58 (owner, 2026-10-14). The original scope was: a per-user dail
   - **Build:** 0 errors, no warnings in changed files.
 - **Docs:** BE `docs/AskCaboodle-FE.md`, "Usage and limits" section: every endpoint, the fields, who sees what, the periods and the purge caveat (D63).
 
-### B9 — Catalog completion (next; after C0b)
-Decisions D75 and D77 (owner, 2026-10-15). Adds the useful business data that is still missing, without loosening security (§9).
+### B9 — Catalog completion (done 2026-10-16, commit `a8387b82`)
+Decisions D75 and D77 (owner, 2026-10-15); D109–D114 (owner, 2026-10-16). Adds the useful business data that is still missing, without loosening security (§9).
 1. **Promotion fee lines, through the calculator.**
    - `get_promotion_performance` gains a fee-line breakdown, for approved and sandbox promotions. Each fee shows:
      - its name and type (lump sum, coupon or Prime);
@@ -493,14 +493,21 @@ Decisions D75 and D77 (owner, 2026-10-15). Adds the useful business data that is
    - The fee tables (`TradeSpend.BrandApprovedPromotionFees`, `TradeSpendSandbox.PromotionFees`) stay calculator-only, with no SQL grant, so the figures still match the Promotion Details screens.
    - Before building, check where the app works out each fee's amount. Use that same code, never a new formula.
    - Remove the glossary's `not_available.promotion_fee_lines`.
-2. **Three CRM tables:**
-   - `CRM.DistributorRetailers`: which distributor serves which retailer for a brand, with `DistributorMarkup` (brand-scoped);
+2. **Two CRM tables** (owner, D113: not `CRM.DistributorRetailers`):
    - `CRM.DistributorBrands`: brand ↔ distributor, with the parent distributor;
    - `CRM.RetailerRegions`: retailer ↔ region ↔ banner.
 
    Each one gets a catalog entry with module tags (D17), rules and a worked example. The grants go in one migration on local `caboodle_dev`.
-3. **Optional, decided when B9 starts:** `DataHub.DistributorUpcMappings` (distributor items ↔ products, with match status), granted without `ResolutionNotes` and `ResolvedBy`.
+   - **Distributor ↔ retailer comes from `CRM.DistributorBanners`** (already catalogued), joined to `CRM.Banners` and then `CRM.Retailers`. Its `DistributorMarkup` is the only markup: the one the promotion screens and the calculator use. `CRM.DistributorRetailers` is never used (D113).
+3. **`DataHub.DistributorUpcMappings`:** not in B9; it moves to B10b with the other pipeline and mapping tables, for platform admins (D109).
 4. **§9:** update every row this package changes.
+
+**What B9 builds on (found at the start, 2026-10-16):**
+- **Fee amounts:** the Promotion Details screens compute each fee in `BrandApprovedPromotionFeeCalculator.Compute` (approved) and `PromotionFeeCalculator.Compute` (sandbox), the same logic. The builders the tool already calls (`TradeSpendDTOBuilder.GetTradeSpendPromoDTO`, `PromotionDTOBuilder.GetPromotionDTO`) put the result on the screen's DTO (`BrandApprovedPromotionFees` / `PromotionFees`: name, type, value). The screen's fee filter ("name - $value") shows the same values. B9 reads those, so it adds no formula.
+- **Two kinds of fee:** AD/TPR fees are the flat fee entered on each event (`LumpSumProposed`), which the screen lists per event name; promotion fees are the named lump-sum, coupon and Prime fees. Bubbies' Publix promotions (Q41) have only AD/TPR fees. Both kinds add up to the totals the tool already showed.
+- **Where each fee applies:** the screens' own fee queries (`GetBrandApprovedPromotionFeesAsync`, `GetPromotionFeesAsync`).
+- **The screen's way of counting (copied, D112):** a lump sum is split evenly across its banners, and a banner with no calculated events (or outside a month or banner filter) gets none, so less than the amount entered can count. A coupon whose dates miss the events counts $0.
+- **Regions:** the app's banner and region screens take a banner's region from `CRM.RetailerRegions`, not from `CRM.Banners."RegionID"`. B4's "banners in each region" example used `RegionID`; B9 changes it to the app's link.
 5. **Tests (free):**
    - the grant-vs-catalog test;
    - every new catalog example runs as `askcaboodle_app`;
@@ -509,7 +516,39 @@ Decisions D75 and D77 (owner, 2026-10-15). Adds the useful business data that is
 6. **Eval:** 3–4 new cases: fees by type, a distributor's markup, the banners in a region, the distributors that carry the brand.
 7. **Paid:** a targeted check of the new cases plus 4 regression cases, about $0.60 on Sonnet 5.5 medium, approved first. A full eval (≈ $2.60) only if results differ.
 
-### B10 — Platform Admin knowledge (after B9)
+**B9 as built (2026-10-16):**
+- **`get_promotion_performance`, `breakdown: "fee"` (D110, D111):**
+  - `PromotionFigures.Fees` holds one `PromotionFeeLine` per fee: name, kind (`AD/TPR fee`, or the screen's type label `Lump Sum` / `Coupon` / `Prime Membership Allowance`), banners, products, events, coupon dates, settings as entered and the amount counted.
+  - **AD/TPR lines:** the calculated events' `LumpSumProposed`, grouped by event name and dates (the same events and sums as the screen's event summary). Simple promotions get the same lines from their existing fee query, now grouped by event.
+  - **Promotion fee lines:** the amount is the builders' own fee summary (`dto.BrandApprovedPromotionFees` / `dto.PromotionFees`); a fee the screen did not calculate counts $0, as in its fee filter. Where each applies comes from the screens' fee queries, with banner, product and event names read in one query per call.
+  - **Result table:** promotion, version, fee, kind, banners, products, events, coupon_start, coupon_end (dates), settings, amount (usd); a promotion without fees gets one "no fees" row. The model text adds the fee rules (D112) and, per promotion, "fee lines: AD/TPR fees $X in N lines · promotion fees $Y in M lines", then up to 15 lines.
+- **Catalog:**
+  - new `CRM.DistributorBrands` and `CRM.RetailerRegions`;
+  - `CRM.DistributorBanners` explains distributor ↔ retailer through the banners and calls its markup the only one (D113), with a retailer example;
+  - **regions (D115):** a retailer's or banner's region comes only from `CRM.RetailerRegions`. `CRM.Banners."RegionID"` is no longer described, and the "banners in each region" example uses `RetailerRegions`. On `caboodle_dev` the two disagree for all 459 linked banners;
+  - glossary: the `promotion_fees` term (two kinds), the `distributor` term points to the two link tables, and `not_available.promotion_fee_lines` is gone; the calculator metric names `breakdown: "fee"`.
+- **Migration `AddAskCaboodleCatalogCompletionGrants`** (applied on local `caboodle_dev`): SELECT on the two tables, checked in `information_schema`; nothing on `CRM.DistributorRetailers`.
+- **Eval (52 cases):**
+  - Q41 is now `answer` only: the 2026 plan's two AD/TPR lines ($6,999 and $6,000, $12,999 in all) and no promotion fees;
+  - Q45 (calculator): fees by type on the HEB 2026 plan, $35,000 lump sum plus $12,073 of AD/TPR fees in 5 lines, no coupon or Prime; "HEB 2026 PV - Draft - Final - Copy" holds only 2027 events. (`SPROUTS 2026 - MD` has no fees, so it could not be the case);
+  - Q46: Sprouts' one banner is served by KeHE DELIVERED at an 8% markup;
+  - Q47: Kroger's 14 banners in 7 regions;
+  - Q48: 39 distributors (and 39 delivery methods);
+  - calculator references also return `fee_lines`, `ad_tpr_fee_lines`, `largest_fee` and the fees per kind, and list every fee line for the claims check.
+- **Tests (free):**
+  - solution 6,821 green across 16 projects; Intelligence 484; coverage 97.9 % unit-only, every new or changed line covered;
+  - DB tests 25 green, among them `PromotionFeeLinesDatabaseTests` (D114): with a temporary lump sum, coupon and Prime fee on the Publix 2026 plan and a sandbox Sprouts version, the lines equal the screen's fee list, its filter labels and its event summary, and add up to both totals (full year and Q4). The lump sum on one banner with events and one without counted half;
+  - every catalog example runs as `askcaboodle_app`; all golden references match;
+  - build 0 errors; the only new warning is the migration's CA1505.
+- **Found:** DI11 (six approved Prime fees point at no promotion). The screen counts a coupon's non-promo units inside its own dates even when a month filter leaves those months out (Q4: $39 on a June coupon); Ask Caboodle copies this (D112).
+- **Paid check, $0.59** (Sonnet 5.5 medium, no re-runs; report BE `docs/AskCaboodle-Eval/2026-10-16-claude-sonnet-5-5-medium-b9.md`):
+  - **9 of 9 passed:** Q41, Q45–Q48 and the regressions Q22, Q37, Q39, Q30; $0.04 per answer on average ($0.36 answers, $0.22 claims check), 13.3 s.
+  - **Q41** lists the two AD/TPR lines and says there are no promotion fees; **Q45** picks the HEB plan by its event dates and splits $47,073 into the $35,000 lump sum and the five AD/TPR lines; **Q46–Q48** read the new tables (KeHE DELIVERED at 8%; 14 Kroger banners in 7 regions; 39 distributors).
+  - **Fact check:** 2 of 9 corrected. Q48's draft hand-counted "10" Costco and "14" Trader Joe's entries (8 and 13): both caught. Q45's "$47,073" (AD/TPR + promotion fees) was right but in no result: a false alarm.
+- **Tuned after the paid check:** the fee header now also states the total of all lines ("fee lines: $47,073 in 6 lines · AD/TPR fees … · promotion fees …"). The free replay of the paid run then flags only Q48's two wrong counts.
+- **Correction message (D116):** Q48's corrected answer told the user "I corrected the Costco and Trader Joe's counts below after checking them against the data." The correction message now ends with "Don't mention the correction; write the answer as if it were the first." The system prompt is unchanged (D104).
+
+### B10 — Platform Admin knowledge (next)
 Decisions D72–D75 (owner, 2026-10-15). Platform admins can ask about the whole system except credentials. Organization users stay on their IAM access (G3–G5).
 1. **A second read-only login.** The group role `askcaboodle_admin_ro` (NOLOGIN) and the login `askcaboodle_admin_app`, created by the owner or ops as in B2, with `default_transaction_read_only` and `statement_timeout` on the login. The connection string goes in the user environment variable `IntelligenceSettings__AdminReadOnlyConnectionString`, never in git.
 2. **What it can read:** everything `askcaboodle_ro` reads, plus:
@@ -520,7 +559,7 @@ Decisions D72–D75 (owner, 2026-10-15). Platform admins can ask about the whole
    - **Email:** the logs' metadata only (template, status, dates), with no addresses or message bodies (D74), plus the template names;
    - **DataLifecycle:** the purge runs and settings;
    - **Brand links:** `Brand.BrandBrokers`, `Brand.BrandSubUsers`;
-   - **Data pipeline:** DataHub import, sync, mapping and data-quality tables, and the raw distributor files (§9.1).
+   - **Data pipeline:** DataHub import, sync, mapping and data-quality tables (with `DataHub.DistributorUpcMappings` without `ResolutionNotes` and `ResolvedBy`, D109), and the raw distributor files (§9.1).
 3. **Never granted:**
    - credentials: `Identity.UserTokens`, `UserLogins`, `UserClaims`, `VerificationCodes`; the password hash, security and concurrency stamps, refresh tokens and email codes in `Identity.Users`; invitation and share-link tokens; `DataHub.ThirdPartyCredentials`;
    - the `Intelligence` schema (other users' questions, D73);
@@ -1055,6 +1094,14 @@ Owner answers recorded 2026-10-11.
 | D106 | C0b: "about 170 stores" | **Owner:** whole numbers under 1,000 stay exact (D98, D100); the correction gives the range instead. Revisit if the same right figure is flagged more than twice (D103). |
 | D107 | Eval: "nothing found" | **Owner:** Q33 (no buyer contacts, and emails can't be given) accepts `answer` or `cannot_answer`, as D87; Q35 (no Sprouts activity logged) stays `answer`, because the data answers it. |
 | D108 | C0c go or no-go | **Owner (2026-10-16):** deferred, not dropped. About one placement or pattern error per full run is left (about 2 %); only platform admins can ask until G2, so waiting costs real users nothing. C0c is done before G2, sized with C8's data from admin use. The order is C0b → B9 → B10 → C1 → …, with C0c before G2. |
+| D109 | B9: `DataHub.DistributorUpcMappings` | **Agreed (2026-10-16):** not in B9. It moves to B10b with the other pipeline and mapping tables, for platform admins, without `ResolutionNotes` and `ResolvedBy`. App users reach it only through DataHub's Entity Resolution screen. |
+| D110 | B9: how fee lines reach the model | **Agreed:** a new `breakdown: "fee"` option on `get_promotion_performance`. The tool definitions change, so the first question after B9 writes the prompt cache once, and runs before and after B9 are not strictly comparable. |
+| D111 | B9: what a fee line shows | **Agreed:** both kinds of fee (each event's AD/TPR fee and each lump-sum, coupon or Prime fee), with where it applies, the coupon dates, the settings as entered and the amount the calculator counts. |
+| D112 | B9: the screen's way of counting fees | **Agreed:** copy it, never fix it: a lump sum split evenly across its banners and counted only for banners with calculated events; a coupon counting $0 when its dates miss the events. The tool's text explains it. |
+| D113 | Distributor ↔ retailer and the markup | **Owner:** `CRM.DistributorRetailers` is never used. Which distributor serves which retailer comes from `CRM.DistributorBanners` joined to `CRM.Banners` and `CRM.Retailers`. There is one markup, `DistributorBanners."DistributorMarkup"`, the one the promotion screens join. |
+| D114 | B9: fee reconciliation data | **Agreed:** the DB test adds a lump-sum, a coupon and a Prime fee to one approved and one sandbox promotion, compares the lines with the screens, and deletes them afterwards, as B3's DB test does. |
+| D115 | Region of a retailer or banner | **Owner (2026-10-16):** it comes from `CRM.RetailerRegions`. The catalog no longer describes `CRM.Banners."RegionID"`. |
+| D116 | A corrected answer mentioning its correction | **Owner (2026-10-16):** users don't need to know how an answer was checked, and the remark misleads them. C0b's correction message (not the system prompt, D104) ends with "Don't mention the correction; write the answer as if it were the first." Built in B9. |
 
 ### 7.1 Demo track — dropped 2026-10-12 (D3), kept for history
 
@@ -1094,7 +1141,8 @@ Each one is posted with its package, and gets a D number once decided.
 | Thumbs-down triage list in the Flight recorder | C8 | **Decided:** D97. Build it in C8; each fixed answer becomes an eval case. |
 | Sonnet 5.5 cache-read price: $0.10 per million tokens (B8; the app's `ModelPrices`) or $0.20 (the `claude-api` skill's table) | Owner (Claude Console) | If the Console bills $0.20, update `ModelPrices`: answers cost about 14 % more than the reports say, and the budgets fill faster. |
 | Where the organization admin's usage page and the "questions left today" indicator sit | FE (§10.9) | FE team |
-| Grant `DataHub.DistributorUpcMappings` (without notes and "resolved by") | B9 | Owner decides when B9 starts |
+| Grant `DataHub.DistributorUpcMappings` (without notes and "resolved by") | B9 | **Decided:** D109, moved to B10b for platform admins. |
+| A corrected answer mentions its correction to the user (B9 paid check, Q48: "I corrected the Costco and Trader Joe's counts below after checking them against the data") | C0b's correction message (owner) | **Decided:** D116, one sentence added to the correction message; built in B9. |
 | Split B10 into B10a (IAM, organizations, modules, settings, audit) and B10b (data pipeline) | B10 | Decide when B10 starts |
 | Organization admins asking about their own organization's members, roles and invitations | Later (after GA) | Optional; scoped to their organization and their IAM permissions |
 | Access to the user-documentation repo, and the review format for Constance | C9 | Owner provides access; the format is agreed when C9 starts |
@@ -1122,8 +1170,8 @@ Each one is posted with its package, and gets a D number once decided.
 | C0 | done | `a102eed1` | 2026-10-15: plan and decisions D79–D89 approved (§4 C0, §7); the IAM branch is unchanged since `b5adb1a1`. Built as in §4 C0 "C0 as built": migration `AddAskCaboodleAnswerPieces` applied locally; solution 6,735 green, Intelligence 398, coverage 97.3 %, DB tests 23 green, build 0 errors.<br>**Paid checks, $3.54:** full run 40/45 counted (B7b 39/45) with the kinds fix, app questions 3/3, $0.035 per answer; the re-checks fixed Q04-DAVID (period), Q19, Q43 and Q44 (fewer rejected calls). Q11, Q29 and Q27 are still failing (see "C0 as built").<br>**Balance:** about $54.03. |
 | C0b | done | `6da28c2d` | 2026-10-16: built as in §4 C0b "as built"; the IAM branch is unchanged since `b5adb1a1`. No migration. Solution 6,813 green, Intelligence 476, coverage 97.8 % unit-only, DB tests 23 green, build 0 errors.<br>**Paid, $3.43:** 4-case check 4/4 ($0.41; Q16 and Q29 now pass); full run 38/45 counted, app questions 3/3, $0.036 per answer ($2.62); 5 of 48 corrected, none sent with the note; no failure caused by the check. D103 tuning, then a re-check of 7 ($0.40): Q04 and Q07 no longer corrected.<br>**At review (D105–D107):** both tunings kept, "about 170" stays strict, Q33 accepts either kind. Still open: C0c go or no-go; the industry-terms list waits for Constance (§7.2).<br>**Balance:** about $50.60. |
 | C0c | deferred | | Fact check, step 2: rankings, trends and figures in the wrong place. Deferred to before G2 (D108): about one such error per full run is left; sized with C8's data. |
-| B9 | next | | Catalog completion: fee lines through the calculator, and three CRM tables. Post the plan and open decisions first. |
-| B10 | todo | | Platform Admin knowledge: everything except credentials (D72–D75). |
+| B9 | done | `a8387b82` | 2026-10-16: plan and decisions D109–D116 approved; the IAM branch is unchanged since `b5adb1a1`. Built as in §3 B9 "as built": fee lines through the calculator (`breakdown: "fee"`), `CRM.DistributorBrands` and `CRM.RetailerRegions` (not `DistributorRetailers`, D113), regions from `RetailerRegions` only (D115); migration `AddAskCaboodleCatalogCompletionGrants` applied locally; solution 6,821 green, Intelligence 484, coverage 97.9 %, DB tests 25 green, build 0 errors. DI11 recorded.<br>**Paid, $0.59:** 9 of 9 passed (Q41, Q45–Q48, Q22, Q37, Q39, Q30); 2 corrected (Q48's two wrong hand counts caught; Q45's right total a false alarm, fixed by stating the fee total).<br>**At review:** D116 (a corrected answer never mentions the correction).<br>**Balance:** about $50.01. |
+| B10 | next | | Platform Admin knowledge: everything except credentials (D72–D75). Post the plan and open decisions first; the owner or ops creates the second read-only login first (§3 B10 item 1). |
 | C1 … C8 | todo | | C1 now includes the run-trace events. |
 | C9 | todo | | Caboodle guide. Needs the documentation repo and Constance's review. |
 | G1 … A3 | todo | | |
@@ -1160,7 +1208,8 @@ Kept up to date in every package that changes the catalog or the grants. The age
 | Contact email, phone, notes | `CRM.Contacts` `Email`, `PhoneNumber`, `ContactNotes` | Personal data would be sent to the Claude API (D23). Notes are skipped too because some hold emails. | Column grant: `askcaboodle_ro` can read only ID, BrandID, names, title, company and Deleted | **G8**, with the data-handling statement and Constance's agreement; for platform admins too (D72) |
 | Emails and phone numbers typed into notes | Any text column (activity notes, comments, brand-report notes) | Same reason (D23 applied to free text) | The gateway replaces them with `[email]` / `[phone]` before the model or the screen sees them | **G8**, as above |
 | Brokerage-internal Brand Report notes | `Broker.BrandReports.InternalNotes` | Brokerage-only working notes; brands get only the shared ones (D18) | Column grant | **G3/G4**, only if a broker-only audience needs them |
-| Individual promotion fee lines | `TradeSpend.BrandApprovedPromotionFees`, `TradeSpendSandbox.PromotionFees` | Calculator inputs. Fee and spend **totals** have been available since B5 through `get_promotion_performance`; the lines (fee names, types, coupon / Prime settings) were not. | Not granted; read only through the app's calculator | **B9:** the fee lines through the calculator, still with no SQL grant (D77) |
+| Promotion fee tables | `TradeSpend.BrandApprovedPromotionFees`, `TradeSpendSandbox.PromotionFees` | Calculator inputs. Totals since B5, and every fee line since B9 (name, type, where it applies, coupon dates, settings, amount), come from `get_promotion_performance` (`breakdown: "fee"`), so they match the Promotion Details screens. | Not granted; read only through the app's calculator | **Never** as SQL (D77); the lines are answered through the calculator since B9 |
+| Retailer-level distributor and markup | `CRM.DistributorRetailers` | Not how Caboodle links distributors: which distributor serves which retailer, and the one markup, come from `CRM.DistributorBanners` through the banners (D113) | Not granted | **Never** (D113) |
 | Raw distributor files | `DataUpload.KeHeRecords`, `UnfiRecords`, `KeHeMappedRecords`, `UNFIMappedRecords`, `DataMappings` | Already normalized into `DistributorSalesRecords`. The raw-only fields (KeHE prior-year quantity, UNFI published wholesale) are rarely asked about. | Not granted | **B10b** for platform admins; **on request** for everyone else |
 | Legacy SPINS format | `DataUpload.SpinsRecords` | Superseded by Stores Insight and Item Ranking; only DataHub cleanup still references it | Not granted | **Never** |
 | Banner activity types | `CRM.BannerActivityTypes`, `BannerActivities.BannerActivityTypeID` | Never populated or read by the app | Not catalogued | **On request**, if the app starts recording types |
@@ -1174,8 +1223,7 @@ Kept up to date in every package that changes the catalog or the grants. The age
 
 | Tables | What they hold | Plan |
 |---|---|---|
-| `CRM.DistributorRetailers`, `CRM.DistributorBrands`, `CRM.RetailerRegions` | Which distributor serves which retailer for a brand (with the distributor markup %), brand ↔ distributor links, and retailer ↔ region ↔ banner links | **B9** (D77) |
-| `DataHub.DistributorUpcMappings` | Distributor items ↔ Caboodle products, with match status | **B9, optional** (§7.2), without `ResolutionNotes` and `ResolvedBy` |
+| `DataHub.DistributorUpcMappings` | Distributor items ↔ Caboodle products, with match status | **B10b**, for platform admins, without `ResolutionNotes` and `ResolvedBy` (D109) |
 | `Broker.PromoTabs`, `PromoTabColumns`, `PromoTabRows`, `PromoTabCells` | A brokerage's own Promo Tabs spreadsheets | **G3**, broker audience only, with each brokerage seeing only its own |
 | `Broker.CategoryReviewCalenderDateAssignments`, `BrandReportStatusSettings` | Calendar date assignments and status settings | **On request** (low question value) |
 | `Broker.BrandReportEmailLogs`, `CategoryReviewEmailLoggers` | Notification email logs | **B10**, metadata only, for platform admins (D74) |
@@ -1270,7 +1318,7 @@ The full contract is in BE `docs/AskCaboodle-FE.md`, "The answer pieces".
 | B5 | Calculator progress labels ("Calculating 2 approved promotions"); promotion tables |
 | B8 | `error.code`, `resetsAt`, `questionsLeftToday` in `done`; tokens for everyone, while $ and the model are for platform admins only (`done` and history) |
 | B8b | `GET askcaboodle/usage`, `GET askcaboodle/organization-usage`, `askcaboodleadmin/settings`, `usage`, `budgets` |
-| B9 | Fee lines in promotion answers (one row per fee: name, type, where it applies, amount); markup, region and distributor answers. No new FE pieces. |
+| B9 | Fee lines in promotion answers: a normal data block, one row per fee (promotion, version, fee, kind, banners, products, events, coupon start and end as dates, settings, amount in usd); markup, region and distributor answers. No new FE pieces. |
 | B10 | No FE change; platform admins get wider answers (organizations, users, modules, imports) |
 | C0 | The `frame` event (kind, headline, notes, options) and its replace rule; the data block's series, formats, totals, highlights and `chartable`; the same pieces in `GET sessions/{id}`; the feedback `reason` (down only) and `feedbackReason` in history |
 | C0b | `text.unverifiedFigures` (and `unverifiedFigures` in `GET sessions/{id}`): when not empty, the note "Some figures in this answer couldn't be checked against the data: …" right under the text (rare). A corrected answer takes a few seconds longer, shows the progress label "Correcting figures that didn't match the data", and may send a new `frame`/`data` that replaces the earlier one |
