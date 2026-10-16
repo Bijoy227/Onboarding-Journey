@@ -548,7 +548,7 @@ Decisions D75 and D77 (owner, 2026-10-15); D109–D114 (owner, 2026-10-16). Adds
 - **Tuned after the paid check:** the fee header now also states the total of all lines ("fee lines: $47,073 in 6 lines · AD/TPR fees … · promotion fees …"). The free replay of the paid run then flags only Q48's two wrong counts.
 - **Correction message (D116):** Q48's corrected answer told the user "I corrected the Costco and Trader Joe's counts below after checking them against the data." The correction message now ends with "Don't mention the correction; write the answer as if it were the first." The system prompt is unchanged (D104).
 
-### B10 — Platform Admin knowledge (next)
+### B10 — Platform Admin knowledge (next: B10a, decisions D117–D123 approved 2026-10-16)
 Decisions D72–D75 (owner, 2026-10-15). Platform admins can ask about the whole system except credentials. Organization users stay on their IAM access (G3–G5).
 1. **A second read-only login.** The group role `askcaboodle_admin_ro` (NOLOGIN) and the login `askcaboodle_admin_app`, created by the owner or ops as in B2, with `default_transaction_read_only` and `statement_timeout` on the login. The connection string goes in the user environment variable `IntelligenceSettings__AdminReadOnlyConnectionString`, never in git.
 2. **What it can read:** everything `askcaboodle_ro` reads, plus:
@@ -579,8 +579,46 @@ Decisions D72–D75 (owner, 2026-10-15). Platform admins can ask about the whole
    - the brokers connected to a brand;
    - the recent module-setting changes.
 9. **Paid:** about $0.60–1.00, approved first.
-10. **Can be split when it starts:** B10a (IAM, organizations, modules, settings, audit) and B10b (the pipeline: imports, syncs, data-quality issues, raw files).
+10. **Split (D117):** B10a (the mechanism, plus IAM, organizations, modules, settings, audit, email-log metadata, brand links and purge runs), then B10b (the pipeline: imports, syncs, mappings, data-quality issues, raw files).
 11. **FE:** no change. Platform admins simply get wider answers (§10.8).
+
+**What B10 builds on (read at the start, 2026-10-16):**
+- **One audience today:** the catalog, system prompt, SQL gateway, tools and conversation factory are singletons, with one login (`NpgsqlSqlGateway`), one cached system block (`AnthropicConversation`) and one fingerprint (model, prompt, tools; `AskConversationFactory`). The platform-admin flag reaches the run only as `AskAgentContext.ShowsCost` (from `AskAsker.IsPlatformAdmin` in `AskQuestionRequest`).
+- **The SQL guard** (`SqlGuard`, fed by `SchemaCatalog.TableNames` and `SchemaNames`) refuses tables outside the catalog in the catalogued schemas and in `SensitiveSchemas` (Identity, Email, Auditing, Organization, Intelligence, hangfire, Configuration, DataLifecycle). `public` is not in that list; the grants refuse it.
+- **Snapshots:** Identity lives in `ApplicationDbContextModelSnapshot` (Users, Roles, RoleClaims, UserRoles, UserClaims, UserLogins, UserTokens) and `Auditing.AuditTrails` there too; the rest in `MainDbContextModelSnapshot`.
+- **Data on `caboodle_dev`:** 225 organizations (215 brand, 10 brokerage), 307 memberships, 373 brand connections, 10,489 `Brand.BrandBrokers` rows, 324 users, 51 legacy invited users (2 with an inviter), 0 organization invitations and access requests, 7,820 module assignments (Ask Caboodle on for 215 organizations) and 7,819 history rows (latest 28 Sep 2026), no module setting definitions or values, 3 audit events, 141 audit trails (Brand Reports only), 1,270 email logs (2 statuses), no purge runs.
+- **Checked:** no audit trail holds a credential value (5 hold an email address, masked by the gateway); `Identity.Users.UserName` is the email address for 317 of 324 users; no email-log subject holds an address.
+
+**B10a — decided design (owner, 2026-10-16: D117–D123; build in the next session):**
+1. **Roles and logins (D118):**
+   - migration `AddAskCaboodleAdminReadOnlyRole`: creates the group role `askcaboodle_admin_ro` NOLOGIN when the migration user can (as B2; otherwise a NOTICE and ops creates it), `GRANT askcaboodle_ro TO askcaboodle_admin_ro`, USAGE on the admin schemas, and the table and column grants below;
+   - `docs/AskCaboodle-AdminReadOnlyLogin.sql` (BE repo), like `docs/AskCaboodle-ReadOnlyLogin.sql`: creates `askcaboodle_admin_app` LOGIN, grants it `askcaboodle_admin_ro`, sets `default_transaction_read_only = on` and `statement_timeout = '15s'`, and asks for the password with `\password`. **The owner runs it with psql** and puts the connection string in the user environment variable `IntelligenceSettings__AdminReadOnlyConnectionString`;
+   - both go in the deployment checklist (§11) and in BE `docs/AskCaboodle-Deployment.md`.
+2. **The audience (D119, D120):** `IsPlatformAdmin` sets a platform-admin audience in `AskAgentContext`. It picks the admin login in the gateway, the admin tables in the catalog index, `get_table_info` and the SQL guard, and a system prompt of two cached blocks: the shared prompt, byte-identical for everyone, then the admin index. Admin sessions get their own fingerprint, and a session that changes audience starts fresh. Without `AdminReadOnlyConnectionString`, platform admins stay on the standard login and catalog, and it is logged.
+3. **What B10a grants** (D72–D74, D121):
+
+   | Schema | Granted | Never granted |
+   |---|---|---|
+   | Organization | `Organizations`, `Memberships`, `Roles`, `RolePermissions`, `BrandConnections`, `BrandAccess`, `BrandAccessModules`, `AccessRequests`; `Domains` without `VerificationValue` and `VerificationHost`; `Invitations` without `Email` and `TokenHash` | — |
+   | Identity | `Users` without `Email`, `NormalizedEmail`, `UserName`, `NormalizedUserName`, `PhoneNumber`, `ObjectId`, `PasswordHash`, `SecurityStamp`, `ConcurrencyStamp`, `RefreshToken`, `PreviousRefreshToken`, `RefreshTokenExpiryTime`, `RefreshTokenRotatedOn`, `EmailVerificationCode`, `EmailExpiryTime`; `Roles` without `ConcurrencyStamp`; `RoleClaims`, `UserRoles`, `UsersHierarchy`; `InvitedUsers` without `Email` and `VerificationCode` | `UserClaims`, `UserLogins`, `UserTokens`, `VerificationCodes` |
+   | Configuration | `Modules`, `ModuleAssignments`, `ModuleAssignmentHistories`, `ModuleDependencies`, `ModuleSettingDefinitions`, `ModuleSettingValues` | — |
+   | Auditing | `AuditEvents` without `IpAddress`; `AuditTrails` | — |
+   | Email (D74) | `EmailLoggers`: ID, `Status`, `ResendCount`, `TotalEmailSent`, `Subject` and the audit dates, without `TO`, `CC`, `BCC`, `From`, `Body`, `ErrorMessage`; `SnsEventLogs`: ID, `EmailLoggerId`, `SnsType`, `ErrorType`, dates; `EmailTemplates`: ID, `Name`, `Module`, `Subject` | addresses, bodies, error texts, SNS payloads |
+   | Broker email logs | `BrandReportEmailLogs` and `CategoryReviewEmailLoggers`: the same metadata columns | the same |
+   | DataLifecycle | the purge and backfill run tables; `SoftDeletePurgeSettings` without `NotificationEmails` | — |
+   | Brand | `BrandBrokers`, `BrandSubUsers` | — |
+
+   Still never granted, on either login: `Intelligence` (D73), `hangfire`, `public`, `DataHub.ThirdPartyCredentials`.
+4. **Catalog:** each new table gets an entry with `audience: platform-admin`, `modules: { brand: none, broker: none }`, rules (organization types 5 = brand and 10 = brokerage; Ask Caboodle on = an enabled assignment of module `ask-caboodle`; legacy invites vs organization invitations) and an example. No new `search_entity` types (D122). §9 rows updated.
+5. **Tests (free):**
+   - a credentials scan of `information_schema` (table and column privileges) for both roles: it fails on any secret-like column (password, hash, token, secret, stamp, code, credential, cipher, key) or personal one (email, phone, address, IP) unless the test lists it as allowed;
+   - the grant-vs-catalog test for both roles (standard grants = standard catalog; admin grants = admin catalog);
+   - DB tests: the admin login reads `Organization.Organizations`, and is refused `Identity.Users."PasswordHash"`, `Identity.UserTokens` and `Intelligence.AskMessages` (42501); the standard login is refused the admin tables;
+   - unit tests: an organization user's prompt, index, `get_table_info` and SQL guard never include admin tables; the shared prompt is byte-identical; the two fingerprints differ.
+6. **Eval (D123):** a per-case `audience: platform-admin`, and 5 admin cases: organizations with Ask Caboodle switched on; who invited a user (the legacy invited users: 2 of 51 have an inviter, so "no inviter recorded" is right for the others); the brokerages connected to a brand; recent module changes; email sending failures.
+7. **Paid:** the 5 admin cases plus 3 regression cases, about $0.55 on Sonnet 5.5 medium, capped at $1.20, approved first.
+
+**B10b (after B10a):** DataHub's import, export, sync, mapping and data-quality tables (with `DistributorUpcMappings` without `ResolutionNotes` and `ResolvedBy`, D109), and the raw distributor files, for platform admins. Never: S3 keys, upload ids and file URLs; `ThirdPartyCredentials`. Eval: the imports and syncs that failed this week.
 
 ---
 
@@ -1101,6 +1139,13 @@ Owner answers recorded 2026-10-11.
 | D113 | Distributor ↔ retailer and the markup | **Owner:** `CRM.DistributorRetailers` is never used. Which distributor serves which retailer comes from `CRM.DistributorBanners` joined to `CRM.Banners` and `CRM.Retailers`. There is one markup, `DistributorBanners."DistributorMarkup"`, the one the promotion screens join. |
 | D114 | B9: fee reconciliation data | **Agreed:** the DB test adds a lump-sum, a coupon and a Prime fee to one approved and one sandbox promotion, compares the lines with the screens, and deletes them afterwards, as B3's DB test does. |
 | D115 | Region of a retailer or banner | **Owner (2026-10-16):** it comes from `CRM.RetailerRegions`. The catalog no longer describes `CRM.Banners."RegionID"`. |
+| D117 | B10 split | **Agreed (2026-10-16):** B10a first (the second login and audience mechanism, plus IAM, organizations, modules and settings, audit, email-log metadata, brand links, purge runs), then B10b (the DataHub pipeline and raw distributor files). |
+| D118 | How the admin role is built | **Agreed:** `askcaboodle_admin_ro` inherits `askcaboodle_ro` (`GRANT askcaboodle_ro TO askcaboodle_admin_ro`) plus its own grants, so the standard reads never drift apart. A migration creates the group role when it can, as in B2; the owner creates the login `askcaboodle_admin_app` with a psql script that asks for the password, like B2's. Both are tracked in the deployment checklist (§11). |
+| D119 | Admin connection string missing | **Agreed:** platform admins fall back to the standard login and catalog (no admin index), and it is logged. |
+| D120 | Prompt layout for platform admins | **Agreed:** the admin index is a second cached system block after the shared prompt, which stays byte-identical for everyone; admin sessions have their own fingerprint, and a session that changes audience starts fresh. |
+| D121 | Columns hidden beyond D72 and D74 | **Agreed:** `Identity.Users."UserName"` and `"NormalizedUserName"` (the email address for 317 of 324 users), `Users."ObjectId"`, `Auditing.AuditEvents."IpAddress"`, `Organization.Domains."VerificationValue"` and `"VerificationHost"`, and the email logs' `ErrorMessage`. Email-log `Subject` is granted: no subject holds an address, and it is the only hint of which email was sent. |
+| D122 | Name search for users and organizations | **Agreed:** not in B10a; SQL name matching is enough. Add `search_entity` types later if the eval shows a need. |
+| D123 | B10a eval data | **Agreed:** "who invited a user" uses the legacy invited users (2 of 51 have an inviter; organization invitations are empty on `caboodle_dev`), and accepts "no inviter recorded" for the rest. |
 | D116 | A corrected answer mentioning its correction | **Owner (2026-10-16):** users don't need to know how an answer was checked, and the remark misleads them. C0b's correction message (not the system prompt, D104) ends with "Don't mention the correction; write the answer as if it were the first." Built in B9. |
 
 ### 7.1 Demo track — dropped 2026-10-12 (D3), kept for history
@@ -1143,9 +1188,11 @@ Each one is posted with its package, and gets a D number once decided.
 | Where the organization admin's usage page and the "questions left today" indicator sit | FE (§10.9) | FE team |
 | Grant `DataHub.DistributorUpcMappings` (without notes and "resolved by") | B9 | **Decided:** D109, moved to B10b for platform admins. |
 | A corrected answer mentions its correction to the user (B9 paid check, Q48: "I corrected the Costco and Trader Joe's counts below after checking them against the data") | C0b's correction message (owner) | **Decided:** D116, one sentence added to the correction message; built in B9. |
-| Split B10 into B10a (IAM, organizations, modules, settings, audit) and B10b (data pipeline) | B10 | Decide when B10 starts |
+| Split B10 into B10a (IAM, organizations, modules, settings, audit) and B10b (data pipeline) | B10 | **Decided:** D117. |
+| A limit on questions per conversation (owner, 2026-10-16: "like other chat apps, e.g. 20 per thread") | Owner; small package before or with C1 | Today there is none: only the daily pools and monthly budgets. Each follow-up re-sends the whole conversation (cached, but cost, time and the fact register grow), and answers get less reliable in very long threads. Suggestion: a Platform Admin setting, default 20 questions per session; at the limit the ask returns a new error code `session_full`, and the FE offers "Start a new conversation" (optionally carrying the question over). Free to build; no paid check needed. |
+| Meaningful session titles (owner, 2026-10-16: "like Claude or ChatGPT, from the first message") | Owner; with the item above | Today the title is the first question itself, on one line, cut at 200 characters. Claude and ChatGPT generate a short title from the first exchange with a model. Suggestion: after the first answer, Haiku 5.5 writes a 3–6 word title (about $0.0001 per session, off the answer's critical path; falls back to the question on any error), sent as a `session` event update and stored; plus a rename endpoint. One smoke question to confirm (≈ $0.05). |
 | Organization admins asking about their own organization's members, roles and invitations | Later (after GA) | Optional; scoped to their organization and their IAM permissions |
-| Access to the user-documentation repo, and the review format for Constance | C9 | Owner provides access; the format is agreed when C9 starts |
+| Access to the user-documentation repo, and the review format for Constance | C9 | **Access given (2026-10-16):** public at https://github.com/tauhid-sifat/Caboodle-Documentations (a project working folder: docs, kb, wiki, specs, meetings, jira…). Written by the BA and not yet reviewed by the owner: treat its content as unverified, and discuss it with the owner when C9 starts. The review format is agreed then too. |
 
 ## 8. Progress log
 
@@ -1171,7 +1218,8 @@ Each one is posted with its package, and gets a D number once decided.
 | C0b | done | `6da28c2d` | 2026-10-16: built as in §4 C0b "as built"; the IAM branch is unchanged since `b5adb1a1`. No migration. Solution 6,813 green, Intelligence 476, coverage 97.8 % unit-only, DB tests 23 green, build 0 errors.<br>**Paid, $3.43:** 4-case check 4/4 ($0.41; Q16 and Q29 now pass); full run 38/45 counted, app questions 3/3, $0.036 per answer ($2.62); 5 of 48 corrected, none sent with the note; no failure caused by the check. D103 tuning, then a re-check of 7 ($0.40): Q04 and Q07 no longer corrected.<br>**At review (D105–D107):** both tunings kept, "about 170" stays strict, Q33 accepts either kind. Still open: C0c go or no-go; the industry-terms list waits for Constance (§7.2).<br>**Balance:** about $50.60. |
 | C0c | deferred | | Fact check, step 2: rankings, trends and figures in the wrong place. Deferred to before G2 (D108): about one such error per full run is left; sized with C8's data. |
 | B9 | done | `a8387b82` | 2026-10-16: plan and decisions D109–D116 approved; the IAM branch is unchanged since `b5adb1a1`. Built as in §3 B9 "as built": fee lines through the calculator (`breakdown: "fee"`), `CRM.DistributorBrands` and `CRM.RetailerRegions` (not `DistributorRetailers`, D113), regions from `RetailerRegions` only (D115); migration `AddAskCaboodleCatalogCompletionGrants` applied locally; solution 6,821 green, Intelligence 484, coverage 97.9 %, DB tests 25 green, build 0 errors. DI11 recorded.<br>**Paid, $0.59:** 9 of 9 passed (Q41, Q45–Q48, Q22, Q37, Q39, Q30); 2 corrected (Q48's two wrong hand counts caught; Q45's right total a false alarm, fixed by stating the fee total).<br>**At review:** D116 (a corrected answer never mentions the correction).<br>**Balance:** about $50.01. |
-| B10 | next | | Platform Admin knowledge: everything except credentials (D72–D75). Post the plan and open decisions first; the owner or ops creates the second read-only login first (§3 B10 item 1). |
+| B10a | next | | 2026-10-16: plan and decisions D117–D123 approved; the IAM branch is unchanged since `b5adb1a1`. Build as in §3 B10 "B10a — decided design". The owner runs the new admin-login script once the migration is applied. |
+| B10b | todo | | The DataHub pipeline and raw distributor files for platform admins (D109, D117). |
 | C1 … C8 | todo | | C1 now includes the run-trace events. |
 | C9 | todo | | Caboodle guide. Needs the documentation repo and Constance's review. |
 | G1 … A3 | todo | | |
@@ -1336,3 +1384,33 @@ The full contract is in BE `docs/AskCaboodle-FE.md`, "The answer pieces".
 - Where the organization admin's usage page and the "questions left today" indicator sit.
 - How a broker's cross-brand scope is shown and switched (G3).
 - The phone layout: the artifact has a top bar and a drawer for narrow screens.
+
+## 11. Deploying to staging and production (tracked)
+
+Owner, 2026-10-16: the database roles, logins and settings Ask Caboodle needs must be tracked, because they are essential when the branch goes to staging and live. Every package that adds a role, login, grant, extension, index or setting updates this list. B10a turns it into the ops runbook BE `docs/AskCaboodle-Deployment.md`, kept up to date from then on.
+
+**Before the Ask Caboodle migrations run (ops, with a user that can create roles and extensions; D5):**
+1. `CREATE EXTENSION IF NOT EXISTS pg_trgm;` (migration `AddAskCaboodleReadOnlyRole` tries it).
+2. The group role `askcaboodle_ro` NOLOGIN. The migration creates it when the migration user can; otherwise it raises a NOTICE and skips its GRANT statements.
+3. From B10a: the group role `askcaboodle_admin_ro` NOLOGIN, a member of `askcaboodle_ro` (migration `AddAskCaboodleAdminReadOnlyRole`, same rule).
+
+**Migrations whose grants are skipped with a NOTICE when the role is missing** (re-run their GRANT statements after creating the role): `AddAskCaboodleReadOnlyRole` (B2), `AddAskCaboodleCatalogGrants` (B4), `AddAskCaboodleCatalogCompletionGrants` (B9), and from B10a `AddAskCaboodleAdminReadOnlyRole`. The trigram indexes are built `CONCURRENTLY` outside a transaction (B2, B4).
+
+**Logins (created once per environment, password typed in psql and never stored in git):**
+
+| Login | Member of | Script (BE repo) | Settings on the login | Connection string goes to |
+|---|---|---|---|---|
+| `askcaboodle_app` | `askcaboodle_ro` | `docs/AskCaboodle-ReadOnlyLogin.sql` (B2) | `default_transaction_read_only = on`, `statement_timeout = '15s'` | `IntelligenceSettings:ReadOnlyConnectionString` |
+| `askcaboodle_admin_app` (B10a) | `askcaboodle_admin_ro` | `docs/AskCaboodle-AdminReadOnlyLogin.sql` (B10a) | the same | `IntelligenceSettings:AdminReadOnlyConnectionString` |
+
+Run each script with psql as a user that can create roles: `psql -h <host> -U <admin user> -d <database> -f docs/<script>.sql`. psql asks twice for the new password.
+
+**Application settings per environment:**
+- `IntelligenceSettings:ClaudeApiKey`: the Claude API key, from a secret store or environment variable, never from a committed settings file;
+- `IntelligenceSettings:Model`: `claude-sonnet-5-5` (D45);
+- the two connection strings above;
+- the Ask Caboodle module settings (B8, per organization) and the platform settings (`askcaboodleadmin/settings`): set by the Platform Admin after the deploy.
+
+**Found on 2026-10-16 (not Ask Caboodle code):** `caboodle/src/Hosts/API/appsettings.Staging.json` and `appsettings.Development.json` hold a Claude API key in plain text. They have been committed since `cf92952e` (4 Mar 2026), and the commit is on `master`, `develop`, `staging` and about 100 other branches on Bitbucket. The owner decides how to rotate the key and move it to a secret store; Ask Caboodle only reads `IntelligenceSettings:ClaudeApiKey`.
+
+**Release flow (owner):** dev goes live, then IAM, then dev is merged into the Ask branch, and Ask Caboodle merges last. Ask Caboodle's migrations are regenerated against the final dev snapshot before the PR.

@@ -1,20 +1,22 @@
 # Ask Caboodle — Handoff for the next session
 
-Written 2026-10-16, after B9 (commit `a8387b82`). Read this first, then §0, §3 B9 ("as built") and B10, §7 (D72–D78, D109–D116 and §7.2), §8, §9 and §10 of [`ask-caboodle-be-implementation-plan.md`](ask-caboodle-be-implementation-plan.md).
+Written 2026-10-16, after B9 (commit `a8387b82`) and B10's planning (decisions D117–D123 approved; docs only). Read this first, then §0, §3 B10 (with "B10a — decided design"), §7 (D72–D75, D109, D117–D123 and §7.2), §8, §9, §10 and §11 of [`ask-caboodle-be-implementation-plan.md`](ask-caboodle-be-implementation-plan.md).
 
 ## Starter prompt
 
-> Read `docs/ask-caboodle/ask-caboodle-next-session.md`, then §0, §3 B9 ("as built") and B10, §7 (D72–D78, D109–D116 and §7.2), §8, §9 and §10 of `docs/ask-caboodle/ask-caboodle-be-implementation-plan.md` in `D:\Fork\Onboarding-Journey`. The backend is `D:\Fork\Caboodle BE Repository\caboodle.backend`, branch `feature/ask-caboodle` (B9 committed at `a8387b82`; working tree clean).
+> Read `docs/ask-caboodle/ask-caboodle-next-session.md`, then §0, §3 B10 (with "B10a — decided design"), §7 (D72–D75, D109, D117–D123 and §7.2), §8, §9, §10 and §11 of `docs/ask-caboodle/ask-caboodle-be-implementation-plan.md` in `D:\Fork\Onboarding-Journey`. The backend is `D:\Fork\Caboodle BE Repository\caboodle.backend`, branch `feature/ask-caboodle` (B9 committed at `a8387b82`; working tree clean).
 >
-> Start package B10 (Platform Admin knowledge). First read what B10 builds on: `Sql/` (the SQL guard and the gateway, and how it picks a connection), the B2 role migration and `docs/AskCaboodle-ReadOnlyLogin.sql`, the catalog loader and the system prompt builder (for the admin index), `IsPlatformAdmin` in the access context, and the tables B10 lists (§3 B10, §9) in the model snapshot: find every credential-like column. Also fetch `origin/feature/CS-1770-iam-service-broker-workspace` and tell me whether it has commits after `b5adb1a1`; don't merge without my go-ahead.
+> Build package B10a (Platform Admin knowledge, part 1). Its plan and all its decisions are approved (D117–D123), so build it as written in §3 B10 "B10a — decided design"; ask me only about something the plan doesn't cover. First re-fetch `origin/feature/CS-1770-iam-service-broker-workspace` and tell me whether it has commits after `b5adb1a1`; don't merge without my go-ahead.
 >
-> Then post B10's short plan and its open decisions, and wait for my go-ahead before building. The decisions include whether to split it into B10a (IAM, organizations, modules, settings, audit) and B10b (the data pipeline, with `DataHub.DistributorUpcMappings`, D109), and the exact SQL for the second read-only login that I or ops will create. Run the free launchers yourself; paid runs still need my approval first, with the cost stated.
+> When the migration `AddAskCaboodleAdminReadOnlyRole` is applied on local `caboodle_dev`, give me the exact psql command for `docs/AskCaboodle-AdminReadOnlyLogin.sql` (I set the password myself) and how to set `IntelligenceSettings__AdminReadOnlyConnectionString`, then continue with the DB tests. Write BE `docs/AskCaboodle-Deployment.md` from plan §11, so every role, login, script and setting needed for staging and live is tracked there.
+>
+> Run the free launchers yourself (PowerShell). Finish in the usual order: build with 0 errors, all tests green, my review, then a one-line commit. Paid runs still need my approval first, with the cost stated.
 
 ## Where things stand
 
 | Item | State |
 |---|---|
-| **Backend branch** | `feature/ask-caboodle`, last commit `a8387b82` (B9), after C0b `6da28c2d`, C0 `a102eed1`, B8b `b2f00e22`, B8 `02a256b6` and the IAM merge `4d0830e6`. Origin has the branch only up to B2 (`940365b8`). Never push unless the owner asks. |
+| **Backend branch** | `feature/ask-caboodle`, last commit `a8387b82` (B9), after C0b `6da28c2d`, C0 `a102eed1`, B8b `b2f00e22`, B8 `02a256b6` and the IAM merge `4d0830e6`. `origin/feature/ask-caboodle` is at B8b (`b2f00e22`); C0, C0b and B9 are local only. Never push unless the owner asks. |
 | **Docs repo** | `D:\Fork\Onboarding-Journey`, branch `caboodle-access-v2`. Docs commits are one line: `Update - Ask Caboodle docs - …`. |
 | **Model in the app** | **Sonnet 5.5, effort medium** since B7b (D45). Since B8, prices come from the `ModelPrices` table in code, per model and per attempt; the five price settings are gone. Development and Staging settings say `claude-sonnet-5-5`. |
 | **Tests** | Solution 6,821 green across 16 projects (Intelligence 484, coverage 97.9 % unit-only). Build has 0 errors. The 25 free DB tests are green. |
@@ -160,25 +162,34 @@ Decisions D109–D116 are in plan §7; "B9 as built" is in §3 B9. In short:
 - **Eval:** Q41 now expects the fee lines; Q45–Q48 are new.
 - **Paid, $0.59:** 9 of 9 passed. Q48's two wrong hand counts were caught; Q45's right fee total was a false alarm until the fee header stated the total.
 
-## Next package: B10 — Platform Admin knowledge (post the plan first)
+## Decided: B10 planning (2026-10-16, docs only)
 
-From plan §3 B10 (D72–D75, D109):
-- **A second read-only login:** the group role `askcaboodle_admin_ro` (NOLOGIN) and the login `askcaboodle_admin_app`, created by the owner or ops as in B2 (give them the SQL), with `default_transaction_read_only` and `statement_timeout` on the login. Its connection string goes in the user environment variable `IntelligenceSettings__AdminReadOnlyConnectionString`, never in git.
-- **The gateway picks the login by role:** the admin login when `IsPlatformAdmin` is true; everyone else stays on `askcaboodle_ro`.
-- **What it reads:**
-  - organizations, identity without credentials, configuration, audit, email-log metadata (D74) and purge runs;
-  - `Brand.BrandBrokers` and `BrandSubUsers`;
-  - in B10b, the DataHub pipeline tables with `DistributorUpcMappings` minus `ResolutionNotes` and `ResolvedBy` (D109), and the raw distributor files.
-- **Never granted:** credentials, the `Intelligence` schema (D73), `hangfire` and `public`; personal email and phone wait for G8 (D72).
-- **Catalog:** `audience: platform-admin` entries, with an admin index appended after the shared prompt so the cached prefix stays the same (D39 still holds).
-- **Tests:** a credentials scan of `information_schema` for both roles, the grant-vs-catalog test for both, DB tests for the admin login, and a check that an organization user never gets the admin index.
-- **Eval:** 4–6 platform-admin cases.
-- **Paid:** about $0.60–1.00, approved first.
-- **Decide at the start:** whether to split B10 into B10a and B10b.
+- **D117–D123 approved:** B10 is split; B10a builds the second login and the platform-admin audience, plus the IAM, configuration, audit, email-log, brand-link and purge data. B10b (the DataHub pipeline and raw distributor files) comes after.
+- **What B10a found** (plan §3 B10 "What B10 builds on"): everything is single-audience today; Identity lives in the `ApplicationDbContext` snapshot; no audit trail holds a credential; `UserName` is the email address for 317 of 324 users (so it is hidden, D121).
+- **Owner asked (2026-10-16):** track every role, login, script and setting needed for staging and live. Plan §11 holds the checklist; B10a writes it into BE `docs/AskCaboodle-Deployment.md`.
+- **Two open points from the owner (§7.2):** a limit on questions per conversation (suggested: a setting, default 20, error `session_full`), and meaningful session titles (suggested: a 3–6 word title by Haiku 5.5 after the first answer, plus rename). Not decided; don't build them unasked.
+- **Settled:** Sonnet 5.5 cache reads cost $0.10 per million tokens (live pricing page; docs commit `3b4a449`).
+- **For C9:** the user-documentation repo is public at https://github.com/tauhid-sifat/Caboodle-Documentations. The BA wrote it and the owner hasn't reviewed it: treat it as unverified and discuss it with the owner when C9 starts.
+- **For the owner, not Ask Caboodle:** a Claude API key sits in plain text in the committed `appsettings.Staging.json` and `appsettings.Development.json` (since `cf92952e`, on `master`, `develop`, `staging`). Never print or copy it; plan §11 records it.
 
-After B10 comes C1.
+## Next package: B10a — Platform Admin knowledge, part 1 (decided; build it)
 
-## After B10: C1 — token streaming and the run trace
+Build exactly as plan §3 B10 "B10a — decided design":
+1. **Migration `AddAskCaboodleAdminReadOnlyRole`:** the group role `askcaboodle_admin_ro` (inherits `askcaboodle_ro`), USAGE on the admin schemas, and the table and column grants in the plan's table. **Script `docs/AskCaboodle-AdminReadOnlyLogin.sql`** for the login `askcaboodle_admin_app`, modelled on `docs/AskCaboodle-ReadOnlyLogin.sql`. The owner runs it and sets `IntelligenceSettings__AdminReadOnlyConnectionString`.
+2. **The platform-admin audience:**
+   - the gateway picks the login by audience;
+   - the catalog, `get_table_info` and the SQL guard expose the admin tables only to platform admins;
+   - the admin index is a second cached system block, so the shared prompt stays byte-identical;
+   - admin sessions have their own fingerprint;
+   - without the admin connection string, platform admins fall back to the standard login and catalog (D119).
+3. **Catalog entries** with `audience: platform-admin`, `modules: none/none`, rules and examples.
+4. **Tests:** the credentials scan, grant-vs-catalog for both roles, admin DB tests (42501 on the password hash, `UserTokens` and Intelligence), and audience unit tests.
+5. **Eval:** a per-case audience and 5 admin cases (D123). **Paid:** about $0.55, approved first.
+6. **Docs:** §9 rows, BE `docs/AskCaboodle-Deployment.md` from plan §11, BE `docs/AskCaboodle-FE.md` only if a field changes (none expected).
+
+After B10a comes B10b, then C1.
+
+## After B10b: C1 — token streaming and the run trace
 
 From plan §4 C1 (the run-trace part was added by the FE review):
 - `AnthropicConversation.SendStreamingAsync` with the SDK's streaming call. It collects the content blocks (text, thinking with signatures, tool-use input JSON, server-tool blocks) and rebuilds the assistant message for the history.
