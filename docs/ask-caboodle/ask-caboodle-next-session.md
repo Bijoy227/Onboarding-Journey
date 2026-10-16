@@ -14,7 +14,7 @@ Written 2026-10-17, after B10b (commit `e26a5f52`) and C1's planning (decisions 
 
 | Item | State |
 |---|---|
-| **Backend branch** | `feature/ask-caboodle`, last commit `a01dfc13` (C1), after B10b `e26a5f52`, C0b.1 `5f7e7f84`, B10a `26a85f3f`, B9 `a8387b82`, C0b `6da28c2d`, C0 `a102eed1`, B8b `b2f00e22`, B8 `02a256b6` and the IAM merge `4d0830e6`. `origin/feature/ask-caboodle` is at B8b (`b2f00e22`); C0, C0b, B9, B10a, C0b.1 and B10b are local only. Never push unless the owner asks. |
+| **Backend branch** | `feature/ask-caboodle`, last commit `a01dfc13` (C1), after B10b `e26a5f52`, C0b.1 `5f7e7f84`, B10a `26a85f3f`, B9 `a8387b82`, C0b `6da28c2d`, C0 `a102eed1`, B8b `b2f00e22`, B8 `02a256b6` and the IAM merge `4d0830e6`. `origin/feature/ask-caboodle` is at B8b (`b2f00e22`); C0, C0b, B9, B10a, C0b.1, B10b and C1 are local only. Never push unless the owner asks. |
 | **Logins on `caboodle_dev`** | `askcaboodle_app` (standard) and, since B10a, `askcaboodle_admin_app` (platform admins), both created by the owner; their connection strings are the user variables below. |
 | **Docs repo** | `D:\Fork\Onboarding-Journey`, branch `caboodle-access-v2`. Docs commits are one line: `Update - Ask Caboodle docs - …`. |
 | **Model in the app** | **Sonnet 5.5, effort medium** since B7b (D45). Since B8, prices come from the `ModelPrices` table in code, per model and per attempt; the five price settings are gone. Development and Staging settings say `claude-sonnet-5-5`. |
@@ -28,7 +28,7 @@ Written 2026-10-17, after B10b (commit `e26a5f52`) and C1's planning (decisions 
 ## Money (read before any paid run)
 
 - **Who pays:** the client (Constance) pays the API bill through the Claude Console. The owner cannot add money themselves.
-- **Balance:** about **$48.55**. C1 spent $0.46 (a smoke question $0.0834, a 6-case check $0.34, a 1-case check without the fallback $0.04); B10b spent $0.56 (a 9-case check $0.48, a 2-case re-check $0.08); B10a $0.44 (an 8-case check); B9 $0.59 (a 9-case check); C0b $3.43 (4-case check $0.41, full run $2.62, re-check of 7 $0.40); C0 $3.54; B8b nothing; B8 about $0.075. The Console has the exact figure.
+- **Balance:** about **$48.51**. C1 spent $0.50 (a smoke question $0.0834, a 6-case check $0.34, a 1-case check without the fallback $0.04, 14 small timing calls $0.044); B10b spent $0.56 (a 9-case check $0.48, a 2-case re-check $0.08); B10a $0.44 (an 8-case check); B9 $0.59 (a 9-case check); C0b $3.43 (4-case check $0.41, full run $2.62, re-check of 7 $0.40); C0 $3.54; B8b nothing; B8 about $0.075. The Console has the exact figure.
 - **Cache-read price (settled 2026-10-16):** Sonnet 5.5 cache reads cost $0.10 per million tokens (0.05x input, on the live pricing page), as `ModelPrices` says; the `claude-api` skill's cached $0.20 is out of date.
 - **Typical costs:**
 
@@ -253,7 +253,7 @@ Plan §4 "C1 as built" has the details. In short:
 - **The run trace:** live `step`, `tool-start`, `tool-end`, and `GET sessions/{id}/messages/{messageId}/trace`; database detail and `done.queries` for platform admins only (D138). No migration.
 - **Paid, $0.42:** smoke right; 6-case check 6 of 6, the streamed sentences ended as the answer in 6 of 6.
 - **Committed at the owner's request;** the ten points beyond the plan's wording are listed in plan §4 for the owner to object to if needed.
-- **Found:** the API sends the final text turn in one burst, so the text doesn't appear progressively yet (§7.2). Not the fallback (checked, $0.04). Proposed next: a few tiny direct streaming calls that time every raw event, one setting at a time (≈ $0.05).
+- **Found:** the final text arrives in one burst. Cause (checked, $0.044): Sonnet 5.5 holds back text written right after a tool result until it is finished, whatever the request says; Sonnet 5 and a first reply stream normally. Options and the recommendation are in plan §7.2; the owner decides. Timing scripts: `burst-check.mjs`, `after-tool.mjs` (raw HTTP, the key read in the process only).
 - **Launchers:** `smoke.ps1` now prints each event's time and the streamed usage; the eval report has a "Streaming (C1)" line and two timing rows.
 
 ## Working agreement (owner)
