@@ -1139,7 +1139,7 @@ Each one is posted with its package, and gets a D number once decided.
 | Personal or shareable pins | C3 | — |
 | Who reviews prompts shared with an organization | C4 | — |
 | Thumbs-down triage list in the Flight recorder | C8 | **Decided:** D97. Build it in C8; each fixed answer becomes an eval case. |
-| Sonnet 5.5 cache-read price: $0.10 per million tokens (B8; the app's `ModelPrices`) or $0.20 (the `claude-api` skill's table) | Owner (Claude Console) | If the Console bills $0.20, update `ModelPrices`: answers cost about 14 % more than the reports say, and the budgets fill faster. |
+| Sonnet 5.5 cache-read price: $0.10 per million tokens (B8; the app's `ModelPrices`) or $0.20 (the `claude-api` skill's table) | Owner (Claude Console) | **Settled (2026-10-16):** $0.10. The live pricing page prices cache hits on Sonnet 5.5 and Opus 5.5 at 0.05x input ($0.10 and $0.20); `ModelPrices` matches it, so the reports' costs stand. The skill's cached table was out of date. |
 | Where the organization admin's usage page and the "questions left today" indicator sit | FE (§10.9) | FE team |
 | Grant `DataHub.DistributorUpcMappings` (without notes and "resolved by") | B9 | **Decided:** D109, moved to B10b for platform admins. |
 | A corrected answer mentions its correction to the user (B9 paid check, Q48: "I corrected the Costco and Trader Joe's counts below after checking them against the data") | C0b's correction message (owner) | **Decided:** D116, one sentence added to the correction message; built in B9. |

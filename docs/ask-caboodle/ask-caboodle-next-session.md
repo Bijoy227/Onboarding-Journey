@@ -28,7 +28,7 @@ Written 2026-10-16, after B9 (commit `a8387b82`). Read this first, then §0, §3
 
 - **Who pays:** the client (Constance) pays the API bill through the Claude Console. The owner cannot add money themselves.
 - **Balance:** about **$50.01**. B9 spent $0.59 (a 9-case check); C0b $3.43 (4-case check $0.41, full run $2.62, re-check of 7 $0.40); C0 $3.54; B8b nothing; B8 about $0.075. The Console has the exact figure.
-- **Cache-read price to confirm:** the app's price table and B8 use $0.10 per million tokens for Sonnet 5.5 cache reads; the `claude-api` skill's table says $0.20. If the Console shows $0.20, Sonnet answers cost about 14 % more than the reports say.
+- **Cache-read price (settled 2026-10-16):** Sonnet 5.5 cache reads cost $0.10 per million tokens (0.05x input, on the live pricing page), as `ModelPrices` says; the `claude-api` skill's cached $0.20 is out of date.
 - **Typical costs:**
 
   | What | Cost |
