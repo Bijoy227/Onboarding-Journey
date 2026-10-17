@@ -1140,6 +1140,54 @@ Owner, 2026-10-16 (D124): "like other chat apps". A small package built right af
 ### C2 — Suggested questions (empty state)
 - `GET suggestions` → curated starters (static YAML per org type, later from the gallery/eval set). Zero LLM cost.
 
+**C2 — decided (owner, 2026-10-17: D145–D152):**
+- **Source (D145):** a YAML file in the BE repo, drafted by Claude and approved by the owner; Constance reviews them later through C5.
+- **Filter (D146, D147):** the modules the person may use for the brand (platform admins: the brand's switched-on modules), and recent data for the topic.
+- **Per audience (D148):** platform admins get the brand's starters, then their own, and only their own without a brand. Brokers get the brand starters by each connected brand's modules; with no brand picked, those that fit at least one connected brand.
+- **Wording (D149):** no names or figures, relative periods only.
+- **Verified (D150):** each starter is the exact question of a golden case that passed its last run; Q60–Q63 are new.
+- **C4 and C5 (D151):** C4 uses this set and lists it first in the `/` picker; C5's library later replaces the YAML.
+- **Order (D152):** stable, the first four covering four topics; no click tracking.
+- **Owner's questions at planning:**
+  - The follow-ups under an answer are C0's `suggestions`, written by the model with the answer (no extra call). C2 doesn't change them; replacing them with verified similar questions belongs to C5 (design §9.3).
+  - A platform admin doesn't have to pick a brand: without one, the agent asks which brand when a question needs one, and admin questions need none. Brokers pick one connected brand or ask across all of them (G3).
+
+**C2 as built (2026-10-17, commit `4ff33590`, committed at the owner's request; the IAM branch is unchanged since `b5adb1a1`, fetched 2026-10-17):**
+- **Endpoint:** `GET askcaboodle/suggestions` with the `BrandID` header and the same permission as the other endpoints until G2. It returns `{ starters: [{ id, text, topic }] }`. No model call, nothing counted.
+- **The starters** (`Suggestions/starters.yaml`, embedded like the catalog): 21 in all.
+  - **13 for brands, in 8 topics:** Sales (Q01, Q03, Q60, Q07), Promotions (Q62, Q63), Plan vs actual (Q20, Q21), Distribution (Q61), Distributors (Q48), Sandbox (Q31), Category reviews (Q32), Concepts (Q43).
+  - **8 for platform admins:** Q49, Q52, Q54, Q53, Q55, Q57, Q58, Q59, in the topics Organizations, Modules, Data pipeline and Emails.
+- **Modules:** each starter lists the tables its golden case's reference reads, and the catalog gives their modules (`ISchemaCatalog.StandardTableModules`), so the starters follow the module tags G4 will enforce. A table counts as granted through its brand slug or its broker slug, with View (a brokerage on a connected brand holds the brand's modules, IAM BROKER-BRAND-ACCESS-D1).
+  - **Organization users:** `BrandsInScope("ask-caboodle", View)`, so the selected brand or every brand where they have Ask Caboodle. A refused `BrandID` gets nothing.
+  - **Platform admins:** the switched-on brand modules of the `BrandID` brand's organization (`EnabledModuleSql.ForOrganization`, IAM's own rule, on the main connection).
+  - A starter shows when one brand in scope allows both its modules and its data.
+- **Data checks** (`AskStarterData`, on the read-only login):
+  - **The checks:** sales (distributor sales since the first of the month 12 months back), distributors (a link to a live distributor), promotions in the next three months and in the next year (approved events with the active statuses 1, 3, 6, 7), this year's approved plan, this year's sandbox plan, and category reviews (a calendar entry, brand report or review).
+  - **One query for every brand,** kept for an hour and shared by everyone: 0.3 s in psql, 0.8 s with the connection. `DISTINCT` in each subquery matters: without it Postgres re-read a million sales rows for each brand (12 s, close to the 15 s timeout).
+  - **On local data** (215 brands, 2026-10-17): sales 38, distributors 184, promotions in the next three months 9, next year 4, approved plan 11, sandbox plan 5, category reviews 8; 29 brands have none. Bubbies passes all seven checks; David passes three (sales, distributors, promotions ahead).
+- **Order:** the first starter of each topic in the file's order, then the second of each, and so on. For Bubbies the first four are Sales, Promotions, Plan vs actual and Distribution; for a platform admin with no brand, Organizations, Modules, Data pipeline and Emails.
+- **The file is checked at start-up:** an unknown or platform-admin table, an unknown data check, a duplicate id or a misspelt audience fails the start, as the catalog does.
+- **Eval:** Q60–Q63, so 67 cases. They are Q04, Q08, Q16 and Q17 with relative periods and no retailer named; their references were recorded free (Q62: 1,203 events in 113 promotions at 77 retailers).
+- **Beyond the plan's wording, for the owner's review:**
+  1. The YAML lists tables, not modules: the catalog gives the modules, and a test checks that the tables equal those of the case's reference.
+  2. A table is granted through either of its slugs, as IAM treats a brokerage on a connected brand.
+  3. An organization user's brands in scope are the ones where they have Ask Caboodle (View).
+  4. When the data checks fail, the modules alone decide (logged, not kept), so the empty state never breaks.
+  5. One check for every brand, shared for an hour, instead of one per brand.
+  6. A brand created within the hour gets no data starters until the next check.
+  7. The sandbox starter (Q31) follows `monthly-report`, the module the catalog gives both of its tables; the Concepts starter (Q43) follows `trade-spend-sandbox`.
+  8. A platform admin's brand starters don't require Ask Caboodle to be switched on for that brand.
+  9. The test page shows a short note for an empty list or an error, where the FE doc says to hide the block.
+- **Tests:** solution 7,013 green across 16 projects (C1b: 6,988); Intelligence 676 (651), coverage 98.0 % unit-only; build 0 errors, no warnings in the changed files. DB tests 60 green, 3 of them new:
+  - the data checks as `askcaboodle_app` for every brand, under 5 s;
+  - Bubbies' switched-on modules;
+  - no starter contains any brand, product, category, retailer, banner, distributor, approved or sandbox promotion name on `caboodle_dev`.
+
+  The golden references, Q60–Q63's included, return their recorded values.
+  - **Unit tests:** the file loads with its modules; each starter is its case's exact question and reads its reference's tables; no names or figures (only "Ask", "Caboodle" and "UPCs" capitalized after the first word, no number above 30, no "$", "%" or quarter); the start-up checks. The data check's reading, hourly cache, failures and cut results. The filter for a member, a broker across brands (one brand must allow both the modules and the data), a refused brand, a platform admin with and without a brand, failed checks, and a brand the check missed. The order.
+- **The test page (C1p):** the starters come from `GET suggestions`: the first four as cards with the topic as a tag, "Show all N suggested questions" for the rest, two columns (one on a phone). They are fetched again for each new conversation, brand change and sign-in, a reply for an earlier brand is ignored, and an empty list or an error shows a short note. Tested free against the mock in headless Edge (`drive-c2.mjs`): Bubbies' four topics and all 21; a starter asks its question; a brand with no data gets Concepts and the admin starters; a brand change while loading keeps only the last brand's; a failure shows the note; no request before sign-in; one column on a phone. C1p's and C1b's own scenarios were re-run unchanged.
+- **Paid:** nothing. The check of the four new cases waits for the owner's approval: `eval-run.ps1 -Cases "Q60,Q61,Q62,Q63" -Budget 0.60 -Rerun 0 -Model claude-sonnet-5-5 -Effort medium -Label c2`, about $0.30. The cap is $0.60 rather than D150's $0.50 because each case in flight reserves $0.30 of the cap. Until it runs, Q60–Q63 are verified only by their references; their originals (Q04, Q08, Q16, Q17) passed in C0b's full run.
+
 ### C3 — Pinned live reports
 - Relative periods: add optional `period` argument to `run_sql` (`last-full-month`, `last-full-quarter`, `ytd`, `last-12-months`, `custom`) — backend resolves to `@period_start/@period_end` parameters (inclusive/exclusive), the model writes SQL with those parameters for relative questions (system prompt rule). Stored plans then stay live.
 - Entities: `PinnedReport { OwnerId, OrganizationId?, BrandId?, Title, Question, Sql, PeriodToken?, VizSpecJson, CatalogVersion, Status (active | broken), LastValidatedOn }`.
@@ -1166,6 +1214,7 @@ Owner, 2026-10-16 (D124): "like other chat apps". A small package built right af
   - **Sharing:** with people in the same organization, through IAM members.
   - **Saved-prompts picker:** the composer's `/` picker lists the starters (C2) and the prompts in one call.
   - **Open (§7.2):** prompts shared with the organization wait for review ("Pending admin review"). Who reviews them, the organization admin or the Platform Admin?
+- **From C2 (D151):** the "seeded starter prompts" are C2's starters (`GET suggestions`), not a second seed; the `/` picker lists them first, then the prompts.
 
 ### C5 — Verified examples (few-shot) and short-circuit
 - `VerifiedExample { NormalizedQuestion, Sql/ToolPlanJson, CatalogVersion, Source (thumbs-up | eval), BrandScope }`; entries only from thumbs-up (B3) or eval passes (B6).
@@ -1179,6 +1228,9 @@ Owner, 2026-10-16 (D124): "like other chat apps". A small package built right af
   - **A nightly re-check, as for pins (C3):** an example whose query breaks after a data or catalog change loses its verified mark.
   - **Templates with slots** for the retailer, product and period (C3's period tokens), so one verified question serves every retailer and period.
   - **Size:** about a third more than C5 as first planned.
+- **From C2 (2026-10-17):**
+  - C5's library becomes the source of `GET suggestions`, with the same fields; C2's YAML becomes its first entries (D151). Templates with slots can then name the brand's own retailers.
+  - The follow-ups under an answer (C0's `suggestions`, written by the model) aren't checked today; C5 can replace them with verified similar questions (design §9.3). The owner asked about them at C2's plan.
 
 ### C6 — Public web research
 - Server tools `web_search_20260209` (+ `web_fetch_20260209`), `max_uses` 3, `user_location` US; declared at session start only when `IntelligenceSettings:EnableWebSearch` (later per-org setting) — never toggled mid-session (append-only).
@@ -1463,6 +1515,14 @@ Owner answers recorded 2026-10-11.
 | D142 | C1b: titles | **Owner:** Haiku 5.5 writes a 3–6 word title after the first answer, plus rename (`PATCH sessions/{id}`); the question stays the title on any error. |
 | D143 | A test FE for the owner | **Owner (2026-10-17):** a live local test page: one HTML file in the docs repo, against the local API with the owner's token, showing the checked text typed out, the frame and table, the run trace and history. Package C1p, right after C1 (§4); the order is C1 → C1p → C1b. |
 | D144 | C1b: which questions count toward the 20 | **Owner (2026-10-17):** only questions that used the model (cost above zero), the same rule as the daily limit; failed questions that never reached the model don't count. |
+| D145 | C2: where the starters come from | **Owner (2026-10-17):** a YAML file in the BE repo for now. Claude drafts them, the owner approves them at review; Constance reviews them later through C5's library. |
+| D146 | C2: modules | **Owner:** organization users get the starters their own module access allows for the brand in scope (built now, checked end to end in G2); platform admins with a brand get what the brand organization's switched-on modules allow (what its members with full access see). |
+| D147 | C2: data | **Owner:** a starter is shown only when the brand has recent data for it (sales in the last 12 months, promotions ahead, this year's plan…), by free checks on the read-only login kept for an hour. |
+| D148 | C2: per audience | **Owner:** a platform admin with a brand gets that brand's starters, then their own; without a brand, only their own. A broker gets the same brand starters, by the modules each connected brand grants (no broker code, D6); with no brand picked, the starters that fit at least one connected brand. Broker-only starters (cross-brand, market overview, brand reports) wait for G3/G6. |
+| D149 | C2: D39 wording | **Owner:** shared starters name no brand, product, promotion, retailer or distributor, hold no figures and use relative periods only; a unit test and a DB test enforce it. Starters filled from the brand's own data (slots) come with C5's templates. |
+| D150 | C2: verified | **Owner:** every starter is the exact question of a golden case that passed its last run (counted, or the app group); four new cases (Q60–Q63) for the new wordings. Their paid check (about $0.30, capped at $0.50) is approved separately. |
+| D151 | C2, C4 and C5 | **Owner:** C2's set is the "seeded starter prompts" of C4 (no second seed); C4's `/` picker lists them first, then the prompts. C5's verified library later replaces the YAML as the source, with the same endpoint and fields; the YAML becomes its first entries. |
+| D152 | C2: order and tracking | **Owner:** a stable order, the first four covering four topics; the FE shows four. Clicks aren't tracked now (C8 can match question text; a `starterId` would need a migration). |
 
 ### 7.1 Demo track — dropped 2026-10-12 (D3), kept for history
 
@@ -1554,8 +1614,9 @@ Each one is posted with its package, and gets a D number once decided.
 | C1 | done | `a01dfc13` | 2026-10-17: built as in §4 "C1 as built" and committed at the owner's request; the IAM branch is unchanged since `b5adb1a1` (fetched 2026-10-17). No migration. Solution 6,934 green, Intelligence 597, coverage 98.2 % unit-only, DB tests 47 green, build 0 errors. **Paid, $0.42:** smoke $0.0834 (right); 6-case check 6 of 6 ($0.34), the streamed sentences ended as the answer in 6 of 6, Q48 corrected and rewound once. Found: the API sends the final text turn in one burst; the cause is Sonnet 5.5 holding back text written after a tool result (§7.2; checks $0.04 + $0.044). Ten points beyond the plan's wording are listed in §4 for the owner.<br>**Balance:** about $48.51. |
 | C1p | done | docs repo | 2026-10-17: `docs/ask-caboodle/test-page/ask-caboodle-test.html` as in §4 "C1p as built"; tested free against a mock in headless Edge; the owner tried it live and asked for the table or chart after the typed text (built). $0 spent by the build. Parked for later (handoff): more visuals for the wait, pricing defaults, speed and cost improvements, figures only when they help. |
 | C1b | done | `f8e56603` | 2026-10-17: D140–D142, and D144 at the short plan (only questions that used the model count); the IAM branch is unchanged since `b5adb1a1`. Built as in §4 "C1b as built": migration `AddAskCaboodleSessionQuestionLimit` applied locally; solution 6,988 green, Intelligence 651, DB tests 48 green, build 0 errors. Test page updated and tested free. **Paid, $0.0003:** nine real titles from Haiku 5.5, 9 of 9 written. At review: Rename stays off during a new conversation's first answer; the title material stays the question plus the headline.<br>**Balance:** about $48.51. |
-| C2 | next | | Suggested questions for the empty state (§4 C2); the handoff's starter prompt starts it with its short plan and open decisions. |
-| C3 … C8 | todo | | |
+| C2 | done | `4ff33590` | 2026-10-17: D145–D152 at the short plan; the IAM branch is unchanged since `b5adb1a1`. Built as in §4 "C2 as built" and committed at the owner's request: `GET askcaboodle/suggestions`, 21 starters in `Suggestions/starters.yaml`, filtered by modules and an hourly data check; eval Q60–Q63 (67 cases); no migration. Solution 7,013 green, Intelligence 676, coverage 98.0 % unit-only, DB tests 60 green, build 0 errors. Test page updated and tested free. The paid check of Q60–Q63 (about $0.30) still waits for approval; nine points beyond the plan's wording are listed in §4 for the owner.<br>**Balance:** about $48.51 (nothing spent). |
+| C3 | next | | Pinned live reports (§4 C3); its open points are in §7.2 (period tokens, the KPI delta, personal or shared pins). The handoff's starter prompt starts it with its short plan and open decisions. |
+| C4 … C8 | todo | | |
 | C9 | todo | | Caboodle guide. Needs the documentation repo and Constance's review. |
 | G1 … A3 | todo | | |
 
@@ -1712,7 +1773,7 @@ The full contract is in BE `docs/AskCaboodle-FE.md`, "The answer pieces".
 | C0b | `text.unverifiedFigures` (and `unverifiedFigures` in `GET sessions/{id}`): when not empty, the note "Some figures in this answer couldn't be checked against the data: …" right under the text (rare). A corrected answer takes a few seconds longer, shows the progress label "Correcting figures that didn't match the data", and may send a new `frame`/`data` that replaces the earlier one |
 | C1 | Streamed text as checked sentences that the FE types out word by word (D96; see the streaming demo): `text-sentence {index, text}` (markdown slices that join into the text) and `text-rewind {keep}` (drop what follows `keep` when a corrected answer differs, or on a refusal), with the "rewriting" pause when a figure fails; the final `text` stays authoritative (D133–D135). Live trace events `step`, `tool-start`, `tool-end` (parallel calls share a step; `selfCorrection`), the trace endpoint `GET sessions/{id}/messages/{messageId}/trace`, `maxSteps` and `wallClockSeconds` on `session`. Organization users' trace has no database detail; `done.queries` only for platform admins (D136, D138) |
 | C1b | The `session_full` error (at 20 questions that used the model, D140, D144) with "Start a new conversation" (the FE pre-fills the question); questions left in the conversation (`session.questionsLeft`, `GET sessions/{id}`), shown near the end; the generated title in a second `session` event about a second after `done` (keep reading until the stream closes, free the composer at `done`), updated in the header and history; rename (`PATCH sessions/{id}`), kept off during a new conversation's first answer (it is saved when that answer ends). Tried on the C1p page |
-| C2 | Starters for the empty state |
+| C2 | `GET askcaboodle/suggestions` for the empty state: `{ starters: [{ id, text, topic }] }` in the order to show. Show the first four (they cover four topics) with the topic as a tag; the rest behind "more", and from C4 in the `/` picker. Fetch for each new conversation and brand change and ignore a reply for an earlier brand; hide the block when the list is empty or the call fails. Clicking a starter asks its text in a new conversation with the same `BrandID`. Free; not the answer's follow-up `suggestions`. Tried on the C1p page |
 | C3 | Pins: create, list, render, delete; broken pins |
 | C4 | Prompt gallery and the `/` picker |
 | C6 | Web sources (`sources` event, `sourceType`) |

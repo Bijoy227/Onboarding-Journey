@@ -8,6 +8,7 @@
   C1p (D143): a local test page for the Ask Caboodle API. Functionality only, based on the Workbench screens; the FE team
   owns the look (D69). Open this file from disk while the API runs locally (CORS allows any origin).
   C1b: questions left in the conversation, session_full with "Start a new conversation", generated titles, rename.
+  C2: suggested questions in an empty conversation, from GET suggestions for the brand picked (none: platform admins' own).
   Test parameters: ?api=<url>&token=<jwt>&brand=<id>&ask=<question>&session=<id>&trace=1
 -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
@@ -132,9 +133,11 @@ button { cursor: pointer; }
 .convo { max-width: 880px; margin: 0 auto; padding: 22px 26px 30px; }
 .empty { padding: 8vh 0 0; max-width: 620px; }
 .empty h2 { font-size: 26px; margin: 0 0 8px; font-weight: 600; }
-.starters { display: grid; gap: 8px; margin-top: 18px; }
-.starter { text-align: left; border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 10px 12px; }
+.starters { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr)); gap: 8px; margin-top: 18px; }
+.starter { text-align: left; border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 10px 12px; display: grid; gap: 3px; align-content: start; }
 .starter:hover { border-color: var(--accent); }
+.starter-tag { font-size: 10.5px; text-transform: uppercase; letter-spacing: .07em; color: var(--text-3); }
+.starters-more, .starters-note { grid-column: 1 / -1; justify-self: start; margin: 0; }
 .q { display: flex; justify-content: flex-end; margin: 4px 0 14px; }
 .q div { background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px 12px 3px 12px; padding: 8px 13px; max-width: 78%; white-space: pre-wrap; overflow-wrap: anywhere; }
 .a { margin: 0 0 34px; }
@@ -330,12 +333,6 @@ const CORRECTING = "Correcting figures that didn't match the data";
 const WORDS_PER_SECOND = { natural: 38, fast: 140 };
 const REASONS = { 'wrong-number': 'Wrong number', 'wrong-entity': 'Wrong entity', 'missing-context': 'Missing context', other: 'Other' };
 const PALETTE = ['#0b6e5a', '#c17b0c', '#2a66a6', '#a64f88', '#6b8f2a', '#8a5a2b', '#3d5670'];
-const STARTERS = [
-  'How many cases did we ship to Sprouts through KeHE each month this year?',
-  'Which retailers took the most cases last quarter?',
-  'What did we spend on TPRs at Sprouts in Q4?',
-  'Which banners carry our products?',
-];
 
 const params = new URLSearchParams(location.search);
 const store = {
@@ -438,6 +435,7 @@ function setSignedIn(name) {
   $('#userName').textContent = name || 'Signed in';
   loadHistory();
   loadUsage();
+  loadStarters();
 }
 
 function setSignedOut(message) {
@@ -1385,10 +1383,35 @@ function newConversation() {
   if (state.running) return false;
   resetConversation();
   $('#convo').innerHTML = `<div class="empty"><h2>Ask about your Caboodle data</h2><p class="muted">Each question is a real one: about $0.04, counted in today's questions. A conversation takes 20 questions, and its first answer gives it a short title (about $0.00003 more).</p>
-    <div class="starters">${STARTERS.map(starter => `<button class="starter" type="button">${esc(starter)}</button>`).join('')}</div></div>`;
-  $('#convo').querySelectorAll('.starter').forEach((button, index) => button.addEventListener('click', () => ask(STARTERS[index])));
+    <div class="starters" aria-live="polite"></div></div>`;
+  loadStarters();
   loadHistory();
   return true;
+}
+
+// C2: the suggested questions come from GET suggestions (free, no model call) for the brand picked. The first four are
+// shown, as the FE will; "Show all" lists the rest, to check what the brand's modules and data allow.
+let startersRequest = 0;
+async function loadStarters() {
+  const host = $('#convo .starters');
+  if (!host || !state.token || host.dataset.token === state.token) return;
+  host.dataset.token = state.token;
+  const request = ++startersRequest;
+  try {
+    const { starters = [] } = await (await api('askcaboodle/suggestions')).json();
+    if (request === startersRequest && host.isConnected) renderStarters(host, starters, false);
+  } catch (error) {
+    if (request === startersRequest && host.isConnected) host.innerHTML = `<p class="muted starters-note">Suggested questions: ${esc(error.message)}</p>`;
+  }
+}
+
+function renderStarters(host, starters, all) {
+  const shown = all ? starters : starters.slice(0, 4);
+  host.innerHTML = shown.map((starter, index) => `<button class="starter" type="button" data-starter="${index}"><span class="starter-tag">${esc(starter.topic)}</span><span>${esc(starter.text)}</span></button>`).join('')
+    + (starters.length > shown.length ? `<button class="btn-link starters-more" type="button">Show all ${starters.length} suggested questions</button>` : '')
+    || '<p class="muted starters-note">No suggested questions for this brand.</p>';
+  host.querySelectorAll('[data-starter]').forEach(button => button.addEventListener('click', () => ask(shown[button.dataset.starter].text)));
+  host.querySelector('.starters-more')?.addEventListener('click', () => renderStarters(host, starters, true));
 }
 
 // C1b: the title (generated after the first answer, or renamed), and the questions left in the conversation.

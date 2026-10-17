@@ -1,14 +1,27 @@
 # Ask Caboodle — Handoff for the next session
 
-Written 2026-10-17, after C1b (commit `f8e56603`). Read this first, then §0, §4 C2 (with C4 and C5, which it overlaps), "C1b as built", §7.2, §8 and §10 of [`ask-caboodle-be-implementation-plan.md`](ask-caboodle-be-implementation-plan.md).
+Written 2026-10-17, after C2 (commit `4ff33590`). Read this first, then §0, §4 C3 (with C0's data block and C1's run trace, which pins reuse), "C2 as built", §7.2, §8 and §10 of [`ask-caboodle-be-implementation-plan.md`](ask-caboodle-be-implementation-plan.md).
 
-## Starter prompt (next: C2)
+## Starter prompt (next: C3)
 
-> Read `docs/ask-caboodle/ask-caboodle-next-session.md`, then §0, §4 C2 (with C4 and C5, which it overlaps), "C1b as built", §7.2, §8 and §10 of `docs/ask-caboodle/ask-caboodle-be-implementation-plan.md` in `D:\Fork\Onboarding-Journey`. The backend is `D:\Fork\Caboodle BE Repository\caboodle.backend`, branch `feature/ask-caboodle` (last commit C1b `f8e56603`; working tree clean).
+> Read `docs/ask-caboodle/ask-caboodle-next-session.md`, then §0, §4 C3 (with C0's data block and C1's run trace, which pins reuse), "C2 as built", §7.2, §8 and §10 of `docs/ask-caboodle/ask-caboodle-be-implementation-plan.md` in `D:\Fork\Onboarding-Journey`. The backend is `D:\Fork\Caboodle BE Repository\caboodle.backend`, branch `feature/ask-caboodle` (last commit C2 `4ff33590`; working tree clean).
 >
-> Next is package C2 (suggested questions for the empty state). First re-fetch `origin/feature/CS-1770-iam-service-broker-workspace` and tell me whether it has commits after `b5adb1a1`; don't merge without my go-ahead. Then post C2's short plan and its open decisions (where the starters come from and who writes them; per audience — brand, broker, platform admin — and per switched-on module; how they relate to C4's gallery and C5's starter library; D39: no brand's names or figures in shared starters) and wait for my go-ahead. Add C2 to the C1p test page (`docs/ask-caboodle/test-page/ask-caboodle-test.html`). The items under "Parked for later" wait until I bring them up.
+> Next is package C3 (pinned live reports). First re-fetch `origin/feature/CS-1770-iam-service-broker-workspace` and tell me whether it has commits after `b5adb1a1`; don't merge without my go-ahead. Then post C3's short plan and its open decisions, and wait for my go-ahead. The open decisions:
+> - one list of period tokens;
+> - storing the tool plan, not only SQL, so calculator pins re-run the calculator;
+> - the KPI delta against the previous period;
+> - personal or shared pins;
+> - the nightly re-check and broken pins;
+> - rendering under the viewer's access.
+>
+> Add C3 to the C1p test page (`docs/ask-caboodle/test-page/ask-caboodle-test.html`). The items under "Parked for later" wait until I bring them up.
 >
 > Run the free launchers yourself (PowerShell). Finish in the usual order: build with 0 errors, all tests green, my review, then a one-line commit. Paid runs still need my approval first, with the cost stated.
+
+## Waiting for the owner (from C2)
+
+- **C2's paid check:** the four new eval cases (Q60–Q63, the starters' wordings of Q04, Q08, Q16, Q17). Run `eval-run.ps1 -Cases "Q60,Q61,Q62,Q63" -Budget 0.60 -Rerun 0 -Model claude-sonnet-5-5 -Effort medium -Label c2`: about $0.30. The cap is $0.60 because each case in flight reserves $0.30. Not approved yet; it can run in any session once the owner says so.
+- **C2's nine points beyond the plan's wording** (plan §4 "C2 as built"): committed at the owner's request, listed for the owner to object to.
 
 ## Parked for later (owner, 2026-10-17)
 
@@ -30,13 +43,13 @@ The owner will bring these up; don't start them unasked.
 
 | Item | State |
 |---|---|
-| **Backend branch** | `feature/ask-caboodle`, last commit `f8e56603` (C1b), after C1 `a01dfc13`, B10b `e26a5f52`, C0b.1 `5f7e7f84`, B10a `26a85f3f`, B9 `a8387b82`, C0b `6da28c2d`, C0 `a102eed1`, B8b `b2f00e22`, B8 `02a256b6` and the IAM merge `4d0830e6`. `origin/feature/ask-caboodle` is at B8b (`b2f00e22`); C0, C0b, B9, B10a, C0b.1, B10b, C1 and C1b are local only. Never push unless the owner asks. |
+| **Backend branch** | `feature/ask-caboodle`, last commit `4ff33590` (C2), after C1b `f8e56603`, C1 `a01dfc13`, B10b `e26a5f52`, C0b.1 `5f7e7f84`, B10a `26a85f3f`, B9 `a8387b82`, C0b `6da28c2d`, C0 `a102eed1`, B8b `b2f00e22`, B8 `02a256b6` and the IAM merge `4d0830e6`. `origin/feature/ask-caboodle` is at B8b (`b2f00e22`); C0, C0b, B9, B10a, C0b.1, B10b, C1, C1b and C2 are local only. Never push unless the owner asks. |
 | **Logins on `caboodle_dev`** | `askcaboodle_app` (standard) and, since B10a, `askcaboodle_admin_app` (platform admins), both created by the owner; their connection strings are the user variables below. |
 | **Docs repo** | `D:\Fork\Onboarding-Journey`, branch `caboodle-access-v2`. Docs commits are one line: `Update - Ask Caboodle docs - …`. |
 | **Model in the app** | **Sonnet 5.5, effort medium** since B7b (D45). Since B8, prices come from the `ModelPrices` table in code, per model and per attempt; the five price settings are gone. Development and Staging settings say `claude-sonnet-5-5`. |
-| **Tests** | With C1b: solution 6,988 green across 16 projects (Intelligence 651). Build has 0 errors. The 48 free DB tests are green, the admin-login ones, C1's trace endpoint and C1b's title/rename race included. |
-| **IAM work** | Merge from `origin/feature/CS-1770-iam-service-broker-workspace` (last merged at `b5adb1a1`; still no new commits when fetched on 2026-10-17, at C1b's start). Its module settings hold Ask Caboodle's three per-organization settings; the two dollar settings are Platform Admin only. Re-fetch and re-check before each merge. |
-| **Golden eval** | 63 questions in `caboodle/tests/Intelligence.Application.Test/Eval/golden.yaml` (since B10b; 57 before), asked as if today were 2026-10-12: 60 counted, plus "App questions" (Q42–Q44), reported apart until C9. Since B10a: a per-case `audience`, the "Platform admin" group (Q49–Q53; since B10b also Q54–Q59 on the data pipeline and the raw files), and `ASK_CABOODLE_EVAL_AUDIENCE=platform-admin`. Since C0: a counted `kind` check, `expect.kinds` for partial answers, and reported headline and database-name checks. Since C0b: a "Fact check" section and a reported `unverified_figures` check. Since B9: Q45–Q48 (fees by type, a distributor's markup, banners by region, the brand's distributors), Q41 answers the fee lines, and calculator references return fee-line figures. Reports and README are in BE `docs/AskCaboodle-Eval/`. |
+| **Tests** | With C2: solution 7,013 green across 16 projects (Intelligence 676, coverage 98.0 % unit-only). Build has 0 errors. The free DB tests (`dbtests.ps1`'s default filter, golden references included) are 60 green: the admin-login ones, C1's trace endpoint, C1b's title/rename race and C2's starter checks included. |
+| **IAM work** | Merge from `origin/feature/CS-1770-iam-service-broker-workspace` (last merged at `b5adb1a1`; still no new commits when fetched on 2026-10-17, at C2's start). Its module settings hold Ask Caboodle's three per-organization settings; the two dollar settings are Platform Admin only. Re-fetch and re-check before each merge. |
+| **Golden eval** | 67 questions in `caboodle/tests/Intelligence.Application.Test/Eval/golden.yaml` (since C2; 63 after B10b), asked as if today were 2026-10-12: 64 counted, plus "App questions" (Q42–Q44), reported apart until C9. Since C2: Q60–Q63, the starters' wordings of Q04, Q08, Q16 and Q17 (not yet run with the model). Every starter in `starters.yaml` must stay the exact question of a case. Since B10a: a per-case `audience`, the "Platform admin" group (Q49–Q53; since B10b also Q54–Q59 on the data pipeline and the raw files), and `ASK_CABOODLE_EVAL_AUDIENCE=platform-admin`. Since C0: a counted `kind` check, `expect.kinds` for partial answers, and reported headline and database-name checks. Since C0b: a "Fact check" section and a reported `unverified_figures` check. Since B9: Q45–Q48 (fees by type, a distributor's markup, banners by region, the brand's distributors), Q41 answers the fee lines, and calculator references return fee-line figures. Reports and README are in BE `docs/AskCaboodle-Eval/`. |
 | **Current baseline (C0b)** | No full run since C0b. B9 changed the catalog and the tool definitions (D110) and checked 9 cases: 9/9, $0.04 per answer. **C0b's full run, Sonnet 5.5 medium:** 38/45 counted (C0: 40/45; the difference is run-to-run flips, none caused by the check), app questions 3/3, **$0.036 per answer**, 13.5 s. 5 of 48 answers corrected by the fact check before the last tuning (about 3 of 48 expected now), none sent with the note. Failing: Q15 (borderline), Q27 (as since B7b), Q29 (a range claim, C0c's kind), Q35 (`cannot_answer` for "nothing found"; stays `answer` by D107). Q33 now accepts either kind (D107). Opus 5.5 medium was last measured in B7b: 41/45, $0.112, 26 s. |
 | **Known weaknesses** | Figures in the wrong place, rankings and pattern claims ("56–68 units per store" when one week is 40; Q11, Q29; B10b's Q57 "two issue types have none open" when one has, passed because a 2 was in the results): C0c. Wrong figures and counts are now caught by C0b (Q16, Q29's "three promo periods"), and hand-added totals pass only when right. |
 | **Data problems** | DI1–DI14 in [`ask-caboodle-data-issues.md`](ask-caboodle-data-issues.md) (B9 added DI11: six approved Prime fees point at no promotion; B10b added DI12: an email address in one Sprouts store's KeHE city, DI13: syncs marked failed although loaded and 3 stuck, DI14: UNFI UPC mappings stored as provider 1, and updated DI9 on zero-unit KeHE lines). The owner's rule: record and maintain them, don't fix them. Add any new one a package finds. DI9 matters for store counts: KeHE zero-case rows count as stores, both in the app and in Ask Caboodle. |
@@ -44,7 +57,7 @@ The owner will bring these up; don't start them unasked.
 ## Money (read before any paid run)
 
 - **Who pays:** the client (Constance) pays the API bill through the Claude Console. The owner cannot add money themselves.
-- **Balance:** about **$48.51**. C1b spent $0.0003 (nine titles from Haiku 5.5); C1 spent $0.50 (a smoke question $0.0834, a 6-case check $0.34, a 1-case check without the fallback $0.04, 14 small timing calls $0.044); B10b spent $0.56 (a 9-case check $0.48, a 2-case re-check $0.08); B10a $0.44 (an 8-case check); B9 $0.59 (a 9-case check); C0b $3.43 (4-case check $0.41, full run $2.62, re-check of 7 $0.40); C0 $3.54; B8b nothing; B8 about $0.075. The Console has the exact figure.
+- **Balance:** about **$48.51**. C2 spent nothing (its $0.30 check waits for approval); C1b spent $0.0003 (nine titles from Haiku 5.5); C1 spent $0.50 (a smoke question $0.0834, a 6-case check $0.34, a 1-case check without the fallback $0.04, 14 small timing calls $0.044); B10b spent $0.56 (a 9-case check $0.48, a 2-case re-check $0.08); B10a $0.44 (an 8-case check); B9 $0.59 (a 9-case check); C0b $3.43 (4-case check $0.41, full run $2.62, re-check of 7 $0.40); C0 $3.54; B8b nothing; B8 about $0.075. The Console has the exact figure.
 - **Cache-read price (settled 2026-10-16):** Sonnet 5.5 cache reads cost $0.10 per million tokens (0.05x input, on the live pricing page), as `ModelPrices` says; the `claude-api` skill's cached $0.20 is out of date.
 - **Typical costs:**
 
@@ -274,7 +287,7 @@ Plan §4 "C1 as built" has the details. In short:
 
 ## Done: C1p — local test page (docs repo, 2026-10-17)
 
-`docs/ask-caboodle/test-page/ask-caboodle-test.html` (plan §4 "C1p as built"): open it from disk with the local API running (`dotnet run --project caboodle/src/Hosts/API/API.csproj --launch-profile Caboodle.Api.Development`), sign in with the `caboodle_dev` login. Each question is real: about $0.04, or about $0.10 for a platform admin's first question of an hour (the admin prompt is 15.5K tokens), billed to the key in `appsettings.Development.json`. The owner tried it live (3 questions: $0.102, $0.049, $0.087) and asked for the reveal order now built: the table or chart after the typed text. "It's looking great now." Tested free against a mock in headless Edge (scratchpad `c1p-test/mock-api.mjs`, `drive.mjs`, `drive-reveal.mjs`, and since C1b `drive-c1b.mjs`; recreate them if needed: the mock replays the smoke run's events from `smoke.log`. The latest copies, with C1b's titles, rename and `session_full`, are in the C1b session's scratchpad `C:\Users\User\AppData\Local\Temp\claude\d--Fork-Onboarding-Journey\c10f2ee0-56c1-441e-b56e-0e9769a13d9a\scratchpad\c1p-test`, while it lasts).
+`docs/ask-caboodle/test-page/ask-caboodle-test.html` (plan §4 "C1p as built"): open it from disk with the local API running (`dotnet run --project caboodle/src/Hosts/API/API.csproj --launch-profile Caboodle.Api.Development`), sign in with the `caboodle_dev` login. Each question is real: about $0.04, or about $0.10 for a platform admin's first question of an hour (the admin prompt is 15.5K tokens), billed to the key in `appsettings.Development.json`. The owner tried it live (3 questions: $0.102, $0.049, $0.087) and asked for the reveal order now built: the table or chart after the typed text. "It's looking great now." Tested free against a mock in headless Edge (scratchpad `c1p-test/mock-api.mjs`, `drive.mjs`, `drive-reveal.mjs`, and since C1b `drive-c1b.mjs`; recreate them if needed: the mock replays the smoke run's events from `smoke.log`. The latest copies, with C2's `suggestions` route (Bubbies gets everything, Acme Foods only Concepts and slowly, the brand `44444444-…` fails) and `drive-c2.mjs`, are in the C2 session's scratchpad `C:\Users\User\AppData\Local\Temp\claude\d--Fork-Onboarding-Journey\e1edcbb2-fda1-4cdc-b723-50726d5b910d\scratchpad\c1p-test`, while it lasts. Start the mock with `node mock-api.mjs smoke.log 5199 0.2`, then run `node drive-c2.mjs <page> shots`).
 
 ## Done: C1b — conversation limit and titles (commit `f8e56603`, 2026-10-17)
 
@@ -287,6 +300,23 @@ Plan §4 "C1b as built" has the details. In short:
 - **Found and fixed:** a follow-up rewrote the whole session row, which would have undone a rename made while it ran; follow-ups now update the counters and dates only.
 - **Paid, $0.0003:** nine real questions, 9 of 9 titled in 0.7–1.3 s (table in plan §4). One wording slip: "stores" became "Retailers".
 - **Test page:** "N of 20 questions left", the live title, rename from the header and history, `session_full` with "Start a new conversation".
+
+## Done: C2 — suggested questions for an empty conversation (commit `4ff33590`, 2026-10-17)
+
+Decisions D145–D152 are in plan §7; "C2 as built" is in §4. In short:
+- **`GET askcaboodle/suggestions`** (the `BrandID` header; the same permission as the other endpoints until G2): `{ starters: [{ id, text, topic }] }`. No model call, nothing counted.
+- **21 starters in `Suggestions/starters.yaml`:** 13 for brands in 8 topics, and 8 for platform admins. Each is the exact question of a golden case, and a test holds them together. No names or figures, relative periods only (D39); a unit test and a DB test enforce it.
+- **Modules:** each starter lists its case reference's tables, and the catalog gives their modules (`ISchemaCatalog.StandardTableModules`).
+  - Organization users go by their own access for the brands in scope (`BrandsInScope("ask-caboodle", View)`).
+  - Platform admins with a brand go by the brand organization's switched-on modules (`EnabledModuleSql.ForOrganization`).
+  - Without a brand, platform admins get only their own starters.
+- **Data checks** (`AskStarterData`): seven checks, one query for every brand on the read-only login, kept an hour for everyone (0.3–0.8 s). On local data, 38 of 215 brands have recent sales and 29 have nothing.
+- **Order:** the first starter of each topic first; the FE shows four.
+- **Eval:** Q60–Q63, so 67 cases (the starters' wordings of Q04, Q08, Q16, Q17), with references recorded free.
+- **Tests:** solution 7,013 green, Intelligence 676 (coverage 98.0 % unit-only), DB tests 60 green, build 0 errors.
+- **Test page:** the starters come from the endpoint: four cards with a topic tag and "Show all". Tested free against the mock in headless Edge (`drive-c2.mjs`); C1p's and C1b's scenarios were re-run unchanged.
+- **Committed at the owner's request** before the paid check (see "Waiting for the owner"). Nine points beyond the plan's wording are listed in plan §4.
+- **Owner's questions at planning, answered in plan §4:** the follow-ups under an answer stay C0's (C5 may replace them with verified ones); a platform admin doesn't have to pick a brand.
 
 ## Working agreement (owner)
 
@@ -381,6 +411,12 @@ dotnet test caboodle/tests/Intelligence.Application.Test/Intelligence.Applicatio
 **New migrations:** `dotnet ef migrations add <Name> --context MainDbContext --project caboodle/src/Database/Migrator/Migrator.csproj --startup-project caboodle/src/Hosts/API/API.csproj` with `ASPNETCORE_ENVIRONMENT=Development` (no database connection needed). Check that the snapshot diff holds only your change, and set a sensible `defaultValue` for a new non-null column (EF writes 0).
 
 ## Lessons from recent sessions
+
+- **`x IN (SELECT …)` over a big table needs `DISTINCT` (C2).** Without it, Postgres judged the million distributor-sales rows too big to hash and re-read them for each of 215 brands: 12 s under the read-only login's 15 s timeout. With `DISTINCT` the list is hashed once: 0.26 s. Time a new query under the read-only login with `EXPLAIN ANALYZE` before relying on it.
+- **Look at the data before choosing a filter (C2).** All 215 local brands have every brand module switched on (IAM's backfill), so a module filter alone changed nothing; only 38 have recent sales. The data check is what keeps most brands from "nothing found" starters.
+- **A missing key isn't "no data" for every rule (C2).** A brand the hourly check hadn't seen lost even the starters that need no data; a unit test caught it. Test the absent case on each branch of a filter.
+- **YamlDotNet flow mappings (C2):** an unquoted value ending in `?` inside `{ … }` fails to parse ("did not find expected ',' or '}'"); quote it.
+- **Starters tie to the eval by exact text (C2).** Rewording a starter means rewording or adding its golden case; `AskStarterLibraryTests` fails otherwise.
 
 - **`ModelPrices.Estimate` rounds to 4 decimals (C1b).** A Haiku title costs about $0.00003 and priced as 0, so it would never have reached the budgets. Price tiny calls to 6 decimals, as `AskMessages.CostUsd` stores them.
 - **A repository `UpdateAsync` writes every column (C1b).** Saving a follow-up through it would have undone a rename made while the question ran. Update only the columns you own (a targeted SQL update), and make background writes conditional ("only while the title is still the question").
