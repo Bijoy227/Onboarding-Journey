@@ -9,7 +9,10 @@
   owns the look (D69). Open this file from disk while the API runs locally (CORS allows any origin).
   C1b: questions left in the conversation, session_full with "Start a new conversation", generated titles, rename.
   C2: suggested questions in an empty conversation, from GET suggestions for the brand picked (none: platform admins' own).
-  Test parameters: ?api=<url>&token=<jwt>&brand=<id>&ask=<question>&session=<id>&trace=1
+  C3: Pin under an answer with a table or headline (title, period), pinned reports in the rail and on a board: each pin
+  re-run on fresh data (headline, change against the previous period, "not loaded yet" note, the same table or chart),
+  its period switched, renamed, deleted, or re-asked when broken.
+  Test parameters: ?api=<url>&token=<jwt>&brand=<id>&ask=<question>&session=<id>&trace=1&pins=1
 -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js"></script>
@@ -250,6 +253,31 @@ table.dt { border-collapse: collapse; width: 100%; font-size: 13px; }
 .done-card dt { color: var(--text-3); font-size: 10.5px; }
 .done-card dd { margin: 0; font-family: Consolas, ui-monospace, monospace; }
 .done-card .wide { grid-column: 1 / -1; }
+
+/* pinned reports (C3) */
+.pins-rail { flex: 0 0 auto; max-height: 28vh; padding-bottom: 6px; }
+.pins-rail .open .pill { display: inline-flex; margin-right: 6px; vertical-align: 1px; }
+.board { max-width: 980px; margin: 0 auto; padding: 22px 26px 30px; display: grid; gap: 16px; }
+.board-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.board-head h2 { margin: 0; font-size: 20px; font-weight: 600; flex: 1; }
+.pin-card { border: 1px solid var(--line); border-radius: 10px; background: var(--surface); padding: 12px 14px; min-width: 0; }
+.pin-card.broken { border-color: var(--err); }
+.pin-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.pin-title { font-weight: 600; font-size: 15px; flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.pin-meta { font-size: 12px; color: var(--text-3); display: flex; gap: 4px 12px; flex-wrap: wrap; margin: 4px 0 10px; }
+.pin-q { font-size: 12.5px; color: var(--text-2); margin: 0 0 8px; }
+.pin-body .data { margin-top: 8px; }
+.pin-actions { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--line); font-size: 12.5px; }
+.pin-actions select { border: 1px solid var(--line-strong); background: var(--surface); border-radius: 5px; padding: 2px 6px; font-size: 12.5px; }
+.delta { font-size: 13px; font-weight: 600; padding: 2px 9px; border-radius: 999px; background: var(--surface-2); color: var(--text-2); }
+.delta.up { background: var(--ok-soft); color: var(--ok); }
+.delta.down { background: var(--warn-soft); color: var(--warn); }
+.data-note { border-left: 3px solid var(--warn); background: var(--warn-soft); padding: 6px 10px; font-size: 13px; margin: 8px 0; border-radius: 0 6px 6px 0; }
+.broken-box { border: 1px solid var(--err); background: var(--err-soft); color: var(--err); border-radius: 8px; padding: 8px 12px; margin: 4px 0 8px; font-size: 13px; }
+.pin-calls { font-size: 12px; color: var(--text-3); margin-top: 8px; display: grid; gap: 4px; }
+.pin-calls pre { margin: 4px 0 0; background: var(--code); border: 1px solid var(--line); border-radius: 4px; padding: 6px 8px; font-size: 11.5px; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 200px; overflow-y: auto; }
+.pin-dialog { display: grid; gap: 6px; margin-top: 8px; padding: 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); max-width: 520px; }
+.pin-dialog label { display: grid; gap: 3px; font-size: 12px; color: var(--text-3); }
 @media (max-width: 1100px) {
   .app.trace-open { grid-template-columns: 280px minmax(0, 1fr); }
   .trace { position: fixed; right: 0; top: 0; bottom: 0; width: min(440px, 92vw); box-shadow: var(--shadow); z-index: 20; }
@@ -291,6 +319,8 @@ table.dt { border-collapse: collapse; width: 100%; font-size: 13px; }
       </details>
       <div class="muted" id="usage"></div>
     </section>
+    <div class="hist-head"><span>Pinned reports</span><button class="btn-link" id="showPins" type="button">Open board</button></div>
+    <ul class="history pins-rail" id="pinsRail"></ul>
     <div class="hist-head"><span>Conversations</span><button class="btn-link" id="newChat" type="button">New</button></div>
     <ul class="history" id="history"></ul>
   </aside>
@@ -309,8 +339,8 @@ table.dt { border-collapse: collapse; width: 100%; font-size: 13px; }
       </label>
       <button class="btn" id="traceToggle" type="button">Run trace</button>
     </header>
-    <div class="scroll" id="scroll"><div class="convo" id="convo"></div></div>
-    <footer class="composer-wrap">
+    <div class="scroll" id="scroll"><div class="convo" id="convo"></div><div class="board" id="board" hidden></div></div>
+    <footer class="composer-wrap" id="composerWrap">
       <div class="status" id="status"></div>
       <form class="composer" id="composer">
         <textarea id="question" rows="1" placeholder="Ask about your Caboodle data"></textarea>
@@ -333,6 +363,16 @@ const CORRECTING = "Correcting figures that didn't match the data";
 const WORDS_PER_SECOND = { natural: 38, fast: 140 };
 const REASONS = { 'wrong-number': 'Wrong number', 'wrong-entity': 'Wrong entity', 'missing-context': 'Missing context', other: 'Other' };
 const PALETTE = ['#0b6e5a', '#c17b0c', '#2a66a6', '#a64f88', '#6b8f2a', '#8a5a2b', '#3d5670'];
+const PERIOD_NAMES = {
+  'last-month': 'Last month', 'last-quarter': 'Last quarter', 'last-year': 'Last year', 'last-3-months': 'Last 3 months',
+  'last-12-months': 'Last 12 months', 'year-to-date': 'Year to date', 'this-year': 'This year', 'next-year': 'Next year',
+  'next-3-months': 'Next 3 months', 'last-30-days': 'Last 30 days', 'last-90-days': 'Last 90 days', fixed: 'Fixed dates',
+};
+const BROKEN_REASONS = {
+  table_unavailable: 'it reads data Ask Caboodle no longer reads', query_failed: 'its query no longer runs',
+  column_missing: 'its query no longer returns the columns it shows', promotion_missing: 'a promotion it calculates no longer exists',
+  access_changed: 'your access changed',
+};
 
 const params = new URLSearchParams(location.search);
 const store = {
@@ -359,6 +399,9 @@ const state = {
   running: null,
   typing: store.get('typing') || 'natural',
   isAdmin: false,
+  pins: [],
+  rendered: new Map(),
+  board: false,
 };
 
 const $ = selector => document.querySelector(selector);
@@ -378,7 +421,7 @@ async function readError(response) {
   const text = await response.text();
   try {
     const data = JSON.parse(text);
-    const parts = [data.messages, data.message, data.title, data.detail, data.errors && Object.values(data.errors).flat()].flat().filter(Boolean);
+    const parts = [data.messages, data.message, data.title, data.detail, data.errors && Object.values(data.errors).flat(), data.error?.messages && Object.values(data.error.messages)].flat().filter(Boolean);
     return parts.length ? parts.join(' ') : text;
   } catch {
     return text || response.statusText;
@@ -436,6 +479,7 @@ function setSignedIn(name) {
   loadHistory();
   loadUsage();
   loadStarters();
+  loadPins();
 }
 
 function setSignedOut(message) {
@@ -444,6 +488,8 @@ function setSignedOut(message) {
   $('#signedOut').hidden = false;
   $('#signedIn').hidden = true;
   $('#history').innerHTML = '';
+  $('#pinsRail').innerHTML = '';
+  state.pins = [];
   $('#usage').textContent = message || '';
 }
 
@@ -475,6 +521,7 @@ function chooseBrand(id, name) {
   $('#brandPicker').hidden = true;
   newConversation();
   loadHistory();
+  loadPins();
 }
 
 let brandSearchTimer;
@@ -533,6 +580,7 @@ async function openSession(id) {
   if (state.running) return;
   try {
     const session = await (await api(`askcaboodle/sessions/${id}`)).json();
+    hidePins();
     resetConversation();
     state.sessionId = session.id;
     state.sessionSaved = true;
@@ -574,6 +622,7 @@ function fillFromHistory(answer, message) {
   answer.unverified = message.unverifiedFigures || [];
   answer.rating = message.rating;
   answer.feedbackReason = message.feedbackReason;
+  answer.pinnedId = state.pins.find(pin => pin.messageID === message.id)?.id || null;
   const answered = message.status === 'answered' || message.status === 'step-limit';
   answer.status = answered ? 'done' : message.status === 'cancelled' ? 'stopped' : 'error';
   answer.finalText = answered ? message.answer || '' : '';
@@ -1111,7 +1160,18 @@ function renderActions(answer) {
       <button class="act ${answer.rating === 'down' ? 'on' : ''}" type="button" data-act="down">▼ Not right${answer.rating === 'down' ? esc(reason) : ''}</button>
       <button class="act" type="button" data-act="copy">Copy</button>
       <button class="act" type="button" data-act="trace">Trace</button>
+      ${pinnable(answer) ? `<button class="act ${answer.pinnedId ? 'on' : ''}" type="button" data-act="pin">${answer.pinnedId ? 'Pinned ✓' : 'Pin'}</button>` : ''}
     </div>
+    ${answer.pinOpen ? `
+      <div class="pin-dialog">
+        <label>Title <input class="field" data-pin-title maxlength="200" value="${esc(answer.data?.title || answer.frame?.headline?.label || '')}"></label>
+        <label>Period <select class="field" data-pin-period>
+          <option value="">As in the answer</option>
+          ${Object.entries(PERIOD_NAMES).map(([token, name]) => `<option value="${token}">${esc(name)}</option>`).join('')}
+        </select></label>
+        <div class="muted" style="font-size:12px">A pin re-runs this answer's table and headline on fresh data, with no AI call. The period can change only when the answer's queries took one.</div>
+        <div class="row"><button class="btn btn-primary" type="button" data-act="pin-save">Pin</button><button class="btn-link" type="button" data-act="pin-cancel">Cancel</button></div>
+      </div>` : ''}
     ${answer.feedbackOpen ? `
       <div class="fb">
         <div class="chips">${Object.entries(REASONS).map(([key, text]) => `<button type="button" data-reason="${key}" class="${answer.pendingReason === key ? 'on' : ''}">${text}</button>`).join('')}</div>
@@ -1132,6 +1192,30 @@ async function onAction(answer, action) {
     try { await navigator.clipboard.writeText(answer.finalText || answer.target); toast('Copied.'); } catch { toast('Copy failed.'); }
   } else if (action === 'trace') {
     showTrace(answer);
+  } else if (action === 'pin') {
+    if (answer.pinnedId) {
+      showPins();
+      return;
+    }
+
+    answer.pinOpen = !answer.pinOpen;
+    renderActions(answer);
+  } else if (action === 'pin-cancel') {
+    answer.pinOpen = false;
+    renderActions(answer);
+  } else if (action === 'pin-save') {
+    const title = answer.el.actions.querySelector('[data-pin-title]')?.value.trim() || null;
+    const period = answer.el.actions.querySelector('[data-pin-period]')?.value || null;
+    try {
+      const pin = await (await api('askcaboodle/pins', { method: 'POST', body: { sessionId: state.sessionId, messageId: answer.messageId, title, period } })).json();
+      answer.pinnedId = pin.id;
+      answer.pinOpen = false;
+      renderActions(answer);
+      toast(`Pinned "${pin.title}"${pin.period ? ` · ${pin.period.name}: ${pin.period.label}` : ''}.`);
+      loadPins();
+    } catch (error) {
+      toast(error.message);
+    }
   } else if (action === 'down') {
     answer.feedbackOpen = !answer.feedbackOpen;
     renderActions(answer);
@@ -1363,6 +1447,223 @@ function liveClock() {
   if (state.running) renderChip(state.running.answer);
 }
 
+/* ---------- pinned reports (C3) ---------- */
+
+// An answer with a table or a headline can be pinned once the server has saved it.
+function pinnable(answer) {
+  return !!answer.messageId && answer.status === 'done' && (answer.frame?.kind || 'answer') === 'answer' && !!(answer.data || answer.frame?.headline);
+}
+
+let pinsRequest = 0;
+async function loadPins() {
+  if (!state.token) return;
+  const request = ++pinsRequest;
+  try {
+    const pins = await (await api('askcaboodle/pins')).json();
+    if (request !== pinsRequest) return;
+    state.pins = pins;
+    renderPinsRail();
+    if (state.board) renderBoard();
+  } catch (error) {
+    if (request === pinsRequest) $('#pinsRail').innerHTML = `<li class="muted" style="padding:6px 8px;font-size:12.5px">${esc(error.message)}</li>`;
+  }
+}
+
+function renderPinsRail() {
+  $('#pinsRail').innerHTML = state.pins.map(pin => `
+    <li><button class="open" type="button" data-pin="${esc(pin.id)}" title="${esc(pin.question)}">
+      <span>${statusPill(pin)}${esc(pin.title)}</span><small>${esc(pin.period ? `${pin.period.name} · ${pin.period.label}` : 'Its own dates')}</small>
+    </button></li>`).join('') || '<li class="muted" style="padding:6px 8px;font-size:12.5px">No pinned reports for this brand</li>';
+}
+
+function statusPill(pin) {
+  return pin.status === 'broken' ? '<span class="pill err">broken</span>' : '<span class="pill ok">ok</span>';
+}
+
+function showPins(focusId) {
+  if (state.running) {
+    toast('Wait for the answer to finish.');
+    return;
+  }
+
+  state.board = true;
+  $('#convo').hidden = true;
+  $('#board').hidden = false;
+  $('#composerWrap').hidden = true;
+  $('#convTitle').textContent = 'Pinned reports';
+  $('#renameTitle').hidden = true;
+  $('#questionsLeft').hidden = true;
+  renderBoard();
+  for (const pin of state.pins) if (!state.rendered.has(pin.id)) renderPin(pin.id);
+  if (focusId) document.querySelector(`[data-card="${CSS.escape(focusId)}"]`)?.scrollIntoView({ block: 'start' });
+}
+
+function hidePins() {
+  if (!state.board) return;
+  state.board = false;
+  $('#board').hidden = true;
+  $('#convo').hidden = false;
+  $('#composerWrap').hidden = false;
+  showConversationHeader();
+}
+
+function renderBoard() {
+  if (!state.board) return;
+  for (const rendered of state.rendered.values()) rendered.display?.chart?.destroy();
+  $('#board').innerHTML = `
+    <div class="board-head"><h2>Pinned reports</h2><span class="muted">${state.pins.length} for ${esc(state.brandId ? state.brandName || state.brandId : 'every brand')} · each one re-runs its queries on fresh data, no AI call</span>
+      <button class="btn" type="button" data-board="refresh-all">Refresh all</button><button class="btn-link" type="button" data-board="back">Back to the conversation</button></div>
+    ${state.pins.map(pin => `<article class="pin-card" data-card="${esc(pin.id)}"></article>`).join('') || '<p class="muted">Nothing pinned yet: use Pin under an answer that has a table or a headline.</p>'}`;
+  for (const pin of state.pins) renderPinCard(pin.id);
+}
+
+function renderPinCard(id) {
+  const card = document.querySelector(`[data-card="${CSS.escape(id)}"]`);
+  const listed = state.pins.find(pin => pin.id === id);
+  if (!card || !listed) return;
+  const rendered = state.rendered.get(id) || {};
+  const result = rendered.result;
+  const pin = result?.pin || listed;
+  const broken = pin.status === 'broken';
+  card.classList.toggle('broken', broken);
+  const meta = [
+    pin.kind === 'calculator' ? 'trade-spend calculator' : 'query',
+    pin.source,
+    `pinned ${utc(pin.pinnedOn).toLocaleDateString()}`,
+    pin.lastRenderedOn ? `refreshed ${utc(pin.lastRenderedOn).toLocaleString()}` : null,
+    pin.lastCheckedOn ? `checked ${utc(pin.lastCheckedOn).toLocaleString()}` : null,
+  ].filter(Boolean);
+  let body = '';
+  if (rendered.loading) body += '<div class="row muted"><span class="spin"></span>Running the pin on fresh data…</div>';
+  if (rendered.error) body += `<div class="error-box">${esc(rendered.error)}</div>`;
+  if (broken) {
+    body += `<div class="broken-box"><b>Broken:</b> ${esc(BROKEN_REASONS[pin.brokenReason] || pin.brokenReason || 'it no longer runs')}.${pin.brokenDetail ? ` ${esc(pin.brokenDetail)}` : ''}
+      <div style="margin-top:6px"><button class="btn" type="button" data-pin-act="reask">Re-ask to repair</button></div></div>`;
+  }
+
+  if (result && !broken) {
+    if (result.problem) body += `<div class="data-note">${esc(result.problem)}</div>`;
+    const headline = result.headline;
+    const delta = result.delta;
+    if (headline) {
+      const row = headline.rowLabel ? ` · ${esc(headline.rowLabel)}` : '';
+      const direction = delta ? (delta.change > 0 ? 'up' : delta.change < 0 ? 'down' : '') : '';
+      const spans = delta && delta.currentLabel !== pin.period?.label ? ` (${esc(delta.currentLabel)} against ${esc(delta.previousLabel)})` : '';
+      const badge = delta ? `<span class="delta ${direction}" title="${esc(delta.previousDisplay)} in ${esc(delta.previousLabel)}">${esc(delta.changeDisplay)} vs ${esc(delta.previousLabel)}${spans}</span>` : '';
+      body += `<div class="headline"><div class="hl-val">${esc(headline.display)}</div><div class="hl-lbl">${esc(headline.label)}${row}</div>${badge}</div>`;
+    }
+
+    const notes = result.notes || {};
+    const rows = [['Scope', notes.scope], ['Period', notes.period], ['Source', notes.source]].filter(([, value]) => value);
+    if (rows.length) body += `<div class="notes">${rows.map(([key, value]) => `<div class="note"><b>${key}</b><span>${esc(value)}</span></div>`).join('')}</div>`;
+    if (result.dataNote) body += `<div class="data-note">${esc(result.dataNote)}</div>`;
+    body += '<div data-pin-data></div>';
+    if (result.calls?.length) {
+      body += `<div class="pin-calls">${result.calls.map(call => `<div>${esc(call.tool)} · ${esc(call.summary || '')} · ${call.ok ? `${call.rowCount ?? 0} row${call.rowCount === 1 ? '' : 's'}` : 'failed'} · ${call.durationMs ?? 0} ms
+        ${call.detail?.sql ? `<details><summary>SQL (platform admins)</summary><pre>${esc(call.detail.sql)}</pre></details>` : ''}${call.detail?.error ? `<pre class="err">${esc(call.detail.error)}</pre>` : ''}</div>`).join('')}</div>`;
+    }
+  }
+
+  const choices = pin.periodChoices || [];
+  const current = pin.period ? pin.period.token || 'fixed' : '';
+  card.innerHTML = `
+    <div class="pin-top"><span class="pin-title" data-pin-title>${esc(pin.title)}</span>${statusPill(pin)}<span class="pill">${esc(pin.period ? `${pin.period.name} · ${pin.period.label}` : 'Its own dates')}</span></div>
+    <div class="pin-meta">${meta.map(item => `<span>${esc(item)}</span>`).join('')}</div>
+    <p class="pin-q">Asked: ${esc(pin.question)}</p>
+    <div class="pin-body">${body}</div>
+    <div class="pin-actions">
+      <button class="act" type="button" data-pin-act="refresh">Refresh</button>
+      ${choices.length ? `<label class="muted">Period <select data-pin-period>${choices.map(token => `<option value="${token}" ${token === current ? 'selected' : ''}>${esc(PERIOD_NAMES[token] || token)}</option>`).join('')}</select></label>` : '<span class="muted">Its queries typed their dates, so the period stays</span>'}
+      <button class="act" type="button" data-pin-act="rename">Rename</button>
+      <button class="act" type="button" data-pin-act="reask">Re-ask</button>
+      ${pin.sessionID ? '<button class="act" type="button" data-pin-act="open">Open the conversation</button>' : ''}
+      <button class="act" type="button" data-pin-act="delete">Delete</button>
+    </div>`;
+  const host = card.querySelector('[data-pin-data]');
+  if (host && result?.data) {
+    rendered.display = rendered.display || { revealed: true, view: null, chart: null, animateReveal: true, el: {} };
+    rendered.display.data = result.data;
+    rendered.display.el.data = host;
+    rendered.display.renderedData = undefined;
+    rendered.display.chart?.destroy();
+    rendered.display.chart = null;
+    renderData(rendered.display);
+    rendered.display.animateReveal = false;
+  }
+}
+
+async function renderPin(id) {
+  const rendered = state.rendered.get(id) || {};
+  state.rendered.set(id, rendered);
+  rendered.loading = true;
+  rendered.error = null;
+  renderPinCard(id);
+  try {
+    rendered.result = await (await api(`askcaboodle/pins/${id}/render`)).json();
+    const index = state.pins.findIndex(pin => pin.id === id);
+    if (index >= 0) state.pins[index] = rendered.result.pin;
+    renderPinsRail();
+  } catch (error) {
+    rendered.error = error.message;
+  } finally {
+    rendered.loading = false;
+    renderPinCard(id);
+  }
+}
+
+async function onPinAction(id, action, value) {
+  const pin = state.pins.find(item => item.id === id);
+  if (!pin) return;
+  if (action === 'refresh') {
+    await renderPin(id);
+  } else if (action === 'period') {
+    try {
+      await updatePin(id, { period: value });
+      await renderPin(id);
+    } catch (error) {
+      toast(error.message);
+      renderPinCard(id);
+    }
+  } else if (action === 'rename') {
+    const host = document.querySelector(`[data-card="${CSS.escape(id)}"] [data-pin-title]`);
+    editText(pin.title, host, () => renderPinCard(id), async title => {
+      try {
+        await updatePin(id, { title });
+      } catch (error) {
+        toast(error.message);
+      }
+    });
+  } else if (action === 'reask') {
+    hidePins();
+    startOver(pin.question);
+  } else if (action === 'open') {
+    openSession(pin.sessionID);
+  } else if (action === 'delete') {
+    if (!confirm('Delete this pinned report?')) return;
+    try {
+      await api(`askcaboodle/pins/${id}`, { method: 'DELETE' });
+      state.rendered.get(id)?.display?.chart?.destroy();
+      state.rendered.delete(id);
+      state.pins = state.pins.filter(item => item.id !== id);
+      for (const answer of state.answers) if (answer.pinnedId === id) { answer.pinnedId = null; renderActions(answer); }
+      renderPinsRail();
+      renderBoard();
+    } catch (error) {
+      toast(error.message);
+    }
+  }
+}
+
+async function updatePin(id, body) {
+  const updated = await (await api(`askcaboodle/pins/${id}`, { method: 'PATCH', body })).json();
+  const index = state.pins.findIndex(pin => pin.id === id);
+  if (index >= 0) state.pins[index] = updated;
+  const rendered = state.rendered.get(id);
+  if (rendered?.result) rendered.result.pin = updated;
+  renderPinsRail();
+  renderPinCard(id);
+}
+
 /* ---------- conversation ---------- */
 
 function resetConversation() {
@@ -1381,6 +1682,7 @@ function resetConversation() {
 
 function newConversation() {
   if (state.running) return false;
+  hidePins();
   resetConversation();
   $('#convo').innerHTML = `<div class="empty"><h2>Ask about your Caboodle data</h2><p class="muted">Each question is a real one: about $0.04, counted in today's questions. A conversation takes 20 questions, and its first answer gives it a short title (about $0.00003 more).</p>
     <div class="starters" aria-live="polite"></div></div>`;
@@ -1433,8 +1735,12 @@ function showConversationHeader(retitled) {
   pill.title = 'Questions left in this conversation; only questions that used the AI model count';
 }
 
-// Enter or leaving the field saves, Escape cancels.
 function editTitle(sessionId, current, host, restore) {
+  editText(current, host, restore, title => renameSession(sessionId, title));
+}
+
+// Enter or leaving the field saves, Escape cancels.
+function editText(current, host, restore, save) {
   const input = document.createElement('input');
   input.className = 'title-edit';
   input.value = current;
@@ -1443,11 +1749,11 @@ function editTitle(sessionId, current, host, restore) {
   input.focus();
   input.select();
   let finished = false;
-  const finish = async save => {
+  const finish = async keep => {
     if (finished) return;
     finished = true;
     const title = input.value.replace(/\s+/g, ' ').trim();
-    if (save && title && title !== current) await renameSession(sessionId, title);
+    if (keep && title && title !== current) await save(title);
     restore();
   };
   input.addEventListener('keydown', event => {
@@ -1566,6 +1872,22 @@ $('#convo').addEventListener('click', event => {
   if (startNew) startOver(startNew.dataset.startOver);
 });
 $('#newChat').addEventListener('click', newConversation);
+$('#showPins').addEventListener('click', () => showPins());
+$('#pinsRail').addEventListener('click', event => {
+  const open = event.target.closest('[data-pin]');
+  if (open) showPins(open.dataset.pin);
+});
+$('#board').addEventListener('click', event => {
+  const boardAction = event.target.closest('[data-board]');
+  if (boardAction?.dataset.board === 'back') hidePins();
+  if (boardAction?.dataset.board === 'refresh-all') state.pins.forEach(pin => renderPin(pin.id));
+  const pinAction = event.target.closest('[data-pin-act]');
+  if (pinAction) onPinAction(pinAction.closest('[data-card]').dataset.card, pinAction.dataset.pinAct);
+});
+$('#board').addEventListener('change', event => {
+  const select = event.target.closest('[data-pin-period]');
+  if (select) onPinAction(select.closest('[data-card]').dataset.card, 'period', select.value);
+});
 $('#traceToggle').addEventListener('click', () => {
   if ($('#trace').hidden) showTrace(state.traced || state.answers[state.answers.length - 1] || null); else hideTrace();
 });
@@ -1596,6 +1918,7 @@ if (state.token) {
 if (params.get('trace') === '1' && !params.get('session')) showTrace(null);
 if (params.get('session')) openSession(params.get('session'));
 else if (params.get('ask')) ask(params.get('ask'));
+else if (params.get('pins') === '1' && state.token) loadPins().then(() => showPins());
 
 window.askCaboodleTest = {
   state,
