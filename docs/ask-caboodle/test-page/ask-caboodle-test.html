@@ -12,7 +12,12 @@
   C3: Pin under an answer with a table or headline (title, period), pinned reports in the rail and on a board: each pin
   re-run on fresh data (headline, change against the previous period, "not loaded yet" note, the same table or chart),
   its period switched, renamed, deleted, or re-asked when broken.
-  Test parameters: ?api=<url>&token=<jwt>&brand=<id>&ask=<question>&session=<id>&trace=1&pins=1
+  C4: the prompt gallery (Organization with the suggested questions under it, Mine, Shared with me, Pending review for
+  admins): cards with their fill-ins as pills (a select, a search box for any retailer or product, dates), Run, a New/Edit
+  prompt form (typed fill-ins, "+ Insert fill-in", "Make selection a fill-in", the {ABSCO} hint, "Improve with AI", who can
+  use it, people from IAM's members), approve or reject; and the composer's "/" picker. A question run from a prompt
+  carries its promptId.
+  Test parameters: ?api=<url>&token=<jwt>&brand=<id>&ask=<question>&session=<id>&trace=1&pins=1&gallery=1
 -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js"></script>
@@ -278,6 +283,68 @@ table.dt { border-collapse: collapse; width: 100%; font-size: 13px; }
 .pin-calls pre { margin: 4px 0 0; background: var(--code); border: 1px solid var(--line); border-radius: 4px; padding: 6px 8px; font-size: 11.5px; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 200px; overflow-y: auto; }
 .pin-dialog { display: grid; gap: 6px; margin-top: 8px; padding: 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); max-width: 520px; }
 .pin-dialog label { display: grid; gap: 3px; font-size: 12px; color: var(--text-3); }
+
+/* prompt gallery and the "/" picker (C4) */
+.tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.tab { border: 0; background: none; padding: 7px 12px 8px; color: var(--text-3); font-weight: 500; }
+.tab.on { color: var(--text); box-shadow: inset 0 -2px 0 var(--accent); }
+.tab .count { font-size: 11px; color: var(--text-3); margin-left: 5px; }
+.prompt-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(320px, 100%), 1fr)); gap: 10px; }
+.prompt-card { border: 1px solid var(--line); border-radius: 10px; background: var(--surface); padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.prompt-card.starter-card { background: var(--surface-2); }
+.pc-top { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.pc-title { font-weight: 600; flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.verified { color: var(--ok); font-size: 11.5px; font-weight: 600; white-space: nowrap; }
+.pc-text { margin: 0; line-height: 2.1; overflow-wrap: anywhere; flex: 1; }
+.var-pill { border: 1px solid var(--accent); background: var(--accent-soft); border-radius: 4px; padding: 0 4px; font-size: 13px; max-width: 240px; }
+input.var-pill { width: 9em; }
+.pc-foot { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; border-top: 1px solid var(--line); padding-top: 8px; font-size: 12.5px; color: var(--text-3); }
+.pc-foot .grow { flex: 1; min-width: 0; }
+.review-note { border-left: 3px solid var(--err); background: var(--err-soft); padding: 5px 9px; font-size: 12.5px; border-radius: 0 6px 6px 0; }
+.group-head { grid-column: 1 / -1; font-size: 11px; text-transform: uppercase; letter-spacing: .07em; color: var(--text-3); font-weight: 600; margin: 6px 0 0; }
+.prompt-editor { display: grid; gap: 8px; padding: 12px 14px; border: 1px solid var(--line-strong); border-radius: 10px; background: var(--surface); }
+.prompt-editor label { display: grid; gap: 3px; font-size: 12px; color: var(--text-3); }
+.prompt-editor textarea { resize: vertical; }
+.var-settings { display: grid; gap: 6px; }
+.var-row { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; display: grid; gap: 6px; font-size: 12.5px; }
+.var-row .tokens { display: flex; flex-wrap: wrap; gap: 4px 12px; }
+.var-row .tokens label { display: flex; gap: 4px; align-items: center; color: var(--text-2); }
+.var-row .row label { display: flex; gap: 6px; align-items: center; }
+.vis-opts { display: flex; gap: 8px; flex-wrap: wrap; border: 0; padding: 0; margin: 0; }
+.vis-opts legend { font-size: 12px; color: var(--text-3); margin-bottom: 4px; }
+.vis-opts label { display: flex; gap: 6px; align-items: center; border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; color: var(--text-2); font-size: 13px; }
+.people { display: flex; flex-wrap: wrap; gap: 6px; }
+.person { display: inline-flex; gap: 4px; align-items: center; border: 1px solid var(--line-strong); border-radius: 999px; padding: 1px 8px; font-size: 12px; }
+.person button { border: 0; background: none; padding: 0; color: var(--text-3); }
+.member-results { list-style: none; margin: 4px 0 0; padding: 0; max-height: 160px; overflow-y: auto; border: 1px solid var(--line); border-radius: 6px; }
+.member-results:empty { display: none; }
+.member-results button { display: block; width: 100%; text-align: left; border: 0; background: none; padding: 4px 8px; font-size: 12.5px; }
+.member-results button:hover { background: var(--surface-2); }
+.editor-err { color: var(--err); font-size: 12.5px; }
+.editor-err:empty { display: none; }
+.q-from { text-align: right; font-size: 11.5px; color: var(--text-3); margin: -10px 0 12px; }
+.editor-tools, .fill-menu, .candidates { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.chip-btn { border: 1px solid var(--line-strong); background: var(--surface); border-radius: 999px; padding: 3px 10px; font-size: 12.5px; }
+.chip-btn:hover { border-color: var(--accent); }
+.candidates, .improve-box, .hint-row { border: 1px dashed var(--accent); border-radius: 8px; padding: 8px 10px; background: var(--accent-soft); font-size: 13px; }
+.improve-box { display: grid; gap: 6px; border-style: solid; }
+.before-after { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.before-after p { margin: 2px 0 0; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; }
+.suggestions { margin: 0; padding-left: 18px; font-size: 13px; }
+.preview { font-size: 13px; line-height: 2; }
+.range-pill { display: inline-flex; gap: 4px; align-items: center; }
+.entity-results li { display: flex; gap: 8px; align-items: center; padding: 3px 8px; font-size: 12.5px; }
+.entity-results li span { flex: 1; min-width: 0; }
+.member-results.entity-results button { display: inline-block; width: auto; padding: 0 4px; }
+@media (max-width: 760px) { .before-after { grid-template-columns: 1fr; } }
+.composer-wrap { position: relative; }
+.picker { position: absolute; left: 26px; right: 26px; bottom: calc(100% - 4px); max-width: 828px; margin: 0 auto; background: var(--surface); border: 1px solid var(--line-strong); border-radius: 8px; box-shadow: var(--shadow); max-height: 320px; overflow-y: auto; padding: 4px; z-index: 30; }
+.picker-h { display: flex; justify-content: space-between; gap: 8px; font-size: 11px; color: var(--text-3); padding: 4px 8px; }
+.pick { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; width: 100%; border: 0; background: none; text-align: left; padding: 6px 8px; border-radius: 5px; font-size: 13px; }
+.pick.on { background: var(--surface-2); box-shadow: inset 2px 0 0 var(--accent); }
+.pick-t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pick-tag { font-size: 11px; color: var(--text-3); white-space: nowrap; }
+.picker-empty { padding: 8px; color: var(--text-3); font-size: 13px; display: flex; gap: 6px; align-items: center; }
 @media (max-width: 1100px) {
   .app.trace-open { grid-template-columns: 280px minmax(0, 1fr); }
   .trace { position: fixed; right: 0; top: 0; bottom: 0; width: min(440px, 92vw); box-shadow: var(--shadow); z-index: 20; }
@@ -321,6 +388,7 @@ table.dt { border-collapse: collapse; width: 100%; font-size: 13px; }
     </section>
     <div class="hist-head"><span>Pinned reports</span><button class="btn-link" id="showPins" type="button">Open board</button></div>
     <ul class="history pins-rail" id="pinsRail"></ul>
+    <div class="hist-head"><span>Prompt gallery</span><button class="btn-link" id="showGallery" type="button">Open</button></div>
     <div class="hist-head"><span>Conversations</span><button class="btn-link" id="newChat" type="button">New</button></div>
     <ul class="history" id="history"></ul>
   </aside>
@@ -339,11 +407,12 @@ table.dt { border-collapse: collapse; width: 100%; font-size: 13px; }
       </label>
       <button class="btn" id="traceToggle" type="button">Run trace</button>
     </header>
-    <div class="scroll" id="scroll"><div class="convo" id="convo"></div><div class="board" id="board" hidden></div></div>
+    <div class="scroll" id="scroll"><div class="convo" id="convo"></div><div class="board" id="board" hidden></div><div class="board" id="gallery" hidden></div></div>
     <footer class="composer-wrap" id="composerWrap">
+      <div class="picker" id="picker" role="listbox" aria-label="Saved prompts" hidden></div>
       <div class="status" id="status"></div>
       <form class="composer" id="composer">
-        <textarea id="question" rows="1" placeholder="Ask about your Caboodle data"></textarea>
+        <textarea id="question" rows="1" placeholder="Ask about your Caboodle data, or type / for saved prompts" aria-controls="picker"></textarea>
         <button class="btn btn-primary" id="send" type="submit">Ask</button>
         <button class="btn" id="stop" type="button" hidden>Stop</button>
       </form>
@@ -402,6 +471,14 @@ const state = {
   pins: [],
   rendered: new Map(),
   board: false,
+  gallery: false,
+  galleryTab: 'organization',
+  prompts: null,
+  promptsError: null,
+  promptValues: new Map(),
+  editor: null,
+  picker: { items: null, key: null, error: null, index: 0, shown: [] },
+  pickedPrompt: null,
 };
 
 const $ = selector => document.querySelector(selector);
@@ -480,6 +557,8 @@ function setSignedIn(name) {
   loadUsage();
   loadStarters();
   loadPins();
+  state.picker.items = null;
+  if (state.gallery) loadPrompts();
 }
 
 function setSignedOut(message) {
@@ -490,6 +569,8 @@ function setSignedOut(message) {
   $('#history').innerHTML = '';
   $('#pinsRail').innerHTML = '';
   state.pins = [];
+  state.prompts = null;
+  state.picker.items = null;
   $('#usage').textContent = message || '';
 }
 
@@ -519,6 +600,7 @@ function chooseBrand(id, name) {
   store.set('brandName', name || '');
   showBrand();
   $('#brandPicker').hidden = true;
+  state.picker.items = null;
   newConversation();
   loadHistory();
   loadPins();
@@ -581,6 +663,7 @@ async function openSession(id) {
   try {
     const session = await (await api(`askcaboodle/sessions/${id}`)).json();
     hidePins();
+    hideGallery();
     resetConversation();
     state.sessionId = session.id;
     state.sessionSaved = true;
@@ -667,6 +750,7 @@ function mountAnswer(answer) {
       <div data-el="actions"></div>
     </section>`;
   turn.querySelector('.q div').textContent = answer.question;
+  if (answer.promptId) turn.querySelector('.q').insertAdjacentHTML('afterend', '<div class="q-from">from a saved prompt</div>');
   for (const element of turn.querySelectorAll('[data-el]')) answer.el[element.dataset.el] = element;
   answer.el.turn = turn;
   answer.el.chip.addEventListener('click', () => showTrace(answer));
@@ -827,7 +911,8 @@ function reveal(answer) {
   answer.animateReveal = false;
 }
 
-async function ask(question) {
+// C4: promptId is the saved prompt the question was filled in from, for its run count.
+async function ask(question, { promptId = null } = {}) {
   question = question.trim();
   if (!question || state.running) return;
   if (!state.token) {
@@ -841,6 +926,7 @@ async function ask(question) {
   }
 
   const answer = createAnswer(question, true);
+  answer.promptId = promptId;
   answer.maxSteps = state.maxSteps;
   answer.wallClockSeconds = state.wallClockSeconds;
   state.answers.push(answer);
@@ -853,7 +939,7 @@ async function ask(question) {
   state.running = { answer, controller };
   renderComposer();
   try {
-    const response = await api('askcaboodle/ask', { method: 'POST', body: { question, sessionId: state.sessionId }, signal: controller.signal, accept: 'text/event-stream' });
+    const response = await api('askcaboodle/ask', { method: 'POST', body: { question, sessionId: state.sessionId, promptId }, signal: controller.signal, accept: 'text/event-stream' });
     if (!(response.headers.get('content-type') || '').includes('text/event-stream')) throw new Error(`Expected an event stream, got ${response.headers.get('content-type')}: ${await response.text()}`);
     for await (const event of readEvents(response)) onEvent(answer, event.name, event.payload);
     answer.status = answer.error ? 'error' : answer.done ? 'done' : 'ended';
@@ -995,7 +1081,9 @@ function renderError(answer) {
     const resets = answer.error.resetsAt ? ` Resets ${esc(new Date(answer.error.resetsAt).toLocaleString())}.` : '';
     const startOver = answer.error.code === 'session_full'
       ? ` <button class="btn" type="button" data-start-over="${esc(answer.question)}">Start a new conversation</button>`
-      : '';
+      : answer.error.code === 'prompt_unavailable'
+        ? ` <button class="btn" type="button" data-ask-plain="${esc(answer.question)}">Ask it without the prompt</button>`
+        : '';
     html = `<div class="error-box"><b>${esc(answer.error.code || 'error')}</b> · ${esc(answer.error.message)}${resets}${startOver}</div>`;
   } else if (answer.status === 'stopped') {
     html = '<div class="stopped">Stopped. The question is saved as cancelled and counts toward today\'s questions.</div>';
@@ -1486,6 +1574,7 @@ function showPins(focusId) {
     return;
   }
 
+  hideGallery();
   state.board = true;
   $('#convo').hidden = true;
   $('#board').hidden = false;
@@ -1664,6 +1753,772 @@ async function updatePin(id, body) {
   renderPinCard(id);
 }
 
+/* ---------- prompt gallery (C4) ---------- */
+
+const VARIABLE = /\{([A-Za-z][A-Za-z0-9_]{0,29})\}/g;
+const ROLLING = Object.keys(PERIOD_NAMES).filter(token => token !== 'fixed');
+const COLLECTIONS = { starters: 'Suggested', organization: 'Organization', mine: 'Mine', shared: 'Shared with me' };
+const FILL_TYPES = [['period', 'Period'], ['dates', 'Dates'], ['retailer', 'Retailer'], ['banner', 'Banner'], ['distributor', 'Distributor'], ['product', 'Product'],
+  ['category', 'Category'], ['region', 'Region'], ['promotion', 'Promotion'], ['brand', 'Brand'], ['text', 'Text']];
+const ENTITY_TYPES = ['retailer', 'banner', 'distributor', 'product', 'category', 'region', 'promotion'];
+const DATES_FORMATS = [['month', 'A month'], ['quarter', 'A quarter'], ['year', 'A year'], ['range', 'A range of days']];
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+// Names that already say what they hold; any other text fill-in is checked against the values, to catch {ABSCO}.
+const PLAIN_NAMES = new Set([...FILL_TYPES.map(([type]) => type), 'store', 'name', 'value', 'customer', 'item', 'when', 'month', 'year', 'quarter', 'week', 'measure', 'metric', 'channel', 'state', 'city']);
+const typeLabel = type => (FILL_TYPES.find(([key]) => key === type) || [type, type])[1];
+const kindOf = name => /^period$/i.test(name) ? 'period' : /^brand$/i.test(name) ? 'brand' : 'text';
+const valueNames = new Map();
+const detections = new Map();
+
+// As the server reads them: in the order they first appear, matched without case, with the first spelling.
+function variableNames(text) {
+  const names = [];
+  for (const match of String(text || '').matchAll(VARIABLE)) if (!names.some(name => name.toLowerCase() === match[1].toLowerCase())) names.push(match[1]);
+  return names;
+}
+
+// The server's dates choices: last year to next year by month or quarter, the last five years to next year.
+function datesChoices(format) {
+  const year = new Date().getUTCFullYear();
+  if (format === 'month') return Array.from({ length: 36 }, (_, index) => `${year - 1 + Math.floor(index / 12)}-${String(index % 12 + 1).padStart(2, '0')}`);
+  if (format === 'quarter') return Array.from({ length: 12 }, (_, index) => `${year - 1 + Math.floor(index / 4)}-Q${index % 4 + 1}`);
+  if (format === 'year') return Array.from({ length: 7 }, (_, index) => String(year - 5 + index));
+  return [];
+}
+
+// "Sep 2026", "Q3 2026", "2026", "1 Jul – 30 Sep 2026"; words: "September 2026" for a month.
+function datesLabel(format, value, words) {
+  if (!value) return '';
+  if (format === 'month') {
+    const [year, month] = value.split('-');
+    return `${(words ? MONTH_NAMES : MONTHS)[Number(month) - 1]} ${year}`;
+  }
+
+  if (format === 'quarter') return value.split('-').reverse().join(' ');
+  if (format === 'year') return value;
+  const [from, to] = value.split('/');
+  if (!from || !to) return value;
+  const day = (text, withYear) => {
+    const [year, month, date] = text.split('-').map(Number);
+    return `${date} ${MONTHS[month - 1]}${withYear ? ` ${year}` : ''}`;
+  };
+  return from.slice(0, 4) === to.slice(0, 4) ? `${day(from, false)} – ${day(to, true)}` : `${day(from, true)} – ${day(to, true)}`;
+}
+
+function showGallery() {
+  if (state.running) {
+    toast('Wait for the answer to finish.');
+    return;
+  }
+
+  hidePins();
+  state.gallery = true;
+  $('#convo').hidden = true;
+  $('#gallery').hidden = false;
+  $('#composerWrap').hidden = true;
+  $('#convTitle').textContent = 'Prompt gallery';
+  $('#renameTitle').hidden = true;
+  $('#questionsLeft').hidden = true;
+  renderGallery();
+  loadPrompts();
+}
+
+function hideGallery() {
+  if (!state.gallery) return;
+  state.gallery = false;
+  state.editor = null;
+  $('#gallery').hidden = true;
+  $('#convo').hidden = false;
+  $('#composerWrap').hidden = false;
+  showConversationHeader();
+}
+
+let promptsRequest = 0;
+async function loadPrompts() {
+  if (!state.token) return;
+  const request = ++promptsRequest;
+  try {
+    const prompts = await (await api('askcaboodle/prompts')).json();
+    if (request !== promptsRequest) return;
+    state.prompts = prompts;
+    state.promptsError = null;
+  } catch (error) {
+    if (request !== promptsRequest) return;
+    state.promptsError = error.message;
+  }
+
+  renderGallery();
+}
+
+function allPrompts() {
+  const prompts = state.prompts;
+  return prompts ? [...prompts.organization, ...prompts.mine, ...prompts.sharedWithMe, ...prompts.pendingReview] : [];
+}
+
+function galleryTabs() {
+  const prompts = state.prompts;
+  const tabs = [
+    ['organization', 'Organization', prompts ? prompts.organization.length + prompts.starters.length : 0],
+    ['mine', 'Mine', prompts?.mine.length ?? 0],
+    ['sharedWithMe', 'Shared with me', prompts?.sharedWithMe.length ?? 0],
+  ];
+  if (prompts?.canReview) tabs.push(['pendingReview', 'Pending review', prompts.pendingReview.length]);
+  return tabs;
+}
+
+function renderGallery() {
+  if (!state.gallery) return;
+  const prompts = state.prompts;
+  const tabs = galleryTabs();
+  if (!tabs.some(([key]) => key === state.galleryTab)) state.galleryTab = 'organization';
+  let cards;
+  if (state.promptsError) {
+    cards = `<div class="error-box group-head">${esc(state.promptsError)}</div>`;
+  } else if (!prompts) {
+    cards = '<div class="row muted group-head"><span class="spin"></span>Loading the gallery…</div>';
+  } else {
+    const list = prompts[state.galleryTab];
+    const empty = { organization: 'No organization prompts yet.', mine: 'You have no saved prompts yet: use New prompt.', sharedWithMe: 'Nothing shared with you yet.', pendingReview: 'Nothing waiting for review.' };
+    cards = list.map(promptCard).join('') || `<p class="muted group-head">${empty[state.galleryTab]}</p>`;
+    if (state.galleryTab === 'organization') {
+      cards += '<div class="group-head">Suggested by Caboodle</div>' + (prompts.starters.map((starter, index) => `
+        <article class="prompt-card starter-card"><div class="pc-top"><span class="pc-title">${esc(starter.topic)}</span><span class="verified" title="Checked against Caboodle's test set">✓ Verified</span></div>
+          <p class="pc-text">${esc(starter.text)}</p>
+          <div class="pc-foot"><span class="grow">Suggested by Caboodle</span><button class="btn btn-primary" type="button" data-starter-run="${index}">Run</button></div></article>`).join('')
+        || '<p class="muted group-head">No suggested questions for this brand.</p>');
+    }
+  }
+
+  const where = prompts ? (prompts.organizationName || 'No organization: your prompts stay private') : '';
+  $('#gallery').innerHTML = `
+    <div class="board-head"><h2>Prompt gallery</h2><span class="muted">${esc(where)}${where ? ' · ' : ''}no AI call until you run a prompt</span>
+      <button class="btn btn-primary" type="button" data-gal="new">New prompt</button><button class="btn-link" type="button" data-gal="back">Back to the conversation</button></div>
+    <div id="promptEditor"></div>
+    <div class="tabs" role="tablist">${tabs.map(([key, label, count]) => `<button class="tab ${key === state.galleryTab ? 'on' : ''}" type="button" role="tab" aria-selected="${key === state.galleryTab}" data-tab="${key}">${label}<span class="count">${count}</span></button>`).join('')}</div>
+    <div class="prompt-cards">${cards}</div>`;
+  renderEditor();
+}
+
+function promptValues(prompt) {
+  if (!state.promptValues.has(prompt.id)) {
+    for (const variable of prompt.variables) for (const choice of variable.choices) if (ENTITY_TYPES.includes(variable.type)) valueNames.set(choice.value, choice.label);
+    state.promptValues.set(prompt.id, Object.fromEntries(prompt.variables.map(variable => [variable.name.toLowerCase(), variable.default ?? ''])));
+  }
+
+  return state.promptValues.get(prompt.id);
+}
+
+// Each fill-in as a pill: a select of its choices, a box that looks values of its type up, dates for a range, or text.
+function pillHtml(prompt, variable, values) {
+  const key = variable.name.toLowerCase();
+  const value = values[key] ?? '';
+  const label = esc(variable.label || variable.name);
+  if (variable.type === 'dates' && variable.dates === 'range') {
+    const [from = '', to = ''] = String(value).split('/');
+    return `<span class="range-pill"><input type="date" class="var-pill" data-var-from="${esc(key)}" value="${esc(from)}" aria-label="${label}: from"> – <input type="date" class="var-pill" data-var-to="${esc(key)}" value="${esc(to)}" aria-label="${label}: to"></span>`;
+  }
+
+  if (variable.search) {
+    const list = `dl-${prompt.id}-${key}`;
+    return `<input class="var-pill" data-var="${esc(key)}" data-search="${esc(variable.type)}" list="${esc(list)}" placeholder="${label}…" value="${esc(valueNames.get(value) || '')}" aria-label="${label}" autocomplete="off"><datalist id="${esc(list)}">${variable.choices.map(choice => `<option value="${esc(choice.label)}">`).join('')}</datalist>`;
+  }
+
+  if (variable.freeText) return `<input class="var-pill" data-var="${esc(key)}" placeholder="${label}" value="${esc(value)}" aria-label="${label}">`;
+  return `<select class="var-pill" data-var="${esc(key)}" aria-label="${label}">${variable.default == null ? `<option value="">${label}…</option>` : ''}${variable.choices.map(choice =>
+    `<option value="${esc(choice.value)}" ${choice.value === value ? 'selected' : ''}>${esc(choice.label)}${choice.detail ? ` · ${esc(choice.detail)}` : ''}</option>`).join('')}</select>`;
+}
+
+function templateHtml(prompt) {
+  const values = promptValues(prompt);
+  return prompt.text.split(/(\{[A-Za-z][A-Za-z0-9_]{0,29}\})/).map(part => {
+    const match = part.match(/^\{(.+)\}$/);
+    const variable = match && prompt.variables.find(item => item.name.toLowerCase() === match[1].toLowerCase());
+    return variable ? pillHtml(prompt, variable, values) : esc(part);
+  }).join('');
+}
+
+function promptCard(prompt) {
+  const visibility = prompt.visibility === 'organization' ? 'Organization'
+    : prompt.visibility === 'people' ? (prompt.isMine ? `Shared with ${prompt.sharedWith.map(person => person.name).join(', ') || 'nobody'}` : 'Shared with you')
+      : 'Only you';
+  const reviewClass = { approved: 'ok', rejected: 'err', pending: 'warn' }[prompt.review];
+  const review = prompt.review ? `<span class="pill ${reviewClass}">${prompt.review === 'pending' ? 'Pending admin review' : prompt.review}</span>` : '';
+  const note = prompt.review === 'rejected' ? `<div class="review-note">Not approved${prompt.reviewNote ? `: ${esc(prompt.reviewNote)}` : '.'} Save it again to send it back for review.</div>` : '';
+  const reviewButtons = !prompt.canReview ? ''
+    : (prompt.review !== 'approved' ? '<button class="act" type="button" data-pa="approve">Approve</button>' : '')
+      + (prompt.review !== 'rejected' ? '<button class="act" type="button" data-pa="reject">Reject</button>' : '');
+  return `<article class="prompt-card" data-prompt="${esc(prompt.id)}">
+    <div class="pc-top"><span class="pc-title">${esc(prompt.title)}</span>${review}<span class="pill">${esc(visibility)}</span></div>
+    <p class="pc-text">${templateHtml(prompt)}</p>
+    ${note}
+    <div class="pc-foot"><span>${prompt.runs} run${prompt.runs === 1 ? '' : 's'}</span><span class="grow">${prompt.isMine ? 'by you' : `by ${esc(prompt.author)}`}</span>
+      ${prompt.canEdit ? '<button class="act" type="button" data-pa="edit">Edit</button><button class="act" type="button" data-pa="delete">Delete</button>' : ''}
+      ${reviewButtons}<button class="btn btn-primary" type="button" data-pa="run">Run</button></div>
+  </article>`;
+}
+
+// What a pill holds, or '' when nothing valid is picked yet.
+function pillValue(variable, values) {
+  const value = String(values[variable.name.toLowerCase()] ?? '').trim();
+  if (variable.type === 'dates' && variable.dates === 'range') {
+    const [from, to] = value.split('/');
+    return from && to && from <= to ? value : '';
+  }
+
+  return value;
+}
+
+// The words go into the question: a choice's text (a period or dates in words, a name) or what was typed.
+function fillPrompt(prompt, values) {
+  return prompt.text.replace(VARIABLE, (placeholder, name) => {
+    const variable = prompt.variables.find(item => item.name.toLowerCase() === name.toLowerCase());
+    if (!variable) return placeholder;
+    const value = pillValue(variable, values);
+    if (!value) return placeholder;
+    if (variable.type === 'dates' && variable.dates === 'range') return variable.choices.find(choice => choice.value === value)?.text ?? datesLabel('range', value);
+    if (variable.search) return valueNames.get(value) || placeholder;
+    if (variable.freeText) return value;
+    return variable.choices.find(choice => choice.value === value)?.text ?? placeholder;
+  });
+}
+
+function runPrompt(prompt) {
+  const values = promptValues(prompt);
+  const missing = prompt.variables.find(variable => !pillValue(variable, values));
+  if (missing) {
+    toast(`Fill in ${missing.label || missing.name} first.`);
+    const key = CSS.escape(missing.name.toLowerCase());
+    document.querySelector(`[data-prompt="${CSS.escape(prompt.id)}"] [data-var="${key}"], [data-prompt="${CSS.escape(prompt.id)}"] [data-var-from="${key}"]`)?.focus();
+    return;
+  }
+
+  const question = fillPrompt(prompt, values);
+  const brand = prompt.variables.find(variable => variable.type === 'brand' && !variable.freeText);
+  const brandId = brand && values[brand.name.toLowerCase()];
+  hideGallery();
+  if (brandId && brandId !== state.brandId) chooseBrand(brandId, brand.choices.find(choice => choice.value === brandId)?.label || '');
+  else if (!newConversation()) return;
+  ask(question, { promptId: prompt.id });
+}
+
+// A search pill: values of its type for the brand, looked up as the person types; a name picked from them sets its id.
+const pillSearches = new Map();
+function searchPill(input) {
+  clearTimeout(pillSearches.get(input));
+  pillSearches.set(input, setTimeout(async () => {
+    const prompt = allPrompts().find(item => item.id === input.closest('[data-prompt]')?.dataset.prompt);
+    if (!prompt) return;
+    try {
+      const { values = [] } = await (await api(`askcaboodle/prompts/values?type=${encodeURIComponent(input.dataset.search)}&search=${encodeURIComponent(input.value.trim())}`)).json();
+      for (const value of values) valueNames.set(value.value, value.label);
+      const list = input.list;
+      if (list) list.innerHTML = values.map(value => `<option value="${esc(value.label)}">${esc(value.detail || '')}${value.inBrandData ? '' : ' · not in this brand\'s data'}</option>`).join('');
+      pickPill(input, prompt);
+    } catch (error) {
+      toast(error.message);
+    }
+  }, 250));
+}
+
+function pickPill(input, prompt) {
+  const name = input.value.trim().toLowerCase();
+  const id = [...valueNames.entries()].find(([, label]) => label.toLowerCase() === name)?.[0];
+  promptValues(prompt)[input.dataset.var] = id || '';
+}
+
+async function onPromptAction(id, action) {
+  const prompt = allPrompts().find(item => item.id === id);
+  if (!prompt) return;
+  try {
+    if (action === 'run') {
+      runPrompt(prompt);
+    } else if (action === 'edit') {
+      openEditor(prompt);
+    } else if (action === 'delete') {
+      if (!confirm(`Delete the prompt "${prompt.title}"?`)) return;
+      await api(`askcaboodle/prompts/${id}`, { method: 'DELETE' });
+      state.picker.items = null;
+      await loadPrompts();
+    } else if (action === 'approve' || action === 'reject') {
+      const note = action === 'reject' ? window.prompt('A note for the author (optional):', '') : null;
+      if (action === 'reject' && note === null) return;
+      await api(`askcaboodle/prompts/${id}/review`, { method: 'POST', body: { decision: action, note: note || null } });
+      state.picker.items = null;
+      toast(action === 'approve' ? 'Approved: the whole organization sees it now.' : 'Rejected: it went back to its author.');
+      await loadPrompts();
+    }
+  } catch (error) {
+    toast(error.message);
+  }
+}
+
+/* ---------- the prompt form (C4) ---------- */
+
+function newSetting(type) {
+  return { type, label: '', dates: 'month', any: true, choices: [], names: {}, defaultValue: '', results: null, search: '' };
+}
+
+function openEditor(prompt) {
+  const setting = variable => {
+    const typed = newSetting(variable.type);
+    const narrowed = variable.type === 'period' ? variable.choices.length !== ROLLING.length : ENTITY_TYPES.includes(variable.type) ? !variable.search : variable.type === 'text' && !variable.freeText;
+    typed.label = variable.label === typeLabel(variable.type) || (variable.type === 'text' && variable.label === variable.name) ? '' : variable.label;
+    typed.dates = variable.dates || 'month';
+    typed.any = !narrowed;
+    typed.choices = narrowed ? variable.choices.map(choice => choice.value) : [];
+    typed.names = Object.fromEntries(variable.choices.map(choice => [choice.value, choice.label]));
+    typed.defaultValue = variable.type === 'brand' ? '' : variable.default || '';
+    return typed;
+  };
+  state.editor = prompt
+    ? {
+      id: prompt.id, title: prompt.title, text: prompt.text, visibility: prompt.visibility, isMine: prompt.isMine, error: '',
+      settings: Object.fromEntries(prompt.variables.map(variable => [variable.name.toLowerCase(), setting(variable)])),
+      people: prompt.sharedWith.map(person => ({ userID: person.userID, name: person.name })), menu: false, candidates: null, improvement: null,
+    }
+    : { id: null, title: '', text: '', visibility: 'private', isMine: true, error: '', settings: {}, people: [], menu: false, candidates: null, improvement: null };
+  renderEditor();
+  $('#peTitle')?.focus();
+}
+
+function renderEditor() {
+  const host = $('#promptEditor');
+  if (!host) return;
+  const editor = state.editor;
+  if (!editor) {
+    host.innerHTML = '';
+    return;
+  }
+
+  const canReview = !!state.prompts?.canReview;
+  const inOrganization = !!state.prompts?.organizationID;
+  const options = [
+    ['private', 'Private', 'Only you'],
+    ['organization', 'Organization', canReview ? 'Everyone in it, at once (you are an admin)' : 'Everyone in it, after an admin approves it'],
+    ['people', 'People', 'Only the members you choose'],
+  ];
+  host.innerHTML = `<form class="prompt-editor" id="peForm" novalidate>
+    <div class="row"><b class="grow">${editor.id ? 'Edit prompt' : 'New prompt'}</b><button class="btn-link" type="button" data-ed="cancel">Close</button></div>
+    <label>Title <input class="field" id="peTitle" maxlength="100" value="${esc(editor.title)}" placeholder="Weekly cases check"></label>
+    <label>Prompt <textarea class="field" id="peText" rows="3" maxlength="2000" placeholder="Write the question as you'd ask it, then turn the parts that change into fill-ins: Cases at ABSCO last quarter">${esc(editor.text)}</textarea></label>
+    <div class="editor-tools">
+      <button class="btn" type="button" data-ed="insert" aria-expanded="${editor.menu}">+ Insert fill-in ▾</button>
+      <button class="btn" type="button" data-ed="selection" title="Select words in the prompt first, such as a retailer's name or a period">Make selection a fill-in</button>
+      <button class="btn" type="button" data-ed="improve">✨ Improve with AI</button>
+      <span class="muted" style="font-size:12px">Fill-ins are the parts people change each time they run it.</span>
+    </div>
+    <div class="fill-menu" id="peMenu" ${editor.menu ? '' : 'hidden'}><span class="muted" style="font-size:12px">Insert at the cursor:</span>${FILL_TYPES.map(([type, label]) => `<button class="chip-btn" type="button" data-insert-type="${type}">${label}</button>`).join('')}</div>
+    <div id="peCandidates">${candidatesHtml(editor)}</div>
+    <div id="peImprove">${improvementHtml(editor)}</div>
+    <div class="var-settings" id="peVars"></div>
+    <div class="preview" id="pePreview"></div>
+    ${editor.isMine
+      ? `<fieldset class="vis-opts"><legend>Who can use it</legend>${options.map(([value, label, help]) => `<label><input type="radio" name="peVis" value="${value}" ${editor.visibility === value ? 'checked' : ''} ${value !== 'private' && !inOrganization ? 'disabled' : ''}><span><b>${label}</b> <small class="muted">${help}</small></span></label>`).join('')}</fieldset>
+        ${inOrganization ? '' : '<span class="muted" style="font-size:12px">Outside an organization a prompt stays private.</span>'}`
+      : '<span class="muted" style="font-size:12px">One of your organization\'s prompts: as an admin you can change it, not who uses it.</span>'}
+    <div id="pePeople" ${editor.visibility === 'people' ? '' : 'hidden'}>
+      <div class="people">${editor.people.map(person => `<span class="person">${esc(person.name)}<button type="button" data-remove-person="${esc(person.userID)}" title="Remove">✕</button></span>`).join('') || '<span class="muted" style="font-size:12px">Nobody chosen yet</span>'}</div>
+      <input class="field" id="peSearch" placeholder="Search your organization's members by name or email" style="margin-top:6px" autocomplete="off">
+      <ul class="member-results" id="peMembers"></ul>
+    </div>
+    <div class="editor-err" id="peErr" role="alert">${esc(editor.error)}</div>
+    <div class="row"><span class="grow"></span><button class="btn" type="button" data-ed="cancel">Cancel</button><button class="btn btn-primary" type="submit">${editor.id ? 'Save changes' : 'Save prompt'}</button></div>
+  </form>`;
+  renderEditorVariables();
+}
+
+function candidatesHtml(editor) {
+  const candidates = editor.candidates;
+  if (!candidates) return '';
+  if (candidates.loading) return '<div class="candidates muted"><span class="spin"></span> Looking "' + esc(candidates.words) + '" up…</div>';
+  return `<div class="candidates"><span class="muted">Make "${esc(candidates.words)}" a fill-in as:</span>${candidates.values.map((value, index) =>
+    `<button class="chip-btn" type="button" data-candidate="${index}">${esc(typeLabel(value.type))}${value.type === 'text' ? '' : `: ${esc(value.label)}`}${value.detail ? ` <small class="muted">${esc(value.detail)}</small>` : ''}</button>`).join('')}
+    <button class="btn-link" type="button" data-ed="candidates-close">Cancel</button></div>`;
+}
+
+function improvementHtml(editor) {
+  const improvement = editor.improvement;
+  if (!improvement) return '';
+  if (improvement.loading) return '<div class="improve-box muted"><span class="spin"></span> Improving the prompt…</div>';
+  if (improvement.error) return `<div class="improve-box"><div class="error-box">${esc(improvement.error)}</div><button class="btn-link" type="button" data-ed="improve-close">Close</button></div>`;
+  const cost = improvement.costUsd == null ? '' : ` · $${Number(improvement.costUsd).toFixed(5)}`;
+  const suggestions = improvement.fillIns.map((suggestion, index) => `<li>"${esc(suggestion.words)}" → ${esc(typeLabel(suggestion.type))}${suggestion.label ? ` (${esc(suggestion.label)})` : ' (pick a value later)'}
+      <button class="btn-link" type="button" data-suggestion="${index}">Make it a fill-in</button></li>`).join('');
+  return `<div class="improve-box">
+    <div class="row"><b class="grow">Improved with AI${cost}</b><button class="btn-link" type="button" data-ed="improve-close">Close</button></div>
+    ${improvement.changed
+      ? `<div class="before-after"><div><small class="muted">Yours</small><p>${esc(improvement.before)}</p></div><div><small class="muted">Improved</small><p>${esc(improvement.text)}</p></div></div>
+        <div class="row">${improvement.accepted ? '<span class="pill ok">Using the improved text</span>' : '<button class="btn btn-primary" type="button" data-ed="improve-use">Use this</button><button class="btn" type="button" data-ed="improve-close">Keep mine</button>'}</div>`
+      : `<p class="muted" style="margin:4px 0">${esc(improvement.note || 'Your prompt is already clear; nothing to change.')}</p>`}
+    ${suggestions ? `<div class="muted" style="font-size:12px">Words that could become fill-ins:</div><ul class="suggestions">${suggestions}</ul>` : ''}
+  </div>`;
+}
+
+function settingOf(name) {
+  const key = name.toLowerCase();
+  return state.editor.settings[key] || (state.editor.settings[key] = newSetting(kindOf(name)));
+}
+
+function renderEditorVariables() {
+  const host = $('#peVars');
+  if (!host || !state.editor) return;
+  const names = variableNames(state.editor.text);
+  host.innerHTML = names.map(name => {
+    const key = name.toLowerCase();
+    const setting = settingOf(name);
+    const typeSelect = `<label class="row">Type <select data-fill-type>${FILL_TYPES.map(([type, label]) => `<option value="${type}" ${type === setting.type ? 'selected' : ''}>${label}</option>`).join('')}</select></label>`;
+    const labelInput = setting.type === 'brand' ? '' : `<label class="row">Shown as <input class="field" data-fill-label value="${esc(setting.label)}" placeholder="${esc(setting.type === 'text' ? name : typeLabel(setting.type))}" maxlength="40" style="width:150px"></label>`;
+    return `<div class="var-row" data-var-row="${esc(key)}">
+      <div class="row" style="flex-wrap:wrap"><b>{${esc(name)}}</b>${typeSelect}${labelInput}</div>
+      ${hintHtml(name, setting)}
+      ${settingBody(name, setting)}
+    </div>`;
+  }).join('') + (names.length > 5 ? '<div class="editor-err">Use at most 5 fill-ins.</div>' : '');
+  renderPreview();
+  for (const name of names) detectName(name);
+}
+
+function settingBody(name, setting) {
+  if (setting.type === 'brand') return '<span class="muted">The brands of whoever runs it, the brand on screen first. Nothing to set.</span>';
+  if (setting.type === 'period') {
+    const offered = setting.choices.length ? setting.choices : ROLLING;
+    return `<div class="tokens">${ROLLING.map(token => `<label><input type="checkbox" data-token="${token}" ${setting.choices.includes(token) ? 'checked' : ''}>${esc(PERIOD_NAMES[token])}</label>`).join('')}</div>
+      <span class="muted">None ticked offers all of them.</span>
+      <div class="row"><label>Default <select data-default><option value="">the first</option>${offered.map(token => `<option value="${token}" ${token === setting.defaultValue ? 'selected' : ''}>${esc(PERIOD_NAMES[token])}</option>`).join('')}</select></label></div>`;
+  }
+
+  if (setting.type === 'dates') {
+    const format = `<label class="row">Runners pick <select data-dates-format>${DATES_FORMATS.map(([value, label]) => `<option value="${value}" ${value === setting.dates ? 'selected' : ''}>${label}</option>`).join('')}</select></label>`;
+    let pick;
+    if (setting.dates === 'range') {
+      const [from = '', to = ''] = setting.defaultValue.split('/');
+      pick = `<label class="row">Default <input type="date" data-default-from value="${esc(from)}"> – <input type="date" data-default-to value="${esc(to)}"></label>`;
+    } else {
+      pick = `<label class="row">Default <select data-default><option value="">none</option>${datesChoices(setting.dates).map(value => `<option value="${value}" ${value === setting.defaultValue ? 'selected' : ''}>${esc(datesLabel(setting.dates, value))}</option>`).join('')}</select></label>`;
+    }
+
+    return `<div class="row" style="flex-wrap:wrap">${format}${pick}</div><span class="muted">The dates go into the question as written, such as "Q3 2026".</span>`;
+  }
+
+  if (ENTITY_TYPES.includes(setting.type)) {
+    const plural = `${typeLabel(setting.type).toLowerCase()} values`;
+    const chosen = setting.choices.map(value => `<span class="person">${esc(setting.names[value] || value)}<button type="button" data-remove-choice="${esc(value)}" title="Remove">✕</button></span>`).join('');
+    const results = setting.results === null ? '' : setting.results.length
+      ? setting.results.map(value => `<li><span>${esc(value.label)} <small class="muted">${esc(value.detail || '')}${value.inBrandData ? '' : ' · not in this brand\'s data'}</small></span>
+          <button class="btn-link" type="button" data-set-default="${esc(value.value)}" data-name="${esc(value.label)}">Default</button>${setting.any ? '' : `<button class="btn-link" type="button" data-add-choice="${esc(value.value)}" data-name="${esc(value.label)}">Add</button>`}</li>`).join('')
+      : '<li class="muted" style="padding:4px 8px">Nothing found</li>';
+    return `<div class="row" style="flex-wrap:wrap"><span>Runners pick</span>
+        <label class="row"><input type="radio" name="any-${esc(name)}" data-any="1" ${setting.any ? 'checked' : ''}>any ${esc(plural)}</label>
+        <label class="row"><input type="radio" name="any-${esc(name)}" data-any="0" ${setting.any ? '' : 'checked'}>only the ones I add</label></div>
+      ${setting.any ? '' : `<div class="people">${chosen || '<span class="muted" style="font-size:12px">None added yet</span>'}</div>`}
+      <div class="row">Default: ${setting.defaultValue ? `<span class="person">${esc(setting.names[setting.defaultValue] || setting.defaultValue)}<button type="button" data-clear-default title="Remove">✕</button></span>` : '<span class="muted">none (runners pick)</span>'}</div>
+      <input class="field" data-entity-search placeholder="Search ${esc(plural)} (this brand's first)" value="${esc(setting.search)}" autocomplete="off">
+      <ul class="member-results entity-results">${results}</ul>`;
+  }
+
+  return `<label>Choices, one per line (none: typed in when run) <textarea class="field" rows="2" data-choices>${esc(setting.choices.join('\n'))}</textarea></label>
+    <label>Default <input class="field" data-default value="${esc(setting.defaultValue)}" maxlength="100"></label>`;
+}
+
+// {ABSCO}: a text fill-in whose name looks like a value gets a one-click fix.
+function hintHtml(name, setting) {
+  const found = detections.get(name.toLowerCase());
+  if (setting.type !== 'text' || setting.choices.length || setting.defaultValue || !found || found.type === 'text') return '';
+  return `<div class="hint-row">"${esc(name)}" looks like a ${esc(typeLabel(found.type).toLowerCase())}.
+    <button class="btn-link" type="button" data-fix-name="${esc(name)}">Make it a ${esc(typeLabel(found.type))} fill-in with ${esc(found.label)} as the default</button></div>`;
+}
+
+async function detectName(name) {
+  const key = name.toLowerCase();
+  if (detections.has(key) || PLAIN_NAMES.has(key) || settingOf(name).type !== 'text') return;
+  detections.set(key, null);
+  try {
+    const { values = [] } = await (await api(`askcaboodle/prompts/values?search=${encodeURIComponent(name)}`)).json();
+    detections.set(key, values[0] || null);
+    if (values[0] && values[0].type !== 'text' && state.editor && variableNames(state.editor.text).some(item => item.toLowerCase() === key)) renderEditorVariables();
+  } catch {
+    detections.delete(key);
+  }
+}
+
+function renderPreview() {
+  const host = $('#pePreview');
+  const editor = state.editor;
+  if (!host || !editor) return;
+  const names = variableNames(editor.text);
+  if (!names.length) {
+    host.innerHTML = '';
+    return;
+  }
+
+  const shown = editor.text.split(/(\{[A-Za-z][A-Za-z0-9_]{0,29}\})/).map(part => {
+    const match = part.match(/^\{(.+)\}$/);
+    if (!match) return esc(part);
+    const setting = settingOf(match[1]);
+    const label = setting.label || (setting.type === 'text' ? match[1] : typeLabel(setting.type));
+    const value = setting.type === 'period' ? PERIOD_NAMES[setting.defaultValue || (setting.choices[0] || ROLLING[0])]
+      : setting.type === 'dates' ? datesLabel(setting.dates, setting.defaultValue) || 'they pick'
+        : setting.type === 'brand' ? 'their brand'
+          : ENTITY_TYPES.includes(setting.type) ? setting.names[setting.defaultValue] || 'they pick'
+            : setting.defaultValue || (setting.choices[0] ?? 'typed');
+    return `<span class="pill">${esc(label)}: ${esc(value)} ▾</span>`;
+  }).join('');
+  host.innerHTML = `<span class="muted" style="font-size:12px">People running it see:</span> ${shown}`;
+}
+
+// A fill-in's name: its type, numbered when taken ("retailer", "retailer2").
+function freeName(type) {
+  const base = type === 'text' ? 'value' : type;
+  const taken = new Set(variableNames(state.editor.text).map(name => name.toLowerCase()));
+  if (!taken.has(base)) return base;
+  for (let index = 2; ; index++) if (!taken.has(`${base}${index}`)) return `${base}${index}`;
+}
+
+// Puts {name} where the words were (or at the cursor) and gives it its type and default.
+function makeFillIn(type, start, end, value) {
+  const editor = state.editor;
+  const name = freeName(type);
+  const before = editor.text.slice(0, start);
+  const after = editor.text.slice(end);
+  const lead = start === end && before && !/\s$/.test(before) ? ' ' : '';
+  const trail = start === end && after && !/^[\s.,;:?!]/.test(after) ? ' ' : '';
+  editor.text = `${before}${lead}{${name}}${trail}${after}`;
+  const setting = newSetting(type);
+  if (value) {
+    if (type === 'dates') setting.dates = value.dates || 'month';
+    if (ENTITY_TYPES.includes(type)) setting.names[value.value] = value.label;
+    setting.defaultValue = type === 'text' ? value.label : value.value;
+  }
+
+  editor.settings[name] = setting;
+  editor.candidates = null;
+  renderEditor();
+  const box = $('#peText');
+  box?.focus();
+  box?.setSelectionRange(start + lead.length, start + lead.length + name.length + 2);
+}
+
+async function makeSelectionAFillIn() {
+  const box = $('#peText');
+  const editor = state.editor;
+  const words = box.value.slice(box.selectionStart, box.selectionEnd);
+  if (!words.trim() || /[{}]/.test(words)) {
+    toast('Select the words to turn into a fill-in, such as a retailer\'s name or "last quarter".');
+    return;
+  }
+
+  editor.candidates = { words: words.trim(), start: box.selectionStart + words.indexOf(words.trim()), end: box.selectionStart + words.indexOf(words.trim()) + words.trim().length, loading: true };
+  $('#peCandidates').innerHTML = candidatesHtml(editor);
+  try {
+    const { values = [] } = await (await api(`askcaboodle/prompts/values?search=${encodeURIComponent(words.trim())}`)).json();
+    if (state.editor !== editor || !editor.candidates) return;
+    editor.candidates = { ...editor.candidates, loading: false, values };
+  } catch (error) {
+    editor.candidates = null;
+    toast(error.message);
+  }
+
+  $('#peCandidates').innerHTML = candidatesHtml(editor);
+}
+
+async function improvePrompt() {
+  const editor = state.editor;
+  if (!editor.text.trim()) {
+    toast('Write the prompt first.');
+    return;
+  }
+
+  editor.improvement = { loading: true };
+  $('#peImprove').innerHTML = improvementHtml(editor);
+  try {
+    const variables = variableNames(editor.text).map(name => ({ name, type: settingOf(name).type }));
+    const result = await (await api('askcaboodle/prompts/improve', { method: 'POST', body: { text: editor.text, variables } })).json();
+    if (state.editor !== editor) return;
+    editor.improvement = { ...result, before: editor.text.trim(), accepted: false };
+    for (const suggestion of result.fillIns) if (suggestion.value && ENTITY_TYPES.includes(suggestion.type)) valueNames.set(suggestion.value, suggestion.label);
+  } catch (error) {
+    editor.improvement = { error: error.message };
+  }
+
+  $('#peImprove').innerHTML = improvementHtml(editor);
+}
+
+function useSuggestion(index) {
+  const editor = state.editor;
+  const suggestion = editor.improvement?.fillIns[index];
+  if (!suggestion) return;
+  const outside = editor.text.replace(/\{[A-Za-z][A-Za-z0-9_]{0,29}\}/g, match => ' '.repeat(match.length));
+  const start = outside.toLowerCase().indexOf(suggestion.words.toLowerCase());
+  if (start < 0) {
+    toast(`"${suggestion.words}" isn't in the prompt any more.`);
+    return;
+  }
+
+  editor.improvement.fillIns = editor.improvement.fillIns.filter((_, other) => other !== index);
+  makeFillIn(suggestion.type, start, start + suggestion.words.length, suggestion.value ? { value: suggestion.value, label: suggestion.label, dates: suggestion.dates } : null);
+}
+
+function fixName(name) {
+  const editor = state.editor;
+  const found = detections.get(name.toLowerCase());
+  if (!found) return;
+  const fresh = freeName(found.type);
+  editor.text = editor.text.replace(new RegExp(`\\{${name}\\}`, 'gi'), `{${fresh}}`);
+  delete editor.settings[name.toLowerCase()];
+  const setting = newSetting(found.type);
+  if (found.type === 'dates') setting.dates = found.dates || 'month';
+  if (ENTITY_TYPES.includes(found.type)) setting.names[found.value] = found.label;
+  setting.defaultValue = found.value;
+  editor.settings[fresh] = setting;
+  renderEditor();
+}
+
+async function searchEntities(row) {
+  const setting = state.editor?.settings[row.dataset.varRow];
+  if (!setting) return;
+  try {
+    const { values = [] } = await (await api(`askcaboodle/prompts/values?type=${encodeURIComponent(setting.type)}&search=${encodeURIComponent(setting.search.trim())}`)).json();
+    for (const value of values) setting.names[value.value] = value.label;
+    setting.results = values;
+  } catch (error) {
+    setting.results = [];
+    toast(error.message);
+  }
+
+  const input = row.querySelector('[data-entity-search]');
+  const caret = input?.selectionStart;
+  renderEditorVariables();
+  const again = document.querySelector(`[data-var-row="${CSS.escape(row.dataset.varRow)}"] [data-entity-search]`);
+  if (again && document.activeElement !== again) {
+    again.focus();
+    if (caret != null) again.setSelectionRange(caret, caret);
+  }
+}
+
+function editorBody() {
+  const editor = state.editor;
+  const variables = variableNames(editor.text).map(name => {
+    const setting = settingOf(name);
+    if (setting.type === 'brand') return { name, type: 'brand' };
+    const entity = ENTITY_TYPES.includes(setting.type);
+    return {
+      name,
+      type: setting.type,
+      label: setting.label.trim() || null,
+      dates: setting.type === 'dates' ? setting.dates : null,
+      choices: setting.type === 'dates' || (entity && setting.any) ? [] : setting.choices,
+      default: setting.defaultValue.trim() || null,
+    };
+  });
+  return { title: editor.title, text: editor.text, variables, visibility: editor.visibility, sharedWith: editor.visibility === 'people' ? editor.people.map(person => person.userID) : [] };
+}
+
+async function savePrompt() {
+  const editor = state.editor;
+  try {
+    const saved = await (await api(editor.id ? `askcaboodle/prompts/${editor.id}` : 'askcaboodle/prompts', { method: editor.id ? 'PUT' : 'POST', body: editorBody() })).json();
+    state.editor = null;
+    state.promptValues.delete(saved.id);
+    state.picker.items = null;
+    if (!editor.id) state.galleryTab = 'mine';
+    toast(saved.review === 'pending' ? 'Saved: it waits for an admin to approve it.' : 'Saved.');
+    await loadPrompts();
+  } catch (error) {
+    editor.error = error.message;
+    const shown = $('#peErr');
+    if (shown) shown.textContent = editor.error;
+  }
+}
+
+let membersTimer;
+let membersRequest = 0;
+async function searchMembers(text) {
+  const request = ++membersRequest;
+  const list = $('#peMembers');
+  try {
+    const page = await (await api(`members?search=${encodeURIComponent(text)}&pageSize=20&currentPage=1`)).json();
+    if (request !== membersRequest || !list?.isConnected) return;
+    const chosen = new Set(state.editor?.people.map(person => person.userID));
+    const members = (page.data || []).filter(member => !chosen.has(member.userId));
+    list.innerHTML = members.map(member => {
+      const name = [member.firstName, member.lastName].filter(Boolean).join(' ') || member.email || member.userId;
+      return `<li><button type="button" data-member="${esc(member.userId)}" data-name="${esc(name)}">${esc(name)} <small class="muted">${esc(member.email || '')}</small></button></li>`;
+    }).join('') || '<li class="muted" style="padding:4px 8px;font-size:12.5px">No member found</li>';
+  } catch (error) {
+    if (request === membersRequest && list?.isConnected) list.innerHTML = `<li class="muted" style="padding:4px 8px;font-size:12.5px">${esc(error.message)}</li>`;
+  }
+}
+
+/* ---------- the "/" picker (C4) ---------- */
+
+let pickerRequest = 0;
+async function loadPicker() {
+  const key = `${state.brandId}|${state.orgId}`;
+  if (!state.token || (state.picker.items && state.picker.key === key)) return;
+  const request = ++pickerRequest;
+  state.picker.items = null;
+  state.picker.error = null;
+  try {
+    const { items = [] } = await (await api('askcaboodle/picker')).json();
+    if (request !== pickerRequest) return;
+    if (key !== `${state.brandId}|${state.orgId}`) {
+      loadPicker();
+      return;
+    }
+
+    state.picker.items = items;
+    state.picker.key = key;
+  } catch (error) {
+    if (request !== pickerRequest) return;
+    state.picker.error = error.message;
+  }
+
+  renderPicker();
+}
+
+function renderPicker() {
+  const box = $('#question');
+  const picker = $('#picker');
+  if (!box.value.startsWith('/') || state.running || state.board || state.gallery) {
+    closePicker();
+    return;
+  }
+
+  const filter = box.value.slice(1).trim().toLowerCase();
+  const items = (state.picker.items || []).filter(item => !filter || item.text.toLowerCase().includes(filter) || item.tag.toLowerCase().includes(filter));
+  state.picker.shown = items;
+  if (state.picker.index >= items.length) state.picker.index = 0;
+  const body = state.picker.error ? `<div class="picker-empty">${esc(state.picker.error)}</div>`
+    : !state.picker.items ? '<div class="picker-empty"><span class="spin"></span>Loading saved prompts…</div>'
+      : items.map((item, index) => `<button type="button" class="pick ${index === state.picker.index ? 'on' : ''}" role="option" id="pick-${index}" aria-selected="${index === state.picker.index}" data-pick="${index}">
+          <span class="pick-t">${esc(item.text)}</span><span class="pick-tag">${item.verified ? '<span class="verified">✓</span> ' : ''}${esc(item.tag)} · ${esc(COLLECTIONS[item.collection] || item.collection)}</span></button>`).join('')
+        || '<div class="picker-empty">No saved prompt matches. Press Esc and type your question.</div>';
+  picker.innerHTML = `<div class="picker-h"><span>Saved prompts</span><span>↑ ↓ choose · Enter insert · Esc close</span></div>${body}`;
+  picker.hidden = false;
+  box.setAttribute('aria-activedescendant', items.length ? `pick-${state.picker.index}` : '');
+  picker.querySelector('.pick.on')?.scrollIntoView({ block: 'nearest' });
+}
+
+function closePicker() {
+  $('#picker').hidden = true;
+  $('#question').removeAttribute('aria-activedescendant');
+}
+
+// The text goes into the composer with its defaults; the first variable left without one is selected to type over.
+function choosePick(index) {
+  const item = state.picker.shown[index];
+  if (!item) return;
+  const box = $('#question');
+  box.value = item.text;
+  state.pickedPrompt = item.kind === 'prompt' ? item.id : null;
+  closePicker();
+  box.focus();
+  const start = box.value.search(/\{[A-Za-z][A-Za-z0-9_]{0,29}\}/);
+  if (start >= 0) box.setSelectionRange(start, box.value.indexOf('}', start) + 1);
+  else box.setSelectionRange(box.value.length, box.value.length);
+}
+
 /* ---------- conversation ---------- */
 
 function resetConversation() {
@@ -1683,6 +2538,7 @@ function resetConversation() {
 function newConversation() {
   if (state.running) return false;
   hidePins();
+  hideGallery();
   resetConversation();
   $('#convo').innerHTML = `<div class="empty"><h2>Ask about your Caboodle data</h2><p class="muted">Each question is a real one: about $0.04, counted in today's questions. A conversation takes 20 questions, and its first answer gives it a short title (about $0.00003 more).</p>
     <div class="starters" aria-live="polite"></div></div>`;
@@ -1815,6 +2671,8 @@ $('#orgId').value = state.orgId;
 $('#orgId').addEventListener('change', () => {
   state.orgId = $('#orgId').value.trim();
   store.set('orgId', state.orgId);
+  state.picker.items = null;
+  if (state.gallery) loadPrompts();
 });
 $('#typing').value = state.typing;
 $('#typing').addEventListener('change', () => {
@@ -1870,6 +2728,232 @@ $('#renameTitle').addEventListener('click', () => {
 $('#convo').addEventListener('click', event => {
   const startNew = event.target.closest('[data-start-over]');
   if (startNew) startOver(startNew.dataset.startOver);
+  const plain = event.target.closest('[data-ask-plain]');
+  if (plain) {
+    $('#question').value = plain.dataset.askPlain;
+    state.pickedPrompt = null;
+    $('#question').focus();
+  }
+});
+$('#showGallery').addEventListener('click', showGallery);
+$('#gallery').addEventListener('click', event => {
+  const target = event.target;
+  const gallery = target.closest('[data-gal]');
+  if (gallery?.dataset.gal === 'back') hideGallery();
+  if (gallery?.dataset.gal === 'new') openEditor(null);
+  const tab = target.closest('[data-tab]');
+  if (tab) {
+    state.galleryTab = tab.dataset.tab;
+    renderGallery();
+  }
+
+  const starter = target.closest('[data-starter-run]');
+  if (starter) {
+    const text = state.prompts.starters[starter.dataset.starterRun].text;
+    hideGallery();
+    if (newConversation()) ask(text);
+  }
+
+  const action = target.closest('[data-pa]');
+  if (action) onPromptAction(action.closest('[data-prompt]').dataset.prompt, action.dataset.pa);
+  const editor = state.editor;
+  if (!editor) return;
+  const tool = target.closest('[data-ed]')?.dataset.ed;
+  if (tool === 'cancel') {
+    state.editor = null;
+    renderEditor();
+    return;
+  }
+
+  // Only the menu changes, so the prompt keeps its cursor for the insert.
+  if (tool === 'insert') {
+    editor.menu = !editor.menu;
+    $('#peMenu').hidden = !editor.menu;
+    target.closest('[data-ed]').setAttribute('aria-expanded', String(editor.menu));
+  }
+
+  if (tool === 'selection') makeSelectionAFillIn();
+  if (tool === 'improve') improvePrompt();
+  if (tool === 'candidates-close') {
+    editor.candidates = null;
+    $('#peCandidates').innerHTML = '';
+  }
+
+  if (tool === 'improve-close') {
+    editor.improvement = null;
+    $('#peImprove').innerHTML = '';
+  }
+
+  if (tool === 'improve-use') {
+    editor.text = editor.improvement.text;
+    editor.improvement.accepted = true;
+    renderEditor();
+  }
+
+  const insert = target.closest('[data-insert-type]');
+  if (insert) {
+    const box = $('#peText');
+    editor.menu = false;
+    makeFillIn(insert.dataset.insertType, box.selectionStart, box.selectionEnd, null);
+  }
+
+  const candidate = target.closest('[data-candidate]');
+  if (candidate && editor.candidates) {
+    const value = editor.candidates.values[Number(candidate.dataset.candidate)];
+    makeFillIn(value.type, editor.candidates.start, editor.candidates.end, value);
+  }
+
+  const suggestion = target.closest('[data-suggestion]');
+  if (suggestion) useSuggestion(Number(suggestion.dataset.suggestion));
+  const fix = target.closest('[data-fix-name]');
+  if (fix) fixName(fix.dataset.fixName);
+
+  const row = target.closest('[data-var-row]');
+  const setting = row && editor.settings[row.dataset.varRow];
+  const add = target.closest('[data-add-choice]');
+  const asDefault = target.closest('[data-set-default]');
+  const removeChoice = target.closest('[data-remove-choice]');
+  if (setting && (add || asDefault || removeChoice || target.closest('[data-clear-default]'))) {
+    if (add && !setting.choices.includes(add.dataset.addChoice)) setting.choices.push(add.dataset.addChoice);
+    if (asDefault) {
+      setting.defaultValue = asDefault.dataset.setDefault;
+      if (!setting.any && !setting.choices.includes(setting.defaultValue)) setting.choices.push(setting.defaultValue);
+    }
+
+    if (removeChoice) {
+      setting.choices = setting.choices.filter(value => value !== removeChoice.dataset.removeChoice);
+      if (setting.defaultValue === removeChoice.dataset.removeChoice) setting.defaultValue = '';
+    }
+
+    if (target.closest('[data-clear-default]')) setting.defaultValue = '';
+    renderEditorVariables();
+  }
+
+  const member = target.closest('[data-member]');
+  const removed = target.closest('[data-remove-person]');
+  if (member || removed) {
+    if (member) editor.people.push({ userID: member.dataset.member, name: member.dataset.name });
+    else editor.people = editor.people.filter(person => person.userID !== removed.dataset.removePerson);
+    renderEditor();
+    $('#peSearch')?.focus();
+  }
+});
+const entitySearches = new Map();
+$('#gallery').addEventListener('input', event => {
+  const target = event.target;
+  const card = target.closest('.prompt-card[data-prompt]');
+  if (card) {
+    const prompt = allPrompts().find(item => item.id === card.dataset.prompt);
+    if (!prompt) return;
+    const values = promptValues(prompt);
+    if (target.dataset.search) searchPill(target);
+    else if (target.dataset.var) values[target.dataset.var] = target.value;
+    else if (target.dataset.varFrom || target.dataset.varTo) {
+      const key = target.dataset.varFrom || target.dataset.varTo;
+      const [from = '', to = ''] = String(values[key] || '').split('/');
+      values[key] = target.dataset.varFrom ? `${target.value}/${to}` : `${from}/${target.value}`;
+    }
+
+    return;
+  }
+
+  const editor = state.editor;
+  if (!editor) return;
+  if (target.id === 'peTitle') editor.title = target.value;
+  if (target.id === 'peText') {
+    editor.text = target.value;
+    renderEditorVariables();
+  }
+
+  if (target.id === 'peSearch') {
+    clearTimeout(membersTimer);
+    membersTimer = setTimeout(() => searchMembers(target.value.trim()), 250);
+  }
+
+  const row = target.closest('[data-var-row]');
+  const setting = row && editor.settings[row.dataset.varRow];
+  if (!setting) return;
+  if (target.matches('[data-choices]')) setting.choices = target.value.split('\n').map(choice => choice.trim()).filter(Boolean);
+  if (target.matches('input[data-default]')) setting.defaultValue = target.value;
+  if (target.matches('[data-fill-label]')) {
+    setting.label = target.value;
+    renderPreview();
+  }
+
+  if (target.matches('[data-entity-search]')) {
+    setting.search = target.value;
+    clearTimeout(entitySearches.get(row.dataset.varRow));
+    entitySearches.set(row.dataset.varRow, setTimeout(() => searchEntities(row), 250));
+  }
+});
+$('#gallery').addEventListener('change', event => {
+  const target = event.target;
+  const card = target.closest('.prompt-card[data-prompt]');
+  if (card) {
+    const prompt = allPrompts().find(item => item.id === card.dataset.prompt);
+    if (prompt && target.dataset.search) pickPill(target, prompt);
+    else if (prompt && target.dataset.var) promptValues(prompt)[target.dataset.var] = target.value;
+    return;
+  }
+
+  const editor = state.editor;
+  if (!editor) return;
+  if (target.name === 'peVis') {
+    editor.visibility = target.value;
+    $('#pePeople').hidden = editor.visibility !== 'people';
+  }
+
+  const row = target.closest('[data-var-row]');
+  const setting = row && editor.settings[row.dataset.varRow];
+  if (!setting) return;
+  if (target.matches('[data-fill-type]')) {
+    Object.assign(setting, newSetting(target.value), { label: setting.label });
+    renderEditorVariables();
+  }
+
+  if (target.matches('[data-token]')) {
+    setting.choices = ROLLING.filter(token => token === target.dataset.token ? target.checked : setting.choices.includes(token));
+    if (setting.defaultValue && setting.choices.length && !setting.choices.includes(setting.defaultValue)) setting.defaultValue = '';
+    renderEditorVariables();
+  }
+
+  if (target.matches('[data-dates-format]')) {
+    setting.dates = target.value;
+    setting.defaultValue = '';
+    renderEditorVariables();
+  }
+
+  if (target.matches('[data-default-from], [data-default-to]')) {
+    const from = row.querySelector('[data-default-from]').value;
+    const to = row.querySelector('[data-default-to]').value;
+    setting.defaultValue = from && to ? `${from}/${to}` : '';
+    renderPreview();
+  }
+
+  if (target.matches('[data-any]')) {
+    setting.any = target.dataset.any === '1';
+    if (setting.any) setting.choices = [];
+    renderEditorVariables();
+  }
+
+  if (target.matches('select[data-default]')) {
+    setting.defaultValue = target.value;
+    renderPreview();
+  }
+});
+$('#gallery').addEventListener('focusin', event => {
+  const row = event.target.matches('[data-entity-search]') && event.target.closest('[data-var-row]');
+  if (row && state.editor?.settings[row.dataset.varRow]?.results === null) searchEntities(row);
+});
+$('#gallery').addEventListener('submit', event => {
+  if (event.target.id !== 'peForm') return;
+  event.preventDefault();
+  savePrompt();
+});
+$('#picker').addEventListener('mousedown', event => event.preventDefault());
+$('#picker').addEventListener('click', event => {
+  const pick = event.target.closest('[data-pick]');
+  if (pick) choosePick(Number(pick.dataset.pick));
 });
 $('#newChat').addEventListener('click', newConversation);
 $('#showPins').addEventListener('click', () => showPins());
@@ -1895,15 +2979,52 @@ $('#traceClose').addEventListener('click', hideTrace);
 $('#composer').addEventListener('submit', event => {
   event.preventDefault();
   const question = $('#question').value;
+  if (question.startsWith('/')) return;
+  const promptId = state.pickedPrompt;
   $('#question').value = '';
-  ask(question);
+  state.pickedPrompt = null;
+  closePicker();
+  ask(question, { promptId });
 });
-$('#question').addEventListener('keydown', event => {
-  if (event.key === 'Enter' && !event.shiftKey) {
-    event.preventDefault();
-    $('#composer').requestSubmit();
+// C4: "/" opens the saved prompts; typing filters them. A question inserted from a prompt keeps its promptId until the
+// composer is emptied or "/" is typed again.
+$('#question').addEventListener('input', () => {
+  const value = $('#question').value;
+  if (!value.trim() || value.startsWith('/')) state.pickedPrompt = null;
+  if (value.startsWith('/')) {
+    state.picker.index = 0;
+    renderPicker();
+    loadPicker();
+  } else {
+    closePicker();
   }
 });
+$('#question').addEventListener('keydown', event => {
+  const open = !$('#picker').hidden;
+  if (open && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
+    event.preventDefault();
+    const count = state.picker.shown.length;
+    if (count) {
+      state.picker.index = (state.picker.index + (event.key === 'ArrowDown' ? 1 : -1) + count) % count;
+      renderPicker();
+    }
+
+    return;
+  }
+
+  if (open && event.key === 'Escape') {
+    event.preventDefault();
+    closePicker();
+    return;
+  }
+
+  if (event.key === 'Enter' && !event.shiftKey) {
+    event.preventDefault();
+    if (open) choosePick(state.picker.index);
+    else $('#composer').requestSubmit();
+  }
+});
+$('#question').addEventListener('blur', closePicker);
 $('#stop').addEventListener('click', () => state.running?.controller.abort());
 
 setInterval(typingTick, 30);
@@ -1919,6 +3040,7 @@ if (params.get('trace') === '1' && !params.get('session')) showTrace(null);
 if (params.get('session')) openSession(params.get('session'));
 else if (params.get('ask')) ask(params.get('ask'));
 else if (params.get('pins') === '1' && state.token) loadPins().then(() => showPins());
+else if (params.get('gallery') === '1' && state.token) showGallery();
 
 window.askCaboodleTest = {
   state,

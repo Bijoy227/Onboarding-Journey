@@ -1,21 +1,29 @@
 # Ask Caboodle — Handoff for the next session
 
-Written 2026-10-18, after C3 (commit `31d598a4`). Read this first, then §0, §4 C4 (with "C2 as built" and "C3 as built": C4 lists C2's starters first and its `{period}` variable uses C3's tokens), §7.2, §8 and §10 of [`ask-caboodle-be-implementation-plan.md`](ask-caboodle-be-implementation-plan.md).
+Written 2026-10-18, after C4 (commit `40efb441`). Read this first, then §0, §4 C5 (with "C2 as built", "C3 as built" and "C4 as built": C5's library replaces C2's YAML, its templates reuse C4's typed fill-ins and C3's period tokens, and it gives organization prompts "Verified"), §7.2, §8 and §10 of [`ask-caboodle-be-implementation-plan.md`](ask-caboodle-be-implementation-plan.md).
 
-## Starter prompt (next: C4)
+## Starter prompt (next: C5)
 
-> Read `docs/ask-caboodle/ask-caboodle-next-session.md`, then §0, §4 C4 (with "C2 as built" and "C3 as built", whose starters and period tokens C4 reuses), §7.2, §8 and §10 of `docs/ask-caboodle/ask-caboodle-be-implementation-plan.md` in `D:\Fork\Onboarding-Journey`. The backend is `D:\Fork\Caboodle BE Repository\caboodle.backend`, branch `feature/ask-caboodle` (last commit the C3 follow-up `280b39e2`, after C3's eval report `8e689053` and C3 `31d598a4`; working tree clean).
+> Read `docs/ask-caboodle/ask-caboodle-next-session.md`, then §0, §4 C5 (with "C2 as built", "C3 as built" and "C4 as built", whose starters, period tokens, typed fill-ins and values lookup C5 builds on), §7.2, §8 and §10 of `docs/ask-caboodle/ask-caboodle-be-implementation-plan.md` in `D:\Fork\Onboarding-Journey`. The backend is `D:\Fork\Caboodle BE Repository\caboodle.backend`, branch `feature/ask-caboodle` (last commit C4 `40efb441`; working tree clean).
 >
-> Next is package C4 (prompt gallery). First re-fetch `origin/feature/CS-1770-iam-service-broker-workspace` and tell me whether it has commits after `b5adb1a1`; don't merge without my go-ahead. Then post C4's short plan and its open decisions, and wait for my go-ahead. The open decisions:
-> - who reviews prompts shared with an organization ("Pending admin review"): the organization admin or the Platform Admin;
-> - sharing: with the organization, with people through IAM members, or private only until G4 (pins stayed personal, D157);
-> - variables: `{brand}` and `{period}` (C3's tokens), preset choices and defaults, free text;
-> - run counts and "Verified" (an organization prompt with a passing eval case);
-> - the `/` picker: C2's starters first, then the prompts, in one call (D151).
+> Next is package C5 (verified examples and short-circuit). First re-fetch `origin/feature/CS-1770-iam-service-broker-workspace` and tell me whether it has commits after `b5adb1a1`; don't merge without my go-ahead. Then post C5's short plan and its open decisions, and wait for my go-ahead. The open decisions:
+> - the size: C5 grew by about a third (D92); split it (for example C5a: library, retrieval and approval; C5b: the short-circuit) or build it at once;
+> - what enters the library first: C2's 21 starters (D151), organization prompts that pass an eval case (D163), thumbs-up answers and eval passes as proposals; and when the 100-question starter library with Constance is written;
+> - normalizing a question for retrieval: names and periods replaced by their types with C4's values lookup and period recognition (D165–D168), then `pg_trgm` and full-text; how many examples go into the user message;
+> - human approval: where a platform admin marks an example verified, and how "Verified" reaches organization prompts;
+> - templates with slots: C4's fill-in types as the slots, so one verified question serves every retailer and period;
+> - the nightly re-check (as C3's pins) and dropping examples when the catalog changes;
+> - `GET suggestions` moving from the YAML to the library (D151), and whether verified similar questions replace C0's follow-ups.
 >
-> Add C4 to the C1p test page (`docs/ask-caboodle/test-page/ask-caboodle-test.html`). The items under "Parked for later" wait until I bring them up.
+> Add C5 to the C1p test page (`docs/ask-caboodle/test-page/ask-caboodle-test.html`). The items under "Parked for later" wait until I bring them up.
 >
 > Run the free launchers yourself (PowerShell). Finish in the usual order: build with 0 errors, all tests green, my review, then a one-line commit. Paid runs still need my approval first, with the cost stated.
+
+## Waiting for the owner (from C4, 2026-10-18)
+
+- **The paid "Improve with AI" check** (`improve.ps1`: `LiveImproveTests`, 8 prompts against Bubbies' values, `{ABSCO}` and an injection attempt included; about $0.001–0.002) was offered and not run. C4 was committed without it.
+- **C4's fourteen points beyond the plan's wording** (plan §4 "C4 as built"): committed at the owner's request, listed for the owner to object to. The four from the fill-ins work: improvement costs in their own table, in the budgets but not the per-question report; an unpriced `ImproveModel` keeps prompts as they are; entity names stored at save; a brand's own values need a brand when saving.
+- **Try it live** on the test page: restart the API first (the migration is applied locally). Building a prompt and the values lookup are free; "Improve with AI" costs about $0.0002 a click; running a prompt is a normal question (about $0.04).
 
 ## Waiting for the owner (from C3, 2026-10-18)
 
@@ -48,12 +56,12 @@ The owner will bring these up; don't start them unasked.
 
 | Item | State |
 |---|---|
-| **Backend branch** | `feature/ask-caboodle`, last commit the C3 follow-up `280b39e2`, after C3's eval report `8e689053`, C3 `31d598a4`, C2's eval report `711dcaef`, C2 `4ff33590`, C1b `f8e56603`, C1 `a01dfc13`, B10b `e26a5f52`, C0b.1 `5f7e7f84`, B10a `26a85f3f`, B9 `a8387b82`, C0b `6da28c2d`, C0 `a102eed1`, B8b `b2f00e22`, B8 `02a256b6` and the IAM merge `4d0830e6`. `origin/feature/ask-caboodle` is at B8b (`b2f00e22`); C0, C0b, B9, B10a, C0b.1, B10b, C1, C1b, C2 and C3 are local only. Never push unless the owner asks. |
+| **Backend branch** | `feature/ask-caboodle`, last commit C4 `40efb441`, after the C3 follow-up `280b39e2`, C3's eval report `8e689053`, C3 `31d598a4`, C2's eval report `711dcaef`, C2 `4ff33590`, C1b `f8e56603`, C1 `a01dfc13`, B10b `e26a5f52`, C0b.1 `5f7e7f84`, B10a `26a85f3f`, B9 `a8387b82`, C0b `6da28c2d`, C0 `a102eed1`, B8b `b2f00e22`, B8 `02a256b6` and the IAM merge `4d0830e6`. `origin/feature/ask-caboodle` is at B8b (`b2f00e22`); C0, C0b, B9, B10a, C0b.1, B10b, C1, C1b, C2, C3 and C4 are local only. Never push unless the owner asks. |
 | **Logins on `caboodle_dev`** | `askcaboodle_app` (standard) and, since B10a, `askcaboodle_admin_app` (platform admins), both created by the owner; their connection strings are the user variables below. |
 | **Docs repo** | `D:\Fork\Onboarding-Journey`, branch `caboodle-access-v2`. Docs commits are one line: `Update - Ask Caboodle docs - …`. |
 | **Model in the app** | **Sonnet 5.5, effort medium** since B7b (D45). Since B8, prices come from the `ModelPrices` table in code, per model and per attempt; the five price settings are gone. Development and Staging settings say `claude-sonnet-5-5`. |
-| **Tests** | With C3: solution 7,095 green across 16 projects (Intelligence 760, coverage 97.8 % unit-only). Build has 0 errors. The free DB tests (`dbtests.ps1`'s default filter, golden references included) are 65 green: the admin-login ones, C1's trace endpoint, C1b's title/rename race, C2's starter checks and C3's five pin tests included. |
-| **IAM work** | Merge from `origin/feature/CS-1770-iam-service-broker-workspace` (last merged at `b5adb1a1`; still no new commits when fetched on 2026-10-17, at C3's start). Its module settings hold Ask Caboodle's three per-organization settings; the two dollar settings are Platform Admin only. Re-fetch and re-check before each merge. |
+| **Tests** | With C4: solution 7,198 green across 16 projects (Intelligence 861, coverage 96.9 % unit-only). Release build has 0 errors. The free DB tests (`dbtests.ps1`'s default filter, golden references included) are 77 green: the admin-login ones, C1's trace endpoint, C1b's title/rename race, C2's starter checks, C3's pin tests and C4's prompt, values and improvement-cost tests included. |
+| **IAM work** | Merge from `origin/feature/CS-1770-iam-service-broker-workspace` (last merged at `b5adb1a1`; still no new commits when fetched on 2026-10-18, at C4's start). Its module settings hold Ask Caboodle's three per-organization settings; the two dollar settings are Platform Admin only. Re-fetch and re-check before each merge. |
 | **Golden eval** | 67 questions in `caboodle/tests/Intelligence.Application.Test/Eval/golden.yaml` (since C2; 63 after B10b), asked as if today were 2026-10-12: 64 counted, plus "App questions" (Q42–Q44), reported apart until C9. Since C2: Q60–Q63, the starters' wordings of Q04, Q08, Q16 and Q17 (4 of 4 passed on 2026-10-17, $0.29). Every starter in `starters.yaml` must stay the exact question of a case. Since C3: `expect.period` on 24 cases and a reported `period` check (did a query take the expected token). Since B10a: a per-case `audience`, the "Platform admin" group (Q49–Q53; since B10b also Q54–Q59 on the data pipeline and the raw files), and `ASK_CABOODLE_EVAL_AUDIENCE=platform-admin`. Since C0: a counted `kind` check, `expect.kinds` for partial answers, and reported headline and database-name checks. Since C0b: a "Fact check" section and a reported `unverified_figures` check. Since B9: Q45–Q48 (fees by type, a distributor's markup, banners by region, the brand's distributors), Q41 answers the fee lines, and calculator references return fee-line figures. Reports and README are in BE `docs/AskCaboodle-Eval/`. |
 | **Current baseline (C0b)** | No full run since C0b. B9 changed the catalog and the tool definitions (D110) and checked 9 cases: 9/9, $0.04 per answer. **C0b's full run, Sonnet 5.5 medium:** 38/45 counted (C0: 40/45; the difference is run-to-run flips, none caused by the check), app questions 3/3, **$0.036 per answer**, 13.5 s. 5 of 48 answers corrected by the fact check before the last tuning (about 3 of 48 expected now), none sent with the note. Failing: Q15 (borderline), Q27 (as since B7b), Q29 (a range claim, C0c's kind), Q35 (`cannot_answer` for "nothing found"; stays `answer` by D107). Q33 now accepts either kind (D107). Opus 5.5 medium was last measured in B7b: 41/45, $0.112, 26 s. |
 | **Known weaknesses** | Figures in the wrong place, rankings and pattern claims ("56–68 units per store" when one week is 40; Q11, Q29; B10b's Q57 "two issue types have none open" when one has, passed because a 2 was in the results): C0c. Wrong figures and counts are now caught by C0b (Q16, Q29's "three promo periods"), and hand-added totals pass only when right. |
@@ -62,7 +70,7 @@ The owner will bring these up; don't start them unasked.
 ## Money (read before any paid run)
 
 - **Who pays:** the client (Constance) pays the API bill through the Claude Console. The owner cannot add money themselves.
-- **Balance:** about **$47.61**. C3 spent $0.61: the 8-case period check $0.37 ($0.30 answers, $0.07 claims check) and the 3-case named-date re-check $0.24 (the changed prompt was cached again on its first case). The owner's live Q62 on the test page ($0.107) went to the key in `appsettings.Development.json`, as C1p's did; C2 spent $0.29 (the 4-case check of its new starters' cases); C1b spent $0.0003 (nine titles from Haiku 5.5); C1 spent $0.50 (a smoke question $0.0834, a 6-case check $0.34, a 1-case check without the fallback $0.04, 14 small timing calls $0.044); B10b spent $0.56 (a 9-case check $0.48, a 2-case re-check $0.08); B10a $0.44 (an 8-case check); B9 $0.59 (a 9-case check); C0b $3.43 (4-case check $0.41, full run $2.62, re-check of 7 $0.40); C0 $3.54; B8b nothing; B8 about $0.075. The Console has the exact figure.
+- **Balance:** about **$47.61**. C4 spent nothing (its improve check was not run). C3 spent $0.61: the 8-case period check $0.37 ($0.30 answers, $0.07 claims check) and the 3-case named-date re-check $0.24 (the changed prompt was cached again on its first case). The owner's live Q62 on the test page ($0.107) went to the key in `appsettings.Development.json`, as C1p's did; C2 spent $0.29 (the 4-case check of its new starters' cases); C1b spent $0.0003 (nine titles from Haiku 5.5); C1 spent $0.50 (a smoke question $0.0834, a 6-case check $0.34, a 1-case check without the fallback $0.04, 14 small timing calls $0.044); B10b spent $0.56 (a 9-case check $0.48, a 2-case re-check $0.08); B10a $0.44 (an 8-case check); B9 $0.59 (a 9-case check); C0b $3.43 (4-case check $0.41, full run $2.62, re-check of 7 $0.40); C0 $3.54; B8b nothing; B8 about $0.075. The Console has the exact figure.
 - **Cache-read price (settled 2026-10-16):** Sonnet 5.5 cache reads cost $0.10 per million tokens (0.05x input, on the live pricing page), as `ModelPrices` says; the `claude-api` skill's cached $0.20 is out of date.
 - **Typical costs:**
 
@@ -336,6 +344,17 @@ Decisions D153–D159 are in plan §7; "C3 as built" is in §4. In short:
 - **Paid, $0.37:** 7 of 8. The six relative questions took their token; Q04 and Q08 (named dates) typed their dates; Q62 listed TPR events only.
 - **Follow-ups (owner, same day):** named-date examples in the period rule and Q62 accepting the TPR-only framing; re-check $0.24 (Q08 now `custom`; Q04 and Q17 still typed; Q17 failed on a claims-check misreading). The owner's live Q62 showed the fact check stopping a head-worked figure ("56" = 114 − 58) and the answer counting it with a query; it cost $0.107 over 9 steps, the high end for a listing question.
 
+## Done: C4 — prompt gallery (commit `40efb441`, 2026-10-18)
+
+Decisions D160–D169 are in plan §7; "C4 as built" is in §4. In short:
+- **The short plan (D160–D164):** the organization's admins review organization prompts (platform admins too); private, organization and people in the same organization, nothing across organizations; runs by D144's rule; "Verified" on C2's starters only until C5; one `GET picker` call, starters first.
+- **Widened at review (D165–D169, owner: "wrap this up here instead of a new plan"):** typed fill-ins (period, dates, retailer, banner, distributor, product, category, region, promotion, brand, text) with a label and a default, "any value" or the author's list; the brand's own values first (authorized, shipped in 12 months, promotions; distributor links); the Dates picker; "Make selection a fill-in" and the `{ABSCO}` hint; "Improve with AI" (Haiku 5.5, exactly the same fill-ins, before and after, 30 a day, cost in the monthly budgets).
+- **Migration `20261017213333_AddAskCaboodlePrompts`** (local `caboodle_dev`; `Down` checked): `AskPrompts`, `AskPromptShares`, `AskPromptImprovements`, `AskMessages.PromptID`. No grants. Settings `ImproveModel`/`ImproveSeconds` (defaults work).
+- **Endpoints:** `GET`/`POST prompts`, `PUT`/`DELETE prompts/{id}`, `POST prompts/{id}/review`, `GET prompts/values`, `POST prompts/improve`, `GET picker`; `promptId` on the ask and the new error `prompt_unavailable`. BE `docs/AskCaboodle-FE.md` ("Prompt gallery") and `docs/AskCaboodle-Deployment.md` list everything.
+- **Tests:** solution 7,198 green, Intelligence 861 (coverage 96.9 % unit-only), DB tests 77 green, Release build 0 errors.
+- **Test page:** the gallery in the rail (tabs, cards with fill-in pills, review, Run), the New/Edit form (insert and make fill-ins, cards per fill-in, preview, Improve with AI, sharing), the `/` picker. Tested free with `drive-c4.mjs` (13 scenarios); the earlier drivers re-ran unchanged. The mock with the prompt routes (`mock-prompts.mjs`), `drive-c4.mjs`, `run-c4.ps1` and `regress.ps1` are in `C:\Users\User\AppData\Local\Temp\claude\d--Fork-Onboarding-Journey\56cf18da-bac0-47dd-9603-54277e0ec947\scratchpad\c1p-test`, while it lasts.
+- **$0 spent.** The paid improve check waits (above).
+
 ## Working agreement (owner)
 
 1. **One package at a time.** Post the plan and open decisions, then wait for the go-ahead. "Can we do X?" is a question, not a go-ahead.
@@ -426,9 +445,18 @@ dotnet test caboodle/tests/Intelligence.Application.Test/Intelligence.Applicatio
 
 **Paid title check** (`titles.ps1`, C1b, about $0.0003): reads `ANTHROPIC_API_KEY` from user scope into the process, sets `ASK_CABOODLE_LIVE_TITLE_TEST=1` and runs `dotnet test … --no-build --filter "FullyQualifiedName~LiveTitleTests" --logger "console;verbosity=detailed"`: nine real questions to the title model, each title printed with its time and cost. Nothing is saved.
 
+**Paid improve check** (`improve.ps1`, C4, about $0.001–0.002): reads `ANTHROPIC_API_KEY` and the read-only connection string from user scope into the process, sets `ASK_CABOODLE_LIVE_IMPROVE_TEST=1` and runs `dotnet test … --configuration Release --no-build --filter "FullyQualifiedName~LiveImproveTests" --logger "console;verbosity=detailed"`: eight prompts improved with Bubbies' values looked up, each printed with its rewrite, note and suggested fill-ins. Nothing is saved.
+
+**Build in Release while the owner's API runs (C4).** The owner keeps the API running from Visual Studio, which locks the Debug output: build and test with `--configuration Release` (and `--no-build` launchers with `--configuration Release` too), and never stop the owner's process.
+
 **New migrations:** `dotnet ef migrations add <Name> --context MainDbContext --project caboodle/src/Database/Migrator/Migrator.csproj --startup-project caboodle/src/Hosts/API/API.csproj` with `ASPNETCORE_ENVIRONMENT=Development` (no database connection needed). Check that the snapshot diff holds only your change, and set a sensible `defaultValue` for a new non-null column (EF writes 0).
 
 ## Lessons from recent sessions
+
+- **Every model the code calls needs a price check (C4).** An unpriced `ImproveModel` would have run with cost 0, so the spend would never have reached the budgets; titles already refused without a price. `AskModelPriceCheck` now warns for the agent's, the title and the improve models; add any new model there and refuse the call without a price.
+- **The read-only gateway binds a null as an untyped parameter (C4).** `COALESCE(@term, '')` fails on Postgres ("could not determine data type"); cast every optional parameter (`@term::text`, `@ids::uuid[]`).
+- **Owner add-ons are package-sized (C4).** "Typed fill-ins and an AI polish" doubled C4. Size such a request out loud (I sized it as a C4b) and let the owner choose before building; the owner chose to fold it in.
+- **`git add -N` to list new files leaves intent-to-add entries (C4).** Undo them with `git diff --name-only --diff-filter=A -z | xargs -0 git reset -q --`.
 
 - **Npgsql reads its legacy-timestamp switch once, at first use (C3).** The API sets it in `UseDatabase` at start-up; a test class that queries through `NpgsqlSqlGateway` before any EF context then can't write `DateTime` columns ("Kind=UTC to timestamp without time zone"). Set `AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true)` in the class's static constructor (`AskPinDatabaseTests`). A class passed alone and failed with others, which is how it showed.
 - **`BrandsInScope` is the brand on screen when one is selected (C3).** To ask "may this person use brand X", use `BrandsWith(slug, action)`; `BrandsInScope` would have marked a pin "access changed" while another brand was open.
