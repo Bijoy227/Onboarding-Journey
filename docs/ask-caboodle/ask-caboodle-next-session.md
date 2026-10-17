@@ -4,7 +4,7 @@ Written 2026-10-18, after C3 (commit `31d598a4`). Read this first, then §0, §4
 
 ## Starter prompt (next: C4)
 
-> Read `docs/ask-caboodle/ask-caboodle-next-session.md`, then §0, §4 C4 (with "C2 as built" and "C3 as built", whose starters and period tokens C4 reuses), §7.2, §8 and §10 of `docs/ask-caboodle/ask-caboodle-be-implementation-plan.md` in `D:\Fork\Onboarding-Journey`. The backend is `D:\Fork\Caboodle BE Repository\caboodle.backend`, branch `feature/ask-caboodle` (last commit C3's eval report `8e689053`, after C3 `31d598a4`; working tree clean).
+> Read `docs/ask-caboodle/ask-caboodle-next-session.md`, then §0, §4 C4 (with "C2 as built" and "C3 as built", whose starters and period tokens C4 reuses), §7.2, §8 and §10 of `docs/ask-caboodle/ask-caboodle-be-implementation-plan.md` in `D:\Fork\Onboarding-Journey`. The backend is `D:\Fork\Caboodle BE Repository\caboodle.backend`, branch `feature/ask-caboodle` (last commit the C3 follow-up `280b39e2`, after C3's eval report `8e689053` and C3 `31d598a4`; working tree clean).
 >
 > Next is package C4 (prompt gallery). First re-fetch `origin/feature/CS-1770-iam-service-broker-workspace` and tell me whether it has commits after `b5adb1a1`; don't merge without my go-ahead. Then post C4's short plan and its open decisions, and wait for my go-ahead. The open decisions:
 > - who reviews prompts shared with an organization ("Pending admin review"): the organization admin or the Platform Admin;
@@ -19,9 +19,7 @@ Written 2026-10-18, after C3 (commit `31d598a4`). Read this first, then §0, §4
 
 ## Waiting for the owner (from C3, 2026-10-18)
 
-- **Two small C3 follow-ups (plan §7.2), the owner's call before C4 or later:**
-  1. **Named dates are typed, not passed as `custom`:** Q04 ("in Q3") and Q08 ("in September") passed, but their pins can't switch period. Proposed: an example in `run_sql`'s `period` description and the prompt sentence, then re-check Q04, Q08 and Q17 (≈ $0.15).
-  2. **Q62 listed TPR events only** (57 promotion × retailer rows, not 113 promotions / 1,203 events), with the right window. Proposed: re-check Q62 alone (≈ $0.10); look at the catalog only if it fails again.
+- **C3's two follow-ups are done (owner, 2026-10-18; plan §7.2, §8 "C3 follow-ups"):** named-date examples in the period rule (Q08 now passes `custom`; Q04 "in Q3" and Q17 "for 2027" still type their dates, so their pins stay on the dates asked), and Q62 accepting the TPR-only framing (new references 56 / 491 / 57). Re-check $0.24; Q17 failed on a claims-check misreading of a long table, with its figures right. Two free items are open in §7.2 for later: the claims judge's table note, and the promotion events example's statuses and dates.
 - **C3's ten points beyond the plan's wording** (plan §4 "C3 as built"): committed at the owner's request, listed for the owner to object to.
 - **Try the pins live** on the test page: answers asked before C3 typed their dates, so their pins stay on "its own dates"; a new question (≈ $0.04) gives a pin whose period can switch.
 - **The optional platform-admin period case** (Q54, ≈ $0.15) was not run.
@@ -50,7 +48,7 @@ The owner will bring these up; don't start them unasked.
 
 | Item | State |
 |---|---|
-| **Backend branch** | `feature/ask-caboodle`, last commit C3's eval report `8e689053`, after C3 `31d598a4`, C2's eval report `711dcaef`, C2 `4ff33590`, C1b `f8e56603`, C1 `a01dfc13`, B10b `e26a5f52`, C0b.1 `5f7e7f84`, B10a `26a85f3f`, B9 `a8387b82`, C0b `6da28c2d`, C0 `a102eed1`, B8b `b2f00e22`, B8 `02a256b6` and the IAM merge `4d0830e6`. `origin/feature/ask-caboodle` is at B8b (`b2f00e22`); C0, C0b, B9, B10a, C0b.1, B10b, C1, C1b, C2 and C3 are local only. Never push unless the owner asks. |
+| **Backend branch** | `feature/ask-caboodle`, last commit the C3 follow-up `280b39e2`, after C3's eval report `8e689053`, C3 `31d598a4`, C2's eval report `711dcaef`, C2 `4ff33590`, C1b `f8e56603`, C1 `a01dfc13`, B10b `e26a5f52`, C0b.1 `5f7e7f84`, B10a `26a85f3f`, B9 `a8387b82`, C0b `6da28c2d`, C0 `a102eed1`, B8b `b2f00e22`, B8 `02a256b6` and the IAM merge `4d0830e6`. `origin/feature/ask-caboodle` is at B8b (`b2f00e22`); C0, C0b, B9, B10a, C0b.1, B10b, C1, C1b, C2 and C3 are local only. Never push unless the owner asks. |
 | **Logins on `caboodle_dev`** | `askcaboodle_app` (standard) and, since B10a, `askcaboodle_admin_app` (platform admins), both created by the owner; their connection strings are the user variables below. |
 | **Docs repo** | `D:\Fork\Onboarding-Journey`, branch `caboodle-access-v2`. Docs commits are one line: `Update - Ask Caboodle docs - …`. |
 | **Model in the app** | **Sonnet 5.5, effort medium** since B7b (D45). Since B8, prices come from the `ModelPrices` table in code, per model and per attempt; the five price settings are gone. Development and Staging settings say `claude-sonnet-5-5`. |
@@ -64,7 +62,7 @@ The owner will bring these up; don't start them unasked.
 ## Money (read before any paid run)
 
 - **Who pays:** the client (Constance) pays the API bill through the Claude Console. The owner cannot add money themselves.
-- **Balance:** about **$47.85**. C3 spent $0.37 (the 8-case period check: $0.30 answers, $0.07 claims check); C2 spent $0.29 (the 4-case check of its new starters' cases); C1b spent $0.0003 (nine titles from Haiku 5.5); C1 spent $0.50 (a smoke question $0.0834, a 6-case check $0.34, a 1-case check without the fallback $0.04, 14 small timing calls $0.044); B10b spent $0.56 (a 9-case check $0.48, a 2-case re-check $0.08); B10a $0.44 (an 8-case check); B9 $0.59 (a 9-case check); C0b $3.43 (4-case check $0.41, full run $2.62, re-check of 7 $0.40); C0 $3.54; B8b nothing; B8 about $0.075. The Console has the exact figure.
+- **Balance:** about **$47.61**. C3 spent $0.61: the 8-case period check $0.37 ($0.30 answers, $0.07 claims check) and the 3-case named-date re-check $0.24 (the changed prompt was cached again on its first case). The owner's live Q62 on the test page ($0.107) went to the key in `appsettings.Development.json`, as C1p's did; C2 spent $0.29 (the 4-case check of its new starters' cases); C1b spent $0.0003 (nine titles from Haiku 5.5); C1 spent $0.50 (a smoke question $0.0834, a 6-case check $0.34, a 1-case check without the fallback $0.04, 14 small timing calls $0.044); B10b spent $0.56 (a 9-case check $0.48, a 2-case re-check $0.08); B10a $0.44 (an 8-case check); B9 $0.59 (a 9-case check); C0b $3.43 (4-case check $0.41, full run $2.62, re-check of 7 $0.40); C0 $3.54; B8b nothing; B8 about $0.075. The Console has the exact figure.
 - **Cache-read price (settled 2026-10-16):** Sonnet 5.5 cache reads cost $0.10 per million tokens (0.05x input, on the live pricing page), as `ModelPrices` says; the `claude-api` skill's cached $0.20 is out of date.
 - **Typical costs:**
 
@@ -335,7 +333,8 @@ Decisions D153–D159 are in plan §7; "C3 as built" is in §4. In short:
 - **Eval:** `expect.period` on 24 cases, a reported `period` check.
 - **Tests:** solution 7,095 green, Intelligence 760 (coverage 97.8 % unit-only), DB tests 65 green, build 0 errors.
 - **Test page:** Pin under answers, pins in the rail, a board of live pins (delta, notes, "not loaded yet", period switch, rename, re-ask, delete). Tested free with `drive-c3.mjs`; the earlier drivers re-ran unchanged.
-- **Paid, $0.37:** 7 of 8. The six relative questions took their token; Q04 and Q08 (named dates) typed their dates; Q62 listed TPR events only. Both are follow-ups in "Waiting for the owner".
+- **Paid, $0.37:** 7 of 8. The six relative questions took their token; Q04 and Q08 (named dates) typed their dates; Q62 listed TPR events only.
+- **Follow-ups (owner, same day):** named-date examples in the period rule and Q62 accepting the TPR-only framing; re-check $0.24 (Q08 now `custom`; Q04 and Q17 still typed; Q17 failed on a claims-check misreading). The owner's live Q62 showed the fact check stopping a head-worked figure ("56" = 114 − 58) and the answer counting it with a query; it cost $0.107 over 9 steps, the high end for a listing question.
 
 ## Working agreement (owner)
 
