@@ -130,7 +130,7 @@ Baseline breakdown (one 4-call question, $0.123): uncached input $0.062 (history
 | L5 | Tool-result budgets (50 rows / 12 K chars to the model, full data to the UI) — keep; tune by eval | none | done | — |
 | L6 | **Effort tuning** (low vs medium) per question class | eval-gated | B7 | −20–40 % output |
 | L7 | **Model choice** Opus 5.5 vs Sonnet 5.5 (½ price) vs Haiku 5.5 — pick the cheapest that matches baseline on every eval category | eval-gated | B7 | up to −50 % |
-| L8 | Zero-LLM paths: pinned reports re-execute stored SQL (no model call); suggestions/gallery are static; session titles from the first question text | none | C2, C3, C4 | removes recurring cost |
+| L8 | Zero-LLM paths: pinned reports re-execute stored SQL (no model call); suggestions/gallery are static; session titles: one short Haiku 5.5 call per conversation since C1b (≈ $0.00003) | none | C2, C3, C4 | removes recurring cost |
 | L9 | Strict short-circuit for near-identical verified questions (re-run stored plan; one small templated answer call) | eval-gated | C5 (phase 2 of it) | large on repeat questions |
 | L10 | Programmatic tool calling for analysis keeps large row sets in the sandbox, not in context; code execution free tier (1,550 h/month/org) | none | A2 | analysis stays cheap |
 | L11 | Web search `max_uses` 3, domain blocklist, web tools declared per session only when enabled for the org | none | C6 | caps $10/1k searches |
@@ -1101,6 +1101,41 @@ Owner, 2026-10-16 (D124): "like other chat apps". A small package built right af
   - "Start a new conversation" carrying the question over is FE-only (the FE pre-fills it);
   - the title follows the question's language and stays under 60 characters;
   - the title arrives in a `session` event when ready before the stream closes, otherwise in history.
+- **Counting (D144, owner at the short plan, 2026-10-17):** only questions that used the model count toward the 20 (cost above zero), the same rule as the daily limit.
+
+**C1b as built (2026-10-17, commit `f8e56603`, committed after the owner's review; the IAM branch is unchanged since `b5adb1a1`, fetched 2026-10-17):**
+- **The setting:** `AskPlatformSettings.SessionQuestionLimit` (default 20), in `GET`/`PUT askcaboodleadmin/settings` (required in `PUT`, 1–100). Migration `20261017134829_AddAskCaboodleSessionQuestionLimit`: one integer column, not null, default 20 (applied on local `caboodle_dev`; `Down` checked and re-applied; no saved settings row locally, so the defaults apply). BE `docs/AskCaboodle-Deployment.md` lists it.
+- **`session_full`:** checked in the ask handler after the daily and monthly checks (a new conversation wouldn't get past those) and after the conversation is opened, before any model call: nothing is saved, spent or counted. "This conversation has reached its 20 questions. Start a new conversation to keep asking." The count is `AskSessionState.QuestionsAsked` (stored questions with a cost, rebuilt from the database like the rest of the state).
+- **Questions left:** the `session` event now carries `title`, `questionLimit` and `questionsLeft` (after the question being answered); `GET sessions/{id}` carries `questionLimit` and `questionsLeft`; never below 0 when the limit is lowered.
+- **Titles:** `Sessions/AskSessionTitles` after the first question of a new conversation is answered (a clarify counts): one call through `ILlmClient.ReplyAsync` (non-streaming, `IntelligenceSettings:TitleModel` = `claude-haiku-5-5`, thinking off, no tools, no caching, `max_tokens` 40, 8 s timeout), the question plus the headline's label as material. The reply is cleaned (first line; "Title:", markdown, surrounding quotes and closing punctuation removed) and kept only when it is at most 60 characters and 8 words; anything else, a refusal, an error or a timeout keeps the question. The second `session` event goes out after `done`; a client that has left finds the title in history.
+- **Rename:** `PATCH sessions/{id}` `{ title }`, own sessions only (404), trimmed and kept on one line, 1–200 characters; returns the session summary. A new conversation is saved when its first answer ends, so it can't be renamed before then (404). **Owner (2026-10-17, at review):** keep Rename off during a new conversation's first answer, and show it once that stream has closed (BE `docs/AskCaboodle-FE.md`, the test page).
+- **Title material (owner, at review):** the question plus the answer's headline, as built; not the answer text. The title is written after the first answer, as ChatGPT does (the owner compared them); not at Enter.
+- **Beyond the plan's wording, for the owner's review:**
+  1. The title's cost is priced to 6 decimals: `ModelPrices.Estimate` rounds to 4, which turns a title's ≈ $0.00003 into 0; `AskMessages.CostUsd` keeps 6.
+  2. The title's cost is added to the first question's `CostUsd` (and passed to the budget monitor), so the budgets and the usage report count it with no schema change; that question's cost in a platform admin's history is ≈ $0.00003 above its `done` event.
+  3. A follow-up now updates only the session's counters and dates (`AskHistory.TouchSessionSql`): before, it rewrote the whole session row, so a rename made while a question was running would have been undone.
+  4. No "renamed" column: the generated title is saved only while the title is still the question (a conditional update), so a rename in that second wins.
+  5. The title job runs after the conversation and the user's running slot are released, so a follow-up asked right after `done` is never `busy`; BE `docs/AskCaboodle-FE.md` says to keep reading until the stream closes and to free the composer at `done`.
+  6. Only the first question of a new conversation is titled; a failed first question keeps the question as the title for good, and conversations from before C1b keep theirs.
+  7. A title model without a price logs a warning at start-up, and no titles are written (questions still work).
+  8. The cleaned title allows up to 8 words, not 6 (the prompt asks for 3–6), so a 7-word reply isn't thrown away.
+- **Tests:** solution 6,988 green across 16 projects (C1: 6,934); Intelligence 651 (597); build 0 errors, the only warning in the changed files the migration's CA1505. DB tests 48 green (a new one: a generated title, a rename by another request, a stale follow-up save and the cost added, on `caboodle_dev`). `LiveTitleTests` (opt-in, paid) asks the title model for nine real questions.
+- **The test page (C1p):** questions left in the header ("19 of 20 questions left", warning from 3, "conversation full"), the title updating live after `done` (header and history), rename from the header (shown once the conversation is saved) and the history list (Enter or leaving the field saves, Escape cancels), `session_full` with "Start a new conversation" (the question copied into the composer), and the composer freed at `done`. Tested free against the mock in headless Edge: the title arrived 0.25 s after `done` with the Ask button already back, a follow-up showed 18 left and no new title, both renames, Escape, `session_full`, a clarify's title; C1p's own scenarios unchanged, no script errors.
+- **Paid, $0.0003 (approved):** `LiveTitleTests`, nine real questions to Haiku 5.5, 9 of 9 titled in 0.7–1.3 s at about $0.00003 each (the instructions are about 250 tokens):
+
+  | Question | Title |
+  |---|---|
+  | How many cases did we ship last month, and how does that compare to the same month last year? | Cases Shipped: September 2026 vs 2025 |
+  | What are our year-to-date cases and dollars, split by KeHE and UNFI? | YTD Cases and Dollars by KeHE, UNFI |
+  | Who were our top 5 retailers by cases in Q3? | Top 5 Retailers by Cases in Q3 |
+  | cases to sprots through keyhe this year | Cases to Sprouts via KeHE |
+  | Which stores stopped ordering Matcha Green Tea in the last three months? (no headline) | Lapsed Matcha Green Tea Retailers |
+  | How are we doing at Fresh Market? (no headline) | Fresh Market performance overview |
+  | What is a promotion family? (no headline) | Promotion Family Definition |
+  | Which organizations have Ask Caboodle switched on? | Ask Caboodle Organizations Enabled |
+  | ¿Cuántas cajas enviamos a Sprouts este año? | Cajas enviadas a Sprouts este año |
+
+  The headline fixed the typos ("sprots", "keyhe"). One wording slip: "stores" became "Retailers" in the Matcha title.
 
 ### C2 — Suggested questions (empty state)
 - `GET suggestions` → curated starters (static YAML per org type, later from the gallery/eval set). Zero LLM cost.
@@ -1427,6 +1462,7 @@ Owner answers recorded 2026-10-11.
 | D141 | C1b: platform admins | **Owner:** the same limit applies to platform admins' own conversations. |
 | D142 | C1b: titles | **Owner:** Haiku 5.5 writes a 3–6 word title after the first answer, plus rename (`PATCH sessions/{id}`); the question stays the title on any error. |
 | D143 | A test FE for the owner | **Owner (2026-10-17):** a live local test page: one HTML file in the docs repo, against the local API with the owner's token, showing the checked text typed out, the frame and table, the run trace and history. Package C1p, right after C1 (§4); the order is C1 → C1p → C1b. |
+| D144 | C1b: which questions count toward the 20 | **Owner (2026-10-17):** only questions that used the model (cost above zero), the same rule as the daily limit; failed questions that never reached the model don't count. |
 
 ### 7.1 Demo track — dropped 2026-10-12 (D3), kept for history
 
@@ -1469,7 +1505,7 @@ Each one is posted with its package, and gets a D number once decided.
 | Grant `DataHub.DistributorUpcMappings` (without notes and "resolved by") | B9 | **Decided:** D109, moved to B10b for platform admins. |
 | A corrected answer mentions its correction to the user (B9 paid check, Q48: "I corrected the Costco and Trader Joe's counts below after checking them against the data") | C0b's correction message (owner) | **Decided:** D116, one sentence added to the correction message; built in B9. |
 | Split B10 into B10a (IAM, organizations, modules, settings, audit) and B10b (data pipeline) | B10 | **Decided:** D117. |
-| A limit on questions per conversation (owner, 2026-10-16: "like other chat apps, e.g. 20 per thread") | C1b (D124) | **Decided:** D140, D141: 20, platform admins included. |
+| A limit on questions per conversation (owner, 2026-10-16: "like other chat apps, e.g. 20 per thread") | C1b (D124) | **Decided:** D140, D141: 20, platform admins included; D144: only questions that used the model count. |
 | Meaningful session titles (owner, 2026-10-16: "like Claude or ChatGPT, from the first message") | C1b (D124) | **Decided:** D142: Haiku 5.5, plus rename. |
 | B10a beyond the plan's wording: the inviter is `InvitedUsers."CreatedBy"` (as on the Admin screen; 48 of 51, not 2, so Q50 asks about Chantico Agave's invitations); `Users."ImageUrl"` and the backfill `Report` hidden too; the purge retentions and table registry granted with the purge settings; `Deleted` in the email-log column grants; the admin group counted | B10a review (owner) | **Decided:** D125, accepted as built. |
 | The fact check flags the "8" in "between 8 and 11 September" (B10a paid check, Q53: a false alarm that cost a correction round). Cause: its day-first date pattern joins days only with "–", "-" or "to" | C0b.1 (owner, 2026-10-16) | **Done:** C0b.1 (`5f7e7f84`) (§4): day-first dates also join their days with "and", "&" or commas; month-first unchanged. The replay of 113 stored answers changes only Q53. |
@@ -1517,8 +1553,9 @@ Each one is posted with its package, and gets a D number once decided.
 | B10b | done | `e26a5f52` | 2026-10-16: plan and decisions D126–D131 approved, and D132 at review (the review points accepted; the zero-unit KeHE sentence removed); the IAM branch is unchanged since `b5adb1a1`. Built as in §3 B10 "B10b as built": migration `AddAskCaboodleDataPipelineGrants` applied locally (55 admin tables), 17 catalog entries, admin block wording, eval Q54–Q59; solution 6,902 green, Intelligence 565, coverage 97.9 %, DB tests 46 green, build 0 errors. DI12–DI14 recorded, DI9 updated. **Paid, $0.56:** check 7 of 9 ($0.48; Q57 a "wrong place" count, Q53 a claims-check false fail), both fixed and re-checked 2 of 2 ($0.08).<br>**Balance:** about $49.01. |
 | C1 | done | `a01dfc13` | 2026-10-17: built as in §4 "C1 as built" and committed at the owner's request; the IAM branch is unchanged since `b5adb1a1` (fetched 2026-10-17). No migration. Solution 6,934 green, Intelligence 597, coverage 98.2 % unit-only, DB tests 47 green, build 0 errors. **Paid, $0.42:** smoke $0.0834 (right); 6-case check 6 of 6 ($0.34), the streamed sentences ended as the answer in 6 of 6, Q48 corrected and rewound once. Found: the API sends the final text turn in one burst; the cause is Sonnet 5.5 holding back text written after a tool result (§7.2; checks $0.04 + $0.044). Ten points beyond the plan's wording are listed in §4 for the owner.<br>**Balance:** about $48.51. |
 | C1p | done | docs repo | 2026-10-17: `docs/ask-caboodle/test-page/ask-caboodle-test.html` as in §4 "C1p as built"; tested free against a mock in headless Edge; the owner tried it live and asked for the table or chart after the typed text (built). $0 spent by the build. Parked for later (handoff): more visuals for the wait, pricing defaults, speed and cost improvements, figures only when they help. |
-| C1b | next | | Decided (D140–D142); the handoff's starter prompt starts it with its short plan. |
-| C2 … C8 | todo | | |
+| C1b | done | `f8e56603` | 2026-10-17: D140–D142, and D144 at the short plan (only questions that used the model count); the IAM branch is unchanged since `b5adb1a1`. Built as in §4 "C1b as built": migration `AddAskCaboodleSessionQuestionLimit` applied locally; solution 6,988 green, Intelligence 651, DB tests 48 green, build 0 errors. Test page updated and tested free. **Paid, $0.0003:** nine real titles from Haiku 5.5, 9 of 9 written. At review: Rename stays off during a new conversation's first answer; the title material stays the question plus the headline.<br>**Balance:** about $48.51. |
+| C2 | next | | Suggested questions for the empty state (§4 C2); the handoff's starter prompt starts it with its short plan and open decisions. |
+| C3 … C8 | todo | | |
 | C9 | todo | | Caboodle guide. Needs the documentation repo and Constance's review. |
 | G1 … A3 | todo | | |
 
@@ -1645,6 +1682,7 @@ The full contract is in BE `docs/AskCaboodle-FE.md`, "The answer pieces".
   | `daily_limit` | Shows `resetsAt` |
   | `monthly_limit` | Shows `resetsAt`; never an amount |
   | `busy` | This conversation is still answering, or 2 questions are already running |
+  | `session_full` | The conversation has used its 20 questions (C1b): "Start a new conversation" with the question copied over |
   | `rate_limited` / `service_busy` | Try again in a minute |
   | `timed_out` | Ask a narrower question |
   | `unavailable`, `refused`, `failed` | — |
@@ -1673,7 +1711,7 @@ The full contract is in BE `docs/AskCaboodle-FE.md`, "The answer pieces".
 | C0 | The `frame` event (kind, headline, notes, options) and its replace rule; the data block's series, formats, totals, highlights and `chartable`; the same pieces in `GET sessions/{id}`; the feedback `reason` (down only) and `feedbackReason` in history |
 | C0b | `text.unverifiedFigures` (and `unverifiedFigures` in `GET sessions/{id}`): when not empty, the note "Some figures in this answer couldn't be checked against the data: …" right under the text (rare). A corrected answer takes a few seconds longer, shows the progress label "Correcting figures that didn't match the data", and may send a new `frame`/`data` that replaces the earlier one |
 | C1 | Streamed text as checked sentences that the FE types out word by word (D96; see the streaming demo): `text-sentence {index, text}` (markdown slices that join into the text) and `text-rewind {keep}` (drop what follows `keep` when a corrected answer differs, or on a refusal), with the "rewriting" pause when a figure fails; the final `text` stays authoritative (D133–D135). Live trace events `step`, `tool-start`, `tool-end` (parallel calls share a step; `selfCorrection`), the trace endpoint `GET sessions/{id}/messages/{messageId}/trace`, `maxSteps` and `wallClockSeconds` on `session`. Organization users' trace has no database detail; `done.queries` only for platform admins (D136, D138) |
-| C1b | The `session_full` error (at 20 questions, D140) with "Start a new conversation" (the FE pre-fills the question), questions left in the conversation, generated titles arriving in a `session` event after the first answer, and rename |
+| C1b | The `session_full` error (at 20 questions that used the model, D140, D144) with "Start a new conversation" (the FE pre-fills the question); questions left in the conversation (`session.questionsLeft`, `GET sessions/{id}`), shown near the end; the generated title in a second `session` event about a second after `done` (keep reading until the stream closes, free the composer at `done`), updated in the header and history; rename (`PATCH sessions/{id}`), kept off during a new conversation's first answer (it is saved when that answer ends). Tried on the C1p page |
 | C2 | Starters for the empty state |
 | C3 | Pins: create, list, render, delete; broken pins |
 | C4 | Prompt gallery and the `/` picker |

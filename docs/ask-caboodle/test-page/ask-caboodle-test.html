@@ -7,6 +7,7 @@
 <!--
   C1p (D143): a local test page for the Ask Caboodle API. Functionality only, based on the Workbench screens; the FE team
   owns the look (D69). Open this file from disk while the API runs locally (CORS allows any origin).
+  C1b: questions left in the conversation, session_full with "Start a new conversation", generated titles, rename.
   Test parameters: ?api=<url>&token=<jwt>&brand=<id>&ask=<question>&session=<id>&trace=1
 -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
@@ -115,8 +116,12 @@ button { cursor: pointer; }
 .history .open { flex: 1; min-width: 0; border: 0; background: none; text-align: left; padding: 6px 8px; font-size: 13px; }
 .history .open span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .history .open small { color: var(--text-3); font-size: 11px; }
-.history .del { border: 0; background: none; color: var(--text-3); padding: 4px 8px; visibility: hidden; }
-.history li:hover .del { visibility: visible; }
+.history .del, .history .ren { border: 0; background: none; color: var(--text-3); padding: 4px 6px; visibility: hidden; }
+.history li:hover .del, .history li:hover .ren { visibility: visible; }
+.history .title-edit { margin: 3px 6px; }
+.title-edit { width: 100%; border: 1px solid var(--accent); background: var(--surface); border-radius: 6px; padding: 3px 8px; font-size: 13px; }
+.main-head .title-edit { font-size: 17px; font-weight: 600; max-width: 560px; }
+.titled { animation: flash 1.6s ease-out; border-radius: 4px; }
 
 /* main */
 .main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
@@ -290,6 +295,8 @@ table.dt { border-collapse: collapse; width: 100%; font-size: 13px; }
   <main class="main">
     <header class="main-head">
       <h1 id="convTitle">New conversation</h1>
+      <button class="btn-link" id="renameTitle" type="button" hidden>Rename</button>
+      <span class="pill" id="questionsLeft" hidden></span>
       <label>Typing
         <select id="typing">
           <option value="natural">natural</option>
@@ -344,6 +351,10 @@ const state = {
   brandName: params.get('brand') ? '' : store.get('brandName') ?? DEFAULT_BRAND.name,
   orgId: store.get('orgId') || '',
   sessionId: null,
+  sessionSaved: false,
+  title: null,
+  questionLimit: null,
+  questionsLeft: null,
   maxSteps: 12,
   wallClockSeconds: 180,
   answers: [],
@@ -512,6 +523,7 @@ async function loadHistory() {
         <button class="open" type="button" data-session="${esc(session.id)}" title="${esc(session.title)}">
           <span>${esc(session.title)}</span><small>${esc(utc(session.lastActivityOn).toLocaleString())} ·${session.messageCount} question${session.messageCount === 1 ? '' : 's'}</small>
         </button>
+        <button class="ren" type="button" data-rename="${esc(session.id)}" data-title="${esc(session.title)}" title="Rename">✎</button>
         <button class="del" type="button" data-delete="${esc(session.id)}" title="Delete">✕</button>
       </li>`).join('') || '<li class="muted" style="padding:6px 8px;font-size:12.5px">No conversations yet</li>';
   } catch (error) {
@@ -525,7 +537,11 @@ async function openSession(id) {
     const session = await (await api(`askcaboodle/sessions/${id}`)).json();
     resetConversation();
     state.sessionId = session.id;
-    $('#convTitle').textContent = session.title;
+    state.sessionSaved = true;
+    state.title = session.title;
+    state.questionLimit = session.questionLimit ?? null;
+    state.questionsLeft = session.questionsLeft ?? null;
+    showConversationHeader();
     for (const message of session.messages) {
       const answer = createAnswer(message.question, false);
       fillFromHistory(answer, message);
@@ -629,11 +645,29 @@ function onEvent(answer, name, payload) {
   answer.events.push({ time, name });
   switch (name) {
     case 'session':
+      // A second session event after done carries a new conversation's generated title (C1b); ignore it once the page has
+      // moved to another conversation.
+      if (!state.answers.includes(answer)) break;
       state.sessionId = payload.sessionId;
       state.maxSteps = payload.maxSteps ?? state.maxSteps;
       state.wallClockSeconds = payload.wallClockSeconds ?? state.wallClockSeconds;
       answer.maxSteps = state.maxSteps;
       answer.wallClockSeconds = state.wallClockSeconds;
+      if (payload.questionLimit != null) {
+        state.questionLimit = payload.questionLimit;
+        state.questionsLeft = payload.questionsLeft;
+      }
+
+      if (payload.title) {
+        const retitled = answer.times.done != null && payload.title !== state.title;
+        state.title = payload.title;
+        if (answer.times.done != null) mark(answer, 'title', time);
+        showConversationHeader(retitled);
+        if (retitled) loadHistory();
+      } else {
+        showConversationHeader();
+      }
+
       break;
     case 'progress':
       answer.progressLabel = payload.label;
@@ -706,10 +740,23 @@ function onEvent(answer, name, payload) {
       answer.messageId = payload.messageId;
       if (payload.model != null) state.isAdmin = true;
       mark(answer, 'done', time);
+      // The answer is over; the stream stays open a moment longer for a new conversation's title (C1b), so the composer is
+      // free again now.
+      answer.status = answer.error ? 'error' : 'done';
+      if (state.running?.answer === answer) {
+        state.running = null;
+        renderComposer();
+      }
+
       break;
     case 'error':
       answer.error = payload;
       mark(answer, 'error', time);
+      if (payload.code === 'session_full') {
+        state.questionsLeft = 0;
+        showConversationHeader();
+      }
+
       break;
   }
 
@@ -741,7 +788,11 @@ async function ask(question) {
     return;
   }
 
-  if (!state.sessionId) $('#convTitle').textContent = question;
+  if (!state.sessionId) {
+    state.title = question;
+    showConversationHeader();
+  }
+
   const answer = createAnswer(question, true);
   answer.maxSteps = state.maxSteps;
   answer.wallClockSeconds = state.wallClockSeconds;
@@ -767,7 +818,13 @@ async function ask(question) {
       answer.error = answer.error || { message: error.message, code: error instanceof ApiError ? `http ${error.status}` : 'network' };
     }
   } finally {
-    state.running = null;
+    if (state.running?.answer === answer) state.running = null;
+    // The server saves a new conversation when its first answer ends, before the stream closes; only then can it be renamed.
+    if (state.sessionId && state.answers.includes(answer) && !state.sessionSaved) {
+      state.sessionSaved = true;
+      showConversationHeader();
+    }
+
     if (answer.finalText != null && answer.shownChars >= answer.target.length) finishText(answer);
     if (answer.status !== 'done' || answer.finalText == null) reveal(answer);
     renderAll(answer);
@@ -889,7 +946,10 @@ function renderError(answer) {
   let html = '';
   if (answer.error) {
     const resets = answer.error.resetsAt ? ` Resets ${esc(new Date(answer.error.resetsAt).toLocaleString())}.` : '';
-    html = `<div class="error-box"><b>${esc(answer.error.code || 'error')}</b> · ${esc(answer.error.message)}${resets}</div>`;
+    const startOver = answer.error.code === 'session_full'
+      ? ` <button class="btn" type="button" data-start-over="${esc(answer.question)}">Start a new conversation</button>`
+      : '';
+    html = `<div class="error-box"><b>${esc(answer.error.code || 'error')}</b> · ${esc(answer.error.message)}${resets}${startOver}</div>`;
   } else if (answer.status === 'stopped') {
     html = '<div class="stopped">Stopped. The question is saved as cancelled and counts toward today\'s questions.</div>';
   } else if (answer.status === 'ended') {
@@ -1113,6 +1173,7 @@ function renderTiming(answer) {
     ['last sentence', t.lastSentence],
     ['typed', t.typed],
     ['done', t.done ?? t.error],
+    ['title', t.title, true],
   ].filter(([, value]) => value != null).sort((left, right) => left[1] - right[1]);
   let html = items.map(([label, value, highlight]) => `<span class="t ${highlight ? 'hl' : ''}">${label} <b>${seconds(value)}</b></span>`).join('');
   if (answer.rewinds) html += `<span class="t">rewound ${answer.rewinds}×</span>`;
@@ -1310,19 +1371,87 @@ function resetConversation() {
   for (const answer of state.answers) answer.chart?.destroy();
   state.answers = [];
   state.sessionId = null;
+  state.sessionSaved = false;
+  state.title = null;
+  state.questionLimit = null;
+  state.questionsLeft = null;
   state.traced = null;
   $('#convo').innerHTML = '';
+  showConversationHeader();
   renderTrace();
 }
 
 function newConversation() {
-  if (state.running) return;
+  if (state.running) return false;
   resetConversation();
-  $('#convTitle').textContent = 'New conversation';
-  $('#convo').innerHTML = `<div class="empty"><h2>Ask about your Caboodle data</h2><p class="muted">Each question is a real one: about $0.04, counted in today's questions.</p>
+  $('#convo').innerHTML = `<div class="empty"><h2>Ask about your Caboodle data</h2><p class="muted">Each question is a real one: about $0.04, counted in today's questions. A conversation takes 20 questions, and its first answer gives it a short title (about $0.00003 more).</p>
     <div class="starters">${STARTERS.map(starter => `<button class="starter" type="button">${esc(starter)}</button>`).join('')}</div></div>`;
   $('#convo').querySelectorAll('.starter').forEach((button, index) => button.addEventListener('click', () => ask(STARTERS[index])));
   loadHistory();
+  return true;
+}
+
+// C1b: the title (generated after the first answer, or renamed), and the questions left in the conversation.
+function showConversationHeader(retitled) {
+  const title = $('#convTitle');
+  title.textContent = state.title || 'New conversation';
+  title.title = state.title || '';
+  if (retitled) {
+    title.classList.remove('titled');
+    void title.offsetWidth;
+    title.classList.add('titled');
+  }
+
+  $('#renameTitle').hidden = !state.sessionId || !state.sessionSaved;
+  const pill = $('#questionsLeft');
+  pill.hidden = state.questionsLeft == null || state.questionLimit == null;
+  pill.className = `pill ${pill.hidden ? '' : state.questionsLeft === 0 ? 'err' : state.questionsLeft <= 3 ? 'warn' : ''}`;
+  pill.textContent = state.questionsLeft === 0 ? 'conversation full' : `${state.questionsLeft} of ${state.questionLimit} questions left`;
+  pill.title = 'Questions left in this conversation; only questions that used the AI model count';
+}
+
+// Enter or leaving the field saves, Escape cancels.
+function editTitle(sessionId, current, host, restore) {
+  const input = document.createElement('input');
+  input.className = 'title-edit';
+  input.value = current;
+  input.maxLength = 200;
+  host.replaceChildren(input);
+  input.focus();
+  input.select();
+  let finished = false;
+  const finish = async save => {
+    if (finished) return;
+    finished = true;
+    const title = input.value.replace(/\s+/g, ' ').trim();
+    if (save && title && title !== current) await renameSession(sessionId, title);
+    restore();
+  };
+  input.addEventListener('keydown', event => {
+    if (event.key === 'Enter') finish(true);
+    if (event.key === 'Escape') finish(false);
+  });
+  input.addEventListener('blur', () => finish(true));
+}
+
+async function renameSession(sessionId, title) {
+  try {
+    const session = await (await api(`askcaboodle/sessions/${sessionId}`, { method: 'PATCH', body: { title } })).json();
+    if (state.sessionId === sessionId) {
+      state.title = session.title;
+      showConversationHeader();
+    }
+  } catch (error) {
+    toast(error.message);
+  }
+
+  loadHistory();
+}
+
+function startOver(question) {
+  if (!newConversation()) return;
+  $('#question').value = question;
+  $('#question').focus();
 }
 
 function scrollToEnd(force) {
@@ -1401,8 +1530,17 @@ $('#noBrand').addEventListener('click', () => chooseBrand('', ''));
 $('#history').addEventListener('click', event => {
   const open = event.target.closest('[data-session]');
   const remove = event.target.closest('[data-delete]');
+  const rename = event.target.closest('[data-rename]');
   if (remove) deleteSession(remove.dataset.delete);
+  else if (rename) editTitle(rename.dataset.rename, rename.dataset.title, rename.closest('li'), loadHistory);
   else if (open) openSession(open.dataset.session);
+});
+$('#renameTitle').addEventListener('click', () => {
+  if (state.sessionId) editTitle(state.sessionId, state.title || '', $('#convTitle'), () => showConversationHeader());
+});
+$('#convo').addEventListener('click', event => {
+  const startNew = event.target.closest('[data-start-over]');
+  if (startNew) startOver(startNew.dataset.startOver);
 });
 $('#newChat').addEventListener('click', newConversation);
 $('#traceToggle').addEventListener('click', () => {
