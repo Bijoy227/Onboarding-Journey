@@ -21,6 +21,9 @@
   example with its calls as the model reads them and the answer it came from (verify or reject, edit its template, who it
   serves and whether it is a starter, re-check, delete), "Which examples would a question get?", "Propose as example"
   under an answer, the examples given in the run trace, and "Verified" on organization prompts (verify one from a run).
+  C6: "Search the web" for a new conversation (platform admins, while the platform switch in the rail is on), "Web search
+  on" for a conversation started with it, the fixed banner and the cited sources under a public_web or mixed answer, the
+  searches in the run trace, "Search the web for this" under a market question asked without it, and web_search_unavailable.
   Test parameters: ?api=<url>&token=<jwt>&brand=<id>&ask=<question>&session=<id>&trace=1&pins=1&gallery=1&examples=1
 -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
@@ -372,6 +375,15 @@ input.var-pill { width: 9em; }
 .pick-t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pick-tag { font-size: 11px; color: var(--text-3); white-space: nowrap; }
 .picker-empty { padding: 8px; color: var(--text-3); font-size: 13px; display: flex; gap: 6px; align-items: center; }
+.web-toggle { white-space: nowrap; border-radius: 999px; }
+.web-toggle.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.web-banner { border-left: 3px solid var(--accent); background: var(--accent-soft); padding: 6px 10px; font-size: 13px; margin: 0 0 12px; border-radius: 0 6px 6px 0; }
+.sources { border: 1px solid var(--line); border-radius: 8px; background: var(--surface); padding: 8px 12px; margin: 10px 0; font-size: 13px; }
+.sources h4 { margin: 0 0 4px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-3); }
+.sources ol { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
+.sources .host { color: var(--text-3); font-size: 12px; margin-left: 6px; }
+.sources q { display: block; color: var(--text-2); font-size: 12.5px; margin-top: 2px; quotes: none; }
+.web-setting { display: inline-flex; gap: 5px; align-items: center; text-transform: none; letter-spacing: 0; font-size: 12px; color: var(--text-2); font-weight: 500; }
 @media (max-width: 1100px) {
   .app.trace-open { grid-template-columns: 280px minmax(0, 1fr); }
   .trace { position: fixed; right: 0; top: 0; bottom: 0; width: min(440px, 92vw); box-shadow: var(--shadow); z-index: 20; }
@@ -417,6 +429,7 @@ input.var-pill { width: 9em; }
     <ul class="history pins-rail" id="pinsRail"></ul>
     <div class="hist-head"><span>Prompt gallery</span><button class="btn-link" id="showGallery" type="button">Open</button></div>
     <div class="hist-head" id="examplesHead" hidden><span>Verified examples</span><button class="btn-link" id="showExamples" type="button">Open</button></div>
+    <div class="hist-head" id="webSettingHead" hidden><span>Web search</span><label class="web-setting" title="The platform setting: lets platform admins start conversations with Search the web"><input type="checkbox" id="webSetting"> on for platform admins</label></div>
     <div class="hist-head"><span>Conversations</span><button class="btn-link" id="newChat" type="button">New</button></div>
     <ul class="history" id="history"></ul>
   </aside>
@@ -426,6 +439,7 @@ input.var-pill { width: 9em; }
       <h1 id="convTitle">New conversation</h1>
       <button class="btn-link" id="renameTitle" type="button" hidden>Rename</button>
       <span class="pill" id="questionsLeft" hidden></span>
+      <span class="pill live" id="webPill" title="This conversation was started with Search the web; it keeps it" hidden>Web search on</span>
       <label>Typing
         <select id="typing">
           <option value="natural">natural</option>
@@ -441,6 +455,7 @@ input.var-pill { width: 9em; }
       <div class="status" id="status"></div>
       <form class="composer" id="composer">
         <textarea id="question" rows="1" placeholder="Ask about your Caboodle data, or type / for saved prompts" aria-controls="picker"></textarea>
+        <button class="btn web-toggle" id="webToggle" type="button" aria-pressed="false" title="Start this conversation with web search: Ask Caboodle may search the public web, at about $0.01 a search" hidden>Search the web</button>
         <button class="btn btn-primary" id="send" type="submit">Ask</button>
         <button class="btn" id="stop" type="button" hidden>Stop</button>
       </form>
@@ -486,6 +501,12 @@ const state = {
   orgId: store.get('orgId') || '',
   sessionId: null,
   sessionSaved: false,
+  // C6: webNext is "Search the web" for the next new conversation; webSearch is the open conversation's, fixed when it
+  // started; webAvailable is the platform switch (null until read, platform admins only).
+  webNext: false,
+  webSearch: false,
+  webAvailable: null,
+  platformSettings: null,
   title: null,
   questionLimit: null,
   questionsLeft: null,
@@ -601,6 +622,9 @@ function setSignedOut(message) {
   state.pins = [];
   state.prompts = null;
   state.picker.items = null;
+  state.platformSettings = null;
+  state.webAvailable = null;
+  $('#webSettingHead').hidden = true;
   $('#usage').textContent = message || '';
 }
 
@@ -663,6 +687,7 @@ async function loadUsage() {
     const cost = usage.costUsd == null ? '' : ` · $${Number(usage.costUsd).toFixed(2)} this month`;
     if (usage.costUsd != null) state.isAdmin = true;
     $('#examplesHead').hidden = !state.isAdmin;
+    if (state.isAdmin && !state.platformSettings) loadWebSetting();
     $('#usage').textContent = left + cost;
   } catch (error) {
     $('#usage').textContent = error.message;
@@ -679,7 +704,7 @@ async function loadHistory() {
     $('#history').innerHTML = sessions.map(session => `
       <li class="${session.id === state.sessionId ? 'active' : ''}">
         <button class="open" type="button" data-session="${esc(session.id)}" title="${esc(session.title)}">
-          <span>${esc(session.title)}</span><small>${esc(utc(session.lastActivityOn).toLocaleString())} ·${session.messageCount} question${session.messageCount === 1 ? '' : 's'}</small>
+          <span>${esc(session.title)}</span><small>${esc(utc(session.lastActivityOn).toLocaleString())} ·${session.messageCount} question${session.messageCount === 1 ? '' : 's'}${session.webSearch ? ' · web search' : ''}</small>
         </button>
         <button class="ren" type="button" data-rename="${esc(session.id)}" data-title="${esc(session.title)}" title="Rename">✎</button>
         <button class="del" type="button" data-delete="${esc(session.id)}" title="Delete">✕</button>
@@ -701,6 +726,7 @@ async function openSession(id) {
     state.title = session.title;
     state.questionLimit = session.questionLimit ?? null;
     state.questionsLeft = session.questionsLeft ?? null;
+    state.webSearch = !!session.webSearch;
     showConversationHeader();
     for (const message of session.messages) {
       const answer = createAnswer(message.question, false);
@@ -730,10 +756,12 @@ async function deleteSession(id) {
 
 function fillFromHistory(answer, message) {
   answer.messageId = message.id;
-  answer.frame = { kind: message.kind, headline: message.headline, notes: message.notes, options: message.options || [] };
+  answer.frame = { kind: message.kind, headline: message.headline, notes: message.notes, options: message.options || [], suggestWebSearch: !!message.suggestWebSearch };
   answer.data = (message.data || [])[0] || null;
   answer.suggestions = message.suggestions || [];
   answer.unverified = message.unverifiedFigures || [];
+  answer.sourceType = message.sourceType || 'caboodle';
+  answer.sources = message.sources || [];
   answer.rating = message.rating;
   answer.feedbackReason = message.feedbackReason;
   answer.pinnedId = state.pins.find(pin => pin.messageID === message.id)?.id || null;
@@ -757,7 +785,7 @@ function createAnswer(question, live) {
     shownChars: 0, renderedText: null, wordCredit: 0, lastTick: null, finalText: null, unverified: [], rewinds: 0,
     orderProblems: 0, mismatch: false, correcting: false, done: null, error: null, messageId: null, rating: null,
     feedbackReason: null, feedbackOpen: false, openCalls: new Set(), chart: null, view: null, traceLoaded: live,
-    progressLabel: null, revealed: !live, animateReveal: false, el: {},
+    progressLabel: null, revealed: !live, animateReveal: false, sourceType: 'caboodle', sources: [], webSearches: 0, el: {},
   };
 }
 
@@ -771,9 +799,11 @@ function mountAnswer(answer) {
       <header class="a-head"><strong>Ask Caboodle</strong><span data-el="state"></span><button class="run-chip" type="button" data-el="chip"></button></header>
       <div class="timing" data-el="timing"></div>
       <div data-el="frame"></div>
+      <div data-el="banner"></div>
       <div class="prose" data-el="prose"></div>
       <div data-el="pause"></div>
       <div data-el="unverified"></div>
+      <div data-el="sources"></div>
       <div data-el="error"></div>
       <div data-el="data"></div>
       <div data-el="options"></div>
@@ -811,6 +841,7 @@ function onEvent(answer, name, payload) {
       // moved to another conversation.
       if (!state.answers.includes(answer)) break;
       state.sessionId = payload.sessionId;
+      state.webSearch = !!payload.webSearch;
       state.maxSteps = payload.maxSteps ?? state.maxSteps;
       state.wallClockSeconds = payload.wallClockSeconds ?? state.wallClockSeconds;
       answer.maxSteps = state.maxSteps;
@@ -890,6 +921,12 @@ function onEvent(answer, name, payload) {
       void answer.el.prose.offsetWidth;
       answer.el.prose.classList.add('flash');
       break;
+    // C6: where a public_web or mixed answer came from, and the pages it cites; sent just before its text.
+    case 'sources':
+      answer.sourceType = payload.sourceType || 'public_web';
+      answer.sources = payload.sources || [];
+      renderSources(answer);
+      break;
     case 'text':
       answer.correcting = false;
       answer.finalText = payload.text;
@@ -900,6 +937,8 @@ function onEvent(answer, name, payload) {
     case 'done':
       answer.done = payload;
       answer.messageId = payload.messageId;
+      answer.sourceType = payload.sourceType || answer.sourceType;
+      answer.webSearches = payload.webSearches || 0;
       if (payload.model != null) state.isAdmin = true;
       mark(answer, 'done', time);
       // The answer is over; the stream stays open a moment longer for a new conversation's title (C1b), so the composer is
@@ -917,6 +956,11 @@ function onEvent(answer, name, payload) {
       if (payload.code === 'session_full') {
         state.questionsLeft = 0;
         showConversationHeader();
+      }
+
+      if (payload.code === 'web_search_unavailable') {
+        state.webNext = false;
+        renderWebToggle();
       }
 
       break;
@@ -970,7 +1014,9 @@ async function ask(question, { promptId = null } = {}) {
   state.running = { answer, controller };
   renderComposer();
   try {
-    const response = await api('askcaboodle/ask', { method: 'POST', body: { question, sessionId: state.sessionId, promptId }, signal: controller.signal, accept: 'text/event-stream' });
+    // C6: webSearch only starts a new conversation with it; an open conversation keeps what it started with.
+    const webSearch = !state.sessionId && state.webNext;
+    const response = await api('askcaboodle/ask', { method: 'POST', body: { question, sessionId: state.sessionId, promptId, ...(webSearch ? { webSearch } : {}) }, signal: controller.signal, accept: 'text/event-stream' });
     if (!(response.headers.get('content-type') || '').includes('text/event-stream')) throw new Error(`Expected an event stream, got ${response.headers.get('content-type')}: ${await response.text()}`);
     for await (const event of readEvents(response)) onEvent(answer, event.name, event.payload);
     answer.status = answer.error ? 'error' : answer.done ? 'done' : 'ended';
@@ -1054,6 +1100,7 @@ function finishText(answer) {
 
   renderProse(answer);
   renderUnverified(answer);
+  renderSources(answer);
   renderTiming(answer);
   reveal(answer);
 }
@@ -1065,6 +1112,7 @@ function renderAll(answer) {
   renderProse(answer);
   renderPause(answer);
   renderUnverified(answer);
+  renderSources(answer);
   renderError(answer);
   renderData(answer);
   renderSuggestions(answer);
@@ -1106,6 +1154,27 @@ function renderUnverified(answer) {
     : '';
 }
 
+// C6: the banner is fixed text, shown from the source type the code set; the sources are the pages the answer cites, each
+// with the passages it cited. Shown once the text is in, like the unverified note.
+const WEB_BANNERS = {
+  public_web: 'This answer uses public web sources, cited below. It is not Caboodle data.',
+  mixed: 'Part of this answer uses public web sources, cited below. That part is not Caboodle data.',
+};
+function renderSources(answer) {
+  const web = answer.sourceType && answer.sourceType !== 'caboodle' && (answer.textFinished || !answer.live);
+  const host = url => { try { return new URL(url).host; } catch { return ''; } };
+  const banner = web ? `<div class="web-banner ${answer.live ? 'reveal' : ''}">${esc(WEB_BANNERS[answer.sourceType] || WEB_BANNERS.public_web)}</div>` : '';
+  const sources = web && answer.sources.length
+    ? `<div class="sources ${answer.live ? 'reveal' : ''}"><h4>Public web sources</h4><ol>${answer.sources.map(source => `<li>
+        <a href="${esc(source.url)}" target="_blank" rel="noopener noreferrer">${esc(source.title || source.url)}</a><span class="host">${esc(host(source.url))}</span>
+        ${(source.quotes || []).map(quote => `<q>${esc(quote)}</q>`).join('')}</li>`).join('')}</ol></div>`
+    : '';
+  if (answer.sourcesHtml === banner + sources) return;
+  answer.sourcesHtml = banner + sources;
+  answer.el.banner.innerHTML = banner;
+  answer.el.sources.innerHTML = sources;
+}
+
 function renderError(answer) {
   let html = '';
   if (answer.error) {
@@ -1114,7 +1183,9 @@ function renderError(answer) {
       ? ` <button class="btn" type="button" data-start-over="${esc(answer.question)}">Start a new conversation</button>`
       : answer.error.code === 'prompt_unavailable'
         ? ` <button class="btn" type="button" data-ask-plain="${esc(answer.question)}">Ask it without the prompt</button>`
-        : '';
+        : answer.error.code === 'web_search_unavailable'
+          ? ` <button class="btn" type="button" data-ask-plain="${esc(answer.question)}">Ask it without web search</button>`
+          : '';
     html = `<div class="error-box"><b>${esc(answer.error.code || 'error')}</b> · ${esc(answer.error.message)}${resets}${startOver}</div>`;
   } else if (answer.status === 'stopped') {
     html = '<div class="stopped">Stopped. The question is saved as cancelled and counts toward today\'s questions.</div>';
@@ -1144,7 +1215,11 @@ function renderFrame(answer) {
 
   const notes = frame.notes || {};
   if (frame.kind === 'cannot_answer') {
-    html += `<div class="cannot"><h4>Not answerable</h4><div class="need"><div><b>Needed</b><br>${esc(notes.needed || '–')}</div><div><b>Available</b><br>${esc(notes.available || '–')}</div></div></div>`;
+    // C6: the server offers web search only where the asker may start it; the platform switch may have gone off since.
+    const offer = frame.suggestWebSearch && state.webAvailable !== false
+      ? `<div style="margin-top:8px"><button class="btn" type="button" data-web-ask="${esc(answer.question)}">Search the web for this</button> <span class="muted">starts a new conversation with web search</span></div>`
+      : '';
+    html += `<div class="cannot"><h4>Not answerable</h4><div class="need"><div><b>Needed</b><br>${esc(notes.needed || '–')}</div><div><b>Available</b><br>${esc(notes.available || '–')}</div></div>${offer}</div>`;
   }
 
   const rows = [['Scope', notes.scope], ['Period', notes.period], ['Source', notes.source]].filter(([, value]) => value);
@@ -1439,7 +1514,70 @@ function renderStatus() {
 function renderComposer() {
   $('#send').hidden = !!state.running;
   $('#stop').hidden = !state.running;
+  renderWebToggle();
   renderStatus();
+}
+
+// C6: "Search the web" is chosen for a new conversation only (the tools are fixed when it starts), by platform admins
+// while the platform switch is on.
+function renderWebToggle() {
+  const toggle = $('#webToggle');
+  toggle.hidden = !state.isAdmin || state.webAvailable === false || !!state.sessionId || !!state.running;
+  toggle.classList.toggle('on', state.webNext);
+  toggle.setAttribute('aria-pressed', String(state.webNext));
+  $('#question').placeholder = state.webNext && !state.sessionId
+    ? 'Ask about the market or your data: Ask Caboodle may search the public web'
+    : 'Ask about your Caboodle data, or type / for saved prompts';
+}
+
+// C6: the platform switch, read with the platform settings and saved with them unchanged but webSearch.
+async function loadWebSetting() {
+  if (!state.isAdmin) return;
+  try {
+    state.platformSettings = await (await api('askcaboodleadmin/settings')).json();
+    state.webAvailable = state.platformSettings.webSearch !== false;
+  } catch (error) {
+    state.webAvailable = null;
+    $('#webSettingHead').title = error.message;
+  }
+
+  $('#webSettingHead').hidden = !state.platformSettings;
+  $('#webSetting').checked = state.webAvailable !== false;
+  if (state.webAvailable === false) state.webNext = false;
+  renderWebToggle();
+}
+
+async function saveWebSetting(on) {
+  const settings = state.platformSettings;
+  if (!settings || !confirm(`Switch web search ${on ? 'on' : 'off'} for Ask Caboodle? It applies to new conversations; conversations already started with it keep it.`)) {
+    $('#webSetting').checked = state.webAvailable !== false;
+    return;
+  }
+
+  try {
+    const body = {
+      platformAdminDailyQuestionLimit: settings.platformAdminDailyQuestionLimit, platformMonthlyBudgetUsd: settings.platformMonthlyBudgetUsd,
+      warningPercentages: settings.warningPercentages, alertEmails: settings.alertEmails, sessionQuestionLimit: settings.sessionQuestionLimit, webSearch: on,
+    };
+    state.platformSettings = await (await api('askcaboodleadmin/settings', { method: 'PUT', body })).json();
+    state.webAvailable = state.platformSettings.webSearch !== false;
+    toast(`Web search is ${state.webAvailable ? 'on' : 'off'} for new conversations.`);
+  } catch (error) {
+    toast(error.message);
+  }
+
+  $('#webSetting').checked = state.webAvailable !== false;
+  if (state.webAvailable === false) state.webNext = false;
+  renderWebToggle();
+  state.answers.forEach(renderFrame);
+}
+
+// "Search the web for this": the same question in a new conversation started with web search.
+function askWithWeb(question) {
+  if (!newConversation()) return;
+  state.webNext = true;
+  renderWebToggle();
+  ask(question);
 }
 
 /* ---------- trace drawer ---------- */
@@ -1522,7 +1660,8 @@ function renderTrace() {
     const calls = step.calls.map(call => {
       const key = `${step.step}:${call.callId}`;
       const open = answer.openCalls.has(key);
-      const meta = [call.rowCount != null ? `${call.rowCount} rows` : '', call.durationMs != null ? `${call.durationMs} ms` : ''].filter(Boolean).join(' · ');
+      const counted = call.tool === 'web_search' ? 'results' : 'rows';
+      const meta = [call.rowCount != null ? `${call.rowCount} ${counted}` : '', call.durationMs != null ? `${call.durationMs} ms` : ''].filter(Boolean).join(' · ');
       return `<div class="call ${call.ok === false ? 'err' : ''}">
         <button class="call-h" type="button" data-call="${esc(key)}"><span class="call-tool">${esc(call.tool)}</span><span class="call-ms">${esc(meta)}</span>${callStatus(call)}</button>
         <div class="call-sum">${esc(call.summary || '')}${call.selfCorrection ? '<span class="tag">self-correction</span>' : ''}</div>
@@ -1543,6 +1682,7 @@ function renderTrace() {
       ['Elapsed', done.elapsedMilliseconds != null ? seconds(done.elapsedMilliseconds / 1000) : null], ['Questions left today', done.questionsLeftToday],
       ['Cost', done.estimatedCostUsd != null ? `$${Number(done.estimatedCostUsd).toFixed(4)}` : null], ['Model', done.model],
       ['Cache read', done.cacheReadTokens?.toLocaleString()], ['Cache write', done.cacheWriteTokens?.toLocaleString()],
+      ['Source', done.sourceType && done.sourceType !== 'caboodle' ? done.sourceType : null], ['Web searches', done.webSearches || null],
     ].filter(([, value]) => value != null);
     html += `<dl class="done-card">${rows.map(([key, value]) => `<div><dt>${key}</dt><dd>${esc(value)}</dd></div>`).join('')}
       ${done.queries ? `<div class="wide"><dt>Queries (platform admins only)</dt><dd>${done.queries.length}</dd></div>` : ''}
@@ -1587,8 +1727,10 @@ function liveClock() {
 /* ---------- pinned reports (C3) ---------- */
 
 // An answer with a table or a headline can be pinned once the server has saved it.
+// An answer that uses public web sources is never pinned or an example (C6); the server refuses it too.
 function pinnable(answer) {
-  return !!answer.messageId && answer.status === 'done' && (answer.frame?.kind || 'answer') === 'answer' && !!(answer.data || answer.frame?.headline);
+  return !!answer.messageId && answer.status === 'done' && (answer.frame?.kind || 'answer') === 'answer' && !!(answer.data || answer.frame?.headline)
+    && (answer.sourceType || 'caboodle') === 'caboodle';
 }
 
 let pinsRequest = 0;
@@ -2848,6 +2990,7 @@ function resetConversation() {
   state.title = null;
   state.questionLimit = null;
   state.questionsLeft = null;
+  state.webSearch = false;
   state.traced = null;
   $('#convo').innerHTML = '';
   showConversationHeader();
@@ -2858,6 +3001,7 @@ function newConversation() {
   if (state.running) return false;
   hidePins();
   hideGallery();
+  state.webNext = false;
   resetConversation();
   $('#convo').innerHTML = `<div class="empty"><h2>Ask about your Caboodle data</h2><p class="muted">Each question is a real one: about $0.04, counted in today's questions. A conversation takes 20 questions, and its first answer gives it a short title (about $0.00003 more).</p>
     <div class="starters" aria-live="polite"></div></div>`;
@@ -2908,6 +3052,8 @@ function showConversationHeader(retitled) {
   pill.className = `pill ${pill.hidden ? '' : state.questionsLeft === 0 ? 'err' : state.questionsLeft <= 3 ? 'warn' : ''}`;
   pill.textContent = state.questionsLeft === 0 ? 'conversation full' : `${state.questionsLeft} of ${state.questionLimit} questions left`;
   pill.title = 'Questions left in this conversation; only questions that used the AI model count';
+  $('#webPill').hidden = !state.webSearch;
+  renderWebToggle();
 }
 
 function editTitle(sessionId, current, host, restore) {
@@ -3053,7 +3199,16 @@ $('#convo').addEventListener('click', event => {
     state.pickedPrompt = null;
     $('#question').focus();
   }
+
+  const web = event.target.closest('[data-web-ask]');
+  if (web) askWithWeb(web.dataset.webAsk);
 });
+$('#webToggle').addEventListener('click', () => {
+  state.webNext = !state.webNext;
+  renderWebToggle();
+  $('#question').focus();
+});
+$('#webSetting').addEventListener('change', event => saveWebSetting(event.target.checked));
 $('#showGallery').addEventListener('click', showGallery);
 $('#showExamples').addEventListener('click', () => showExamples());
 $('#examples').addEventListener('click', event => {
