@@ -1303,6 +1303,180 @@ Owner, 2026-10-16 (D124): "like other chat apps". A small package built right af
   - The follow-ups under an answer (C0's `suggestions`, written by the model) aren't checked today; C5 can replace them with verified similar questions (design §9.3). The owner asked about them at C2's plan.
 - **From C4 (D163):** organization prompts get "Verified" here: a platform admin marks one after an eval pass, and the nightly re-check takes it away when it breaks. Today only the starters show it. C4's `AskMessages.PromptID` gives each prompt's runs for choosing which to verify first.
 
+**C5 — decided (owner, 2026-10-18: D170–D176):** split into C5a now and C5b once C5a's results are measured (D170); the 21 starters verified at once, and the other passing golden cases, thumbs-ups and organization prompts entered as proposals; the 100-question library skipped for now: the draft goes to the owner to check with Constance, with no paid run for it yet (D171); exact names and known aliases only, at most 2 examples, the threshold set free on the golden questions (D172); platform admins verify, and an organization prompt is verified from one of its runs (D173); slots of C4's types (D174); broken examples go out of use, and a catalog change sends one to "review again" (D175); `GET suggestions` comes from the library, and C0's follow-ups stay until C5b (D176). The IAM branch is unchanged since `b5adb1a1` (fetched 2026-10-18, at C5's start). Cost: the 12-case paid check is approved (about $0.65, cap $1.20) for after the build; no full run now.
+
+**C5a as built (2026-10-18, committed as `4ee2a349` at the owner's request; examples in the question off by D177):**
+- **Migration `20261018111702_AddAskCaboodleExamples`** (local `caboodle_dev`; `Down` checked and re-applied) adds three things:
+  - `Intelligence.AskExamples`, which holds:
+    - the question, its template, its retrieval text and slots;
+    - the audience, the scope (organization or brand) and the source brand;
+    - the calls and view in the pins' JSON shapes, so C0's headline and notes rules are kept;
+    - the tables read and their catalog hash;
+    - the seed key and hash, the source and its reference;
+    - the status, review note, reviewer and date;
+    - the check's result and date, and "catalog changed";
+    - the starter topic, order and data checks.
+
+    The seed key has a unique index that deleted rows keep, so a deleted seeded example never comes back.
+  - `AskMessages.ExamplesJson`: the examples given with each question, for C8.
+  - `AskPrompts.ExampleID`.
+
+  No grants. BE `docs/AskCaboodle-Deployment.md` lists it.
+- **Templates and slots (`Examples/AskExampleBuilder`):** an example is built from a stored answer the way a pin is (C3): the shown results' calls and C0's view, with a pin's refusals reworded for an example. Then:
+  - Each id in the calls that the answer's name search found, or that the names list knows, becomes a slot of C4's types (`{retailer}`; a second one is `{retailer2}`).
+  - The words of the question that named the value become that slot in the template.
+  - The asking brand, when the question names it, becomes `{brand}`.
+
+  **Leftovers** keep an example with its brand (D39):
+  - an id that is neither the brand's nor a slot's;
+  - a UPC or item code;
+  - a brand's own name written in the SQL (a product, category, promotion or brand name that no shared name holds);
+  - the brand's own words in the question, or in what the SQL wrote itself (its literals and column aliases): "our Ube flavor", `all_ube_stores`.
+- **Names (`Examples/AskExampleNames`):** read on the read-only login, with no model call.
+  - For everyone, kept an hour: retailers with their aliases (as the name search knows them), banners, distributors, regions and brands.
+  - Only for their own brand, kept an hour per brand: products, categories and promotions.
+  - A retailer is also known by the first word or two that at least two of its aliases start with and no other retailer's do ("Albertsons" for ABSCO).
+- **Retrieval (`Examples/AskQuestionShape`, `AskExampleFinder`, `AskExampleStore.ScoreSql`):**
+  - **Shaping:** the question is shaped with the brand's names. Names become their type; relative periods become one word, named dates another and numbers a third; filler words are dropped.
+  - **Scoring:** Postgres averages two scores against the library: the `pg_trgm` similarity of the shaped texts, and the share of stemmed words both have (full-text lexemes, leaving out the slot words and "many"/"much").
+  - **What is given:** only verified examples in use, of the asker's audience and scope (everyone, the organization worked in or the brand's, or the brand), and only when every table their calls read is in a module the asker may use (C2's rule).
+  - **Limits:** at most `ExamplesPerQuestion` (2), from `ExampleMinimumScore` (0.55), searched for at most `ExampleSearchSeconds` (3). A slow or failed search answers without them and logs a warning. A conversation never gets the same example twice.
+- **In the question (`Examples/AskExampleBlock`):** a `<verified_examples>` block goes in the user message after `<context>`.
+  - **Its instruction:** the examples are a guide, not this question's answer; find this question's names with `search_entity` and pass its own period; check the catalog for anything the examples don't cover.
+  - **Each example shows:**
+    - its template;
+    - its calls: the SQL with the source brand's id as the asking brand's and each slot's value as `{name}`; the period token, or "custom, the dates the user named"; the calculator's arguments;
+    - how it was shown ("Shown as: bar of cases by month; headline total of cases").
+
+    No figures. An example over 4,000 characters is left out.
+  - **What stays the same:** the system prompt and tools, so the cache and older conversations are untouched.
+  - **The fact check** reads the user message without the block, so a number in an example's SQL never vouches for a figure (`AskFactRegister`).
+  - **Platform admins** get `{ id, score, template }` in `done.examples` and in history.
+- **Proposals (`Examples/AskExampleProposals`):**
+  - A thumbs-up on an answer with a table or headline proposes it, and never fails the rating.
+  - A platform admin's "Propose as example" (`POST examples`) does the same for their own answers.
+  - An example starts with the brand it was asked on.
+  - The same question for the same brand isn't proposed twice.
+- **Approval (`askcaboodleadmin`, platform admins only, 403 for anyone else):**
+  - `GET examples?filter=`: the examples of one status, with the counts per status.
+  - `GET examples/{id}`: the calls as the model reads them, the slots, how it was shown, the tables, the leftovers and the source answer.
+  - `PUT examples/{id}`: the template's wording (with its own fill-ins), the scope, the starter topic and data checks.
+  - `POST examples/{id}/review`: Verify runs its calls first, as a pin's are run; an example whose calls don't run, or can't run now, isn't verified. Reject takes a note.
+  - `POST examples/{id}/check`: Re-check now, free.
+  - `DELETE examples/{id}`.
+  - `GET examples/similar?question=`: the question as retrieval reads it, and the closest examples the brand may be shown, proposals included, marked "given" when they would be.
+
+  BE `docs/AskCaboodle-FE.md` has "Verified examples".
+- **Seed (`Examples/examples.json`, `AskExampleSync`):** written by the free `ExampleSeedTool` from the stored eval reports. For each one-question case it takes the newest passing run since C0 whose shown queries took the period the case expects; a run that typed its dates for a relative question is skipped.
+  - **35 entries:** 32 open to everyone; Q09, Q10 and Q30 for Bubbies only (leftovers).
+  - **Answers (added after the owner's first look, 2026-10-18):** each entry also carries its passing run's answer (the text, headline, notes and the table shown; 33 of 35 have a table), so a platform admin judges it by what the user saw. `GET examples/{id}` returns it as `answer`, with `run` naming the eval report and no conversation ids. It is read from the seed by the example's key: no database change, never given to the model, and not part of the seed hash, so adding it changed no example's status.
+  - **When it syncs:** at start-up (one Hangfire job) and before every nightly check.
+  - **What comes in:**
+    - the 21 starters, verified at once (D150): 11 have calls the model can be given; 10 have no usable run, so they are offered as starters only;
+    - every other entry as a proposal (24).
+  - **Changes:** a changed entry is rewritten and, unless it is a starter, sent back to review.
+  - **What stays:** an admin's decisions. A deleted example doesn't come back, and a rejected one stays rejected.
+  - **Re-shaping:** each sync also re-shapes every example's retrieval text with today's names.
+- **Nightly re-check (`Examples/AskExampleChecks`):** `ask-caboodle-examples-nightly` runs at 03:30 UTC, after the pins' check. It runs every verified example's calls through the pins' runner, on the example's source brand and the audience's login, with no AI call.
+  - A broken example is out of use until it passes again.
+  - An example whose tables' catalog entries changed goes to "review again" until a platform admin verifies it again.
+  - A timeout or an unavailable database changes nothing.
+- **Starters (`Suggestions/AskStarterSource`):**
+  - `GET suggestions`, the gallery and the picker read the library's starters, kept five minutes and forgotten on a platform admin's change.
+  - The seeded starters keep `starters.yaml`'s id, tables and data checks, so C2's filter and output are unchanged.
+  - A platform admin can mark a verified example open to everyone as a starter. Its wording is checked by D149's rule (`Suggestions/AskStarterWording`: no fill-ins, amounts, percentages or quarters).
+  - Without the library (not seeded yet, or unreadable), `starters.yaml`'s own list is shown.
+- **Organization prompts (D173):**
+  - `GET prompts/{id}/runs`: an approved organization prompt's last 20 answered runs.
+  - `POST prompts/{id}/verify` with a run: that answer becomes a verified example for the organization (for its brand only, when it has leftovers), and the prompt links to it.
+  - `DELETE prompts/{id}/verify`.
+
+  The prompt and its picker item show `verified` while the example is in use. A change to the prompt's text or fill-ins drops the link (in the update's SQL).
+- **Eval:**
+  - Each case is asked with the verified examples the app would give it, except its own example and those of its other wordings (the same question on another brand, and Q04/Q60, Q08/Q61, Q16/Q62, Q17/Q63).
+  - The report lists the examples given, by case and score. `ASK_CABOODLE_EVAL_EXAMPLES=0` asks without them.
+  - The free `ExampleRetrievalTool` prints every golden question's closest examples with both scores. At 0.55, 13 of 65 cases have a match under these rules (17 at 0.50, 6 at 0.60).
+  - BE `docs/AskCaboodle-Eval/README.md` is updated.
+- **Beyond the plan's wording, for the owner's review:**
+  1. Only ids become slots.
+     - A name written in the SQL stays as written: it may be a fixed code's label ('UNFI' for source 1), and a brand's own name there is a leftover.
+     - The period isn't a slot: the template keeps the question's period words, the call shows the period token, and retrieval reads every relative period as one word.
+     - Numbers are read as one word in retrieval but stay as written in the template, so there is no `{n}` slot.
+  2. In the block, the source brand's id becomes the asking brand's id, not `{brand}` (`{brand}` only when there is no brand), so the model can run the SQL as shown.
+  3. The score averages the trigram similarity and the share of stemmed words. The word share stops "cases to Sprouts" from matching "stores at Sprouts" on letters alone.
+  4. The threshold 0.55 was set with the free retrieval tool under the eval's leave-one-out. That leaves out each case's other wordings too, so the check "each case finds its other wording" couldn't be made: those pairs are excluded by design.
+  5. Some matches at 0.55 share a question's shape but ask for something else: Q12 ("How much did we ship to Albertsons last quarter?") and Q61 ("How many stores did we ship to last month?") match each other at 0.566. The block tells the model to check the catalog for anything the example doesn't cover; the paid check shows whether such matches help or mislead (§7.2).
+  6. "Starter" isn't a source: a starter is an eval example with a starter topic. The stored statuses are proposed, verified and rejected. "Broken" and "review again" come from the check's result and the catalog flag, so a fixed example comes back without a new review.
+  7. A seeded starter without a usable passing run still comes into the library, without calls. It stays a suggested question and is never given to the model.
+  8. The same question for the same brand isn't proposed twice. The plan said "merged", but nothing is counted.
+  9. Verifying runs the example's calls first, as a pin's are run. An example whose calls can't run now (a timeout, or the admin login missing) isn't verified.
+  10. A platform-admin example (admin tables) is given only to platform admins, and checked only when `AdminReadOnlyConnectionString` is set.
+  11. A platform admin's examples go by the brand organization's switched-on modules (C2's rule, D146). A platform admin sees the examples of the organization they work in and of the brand on screen.
+  12. Only an approved organization prompt can be verified. `DELETE prompts/{id}/verify` keeps the example in the library.
+  13. Each API instance caches the starter list for five minutes, so another instance shows a change within five minutes.
+- **Tests:**
+  - **Totals:** solution 7,284 green across 16 projects (C4: 7,198); Intelligence 947 (C4: 861). Release build 0 errors; the only new warning is the migration's CA1505.
+  - **DB tests:** 80 green (3 new). They check:
+    - the library's SQL on `caboodle_dev`: scoring, the audience and scope filters, excluded ids, every targeted write, the starters' order;
+    - the names on the read-only login with Bubbies' own, in under 5 s, with "Albertsons" read as ABSCO;
+    - every seed entry's calls on today's data, and that no example open to everyone holds a brand's own values;
+    - an answer becoming an example, and a prompt verified from it showing "Verified" until its text changes.
+
+    The rows are removed afterwards.
+  - **Unit tests:**
+    - the shaping (names, aliases, periods, dates, numbers, filler);
+    - the builder (slots, templates, `{brand}`, every kind of leftover, the refusals);
+    - the block (brand id and slots replaced, calculator arguments, named dates, the length limit);
+    - the finder (in use, threshold, limit, scope, modules, excluded cases);
+    - the seed and sync (starters verified, proposals, changed entries, deleted and rejected kept, re-shaping);
+    - the check and the nightly job;
+    - the starter source (library, fallback, cache, marked starters, the wording rule);
+    - every handler and validator;
+    - the thumbs-up proposal;
+    - the ask: examples given, recorded and not repeated; a failed or slow search answers without them;
+    - the fact register without the block.
+- **The test page (C1p):**
+  - **An admin "Examples" panel in the rail:**
+    - tabs by status with counts, and cards with the source, the case and the scope;
+    - the detail, laid out for a reviewer after the owner's first look: "1. Is this answer right?" (the answer as the user saw it, its headline, notes and table or chart; for a seeded one, the test run it came from), "2. Who can get it?" (one sentence, the scope choice, the leftovers as a sentence), then "Verify: the answer is right" and "Reject: it is wrong"; the reusable wording, fill-ins, calls, tables and Re-check now folded under "Technical details (for engineers)", and the starter fields under "Also suggest it on the empty screen";
+    - the broken reason or "the catalog changed", Save changes and Delete;
+    - "Similar examples" for any question, with the scores and which are given.
+  - **Under answers and in the trace:** "Propose as example" under a platform admin's answers, and "Verified examples given" in the trace, live and from history.
+  - **On organization prompts:** "✓ Verified" and "Verify from a run" (the runs with their answers, "Verify from this run", "No longer verified").
+  - **Tested free** against the mock in headless Edge (`drive-c5.mjs`: 10 scenarios, no problems, no phone overflow; re-run after the reviewer layout, with the seeded answer's chart drawn). The earlier drivers re-ran with no change except timing and order, and C4's now shows the new "Verify from a run" button.
+- **The 100-question starter library (D171):** drafted for the owner and Constance in [`ask-caboodle-starter-library-draft.md`](ask-caboodle-starter-library-draft.md). It has 100 questions in 15 topics, each with who asks it, what it answers, the data it uses and Keep / Change / Drop. It isn't in the library, and there is no paid run until they have marked it.
+- **Paid check, $0.49 (owner, 2026-10-18; eval report `2026-10-18-claude-sonnet-5-5-medium-c5a-examples`):**
+  - **Which cases:** the owner asked to test only the cases that get a verified example today, 8 of 65 after the owner verified Q10: Q01, Q01-DAVID, Q03, Q05, Q12, Q20, Q27 and Q31. The free retrieval tool now prints "given today" per case. Cost: $0.35 answers, $0.14 claims check.
+  - **Result:** 5 of 8 passed. Their last runs passed 7 of 8 (Q27 has failed since B7b). The rule checks passed 8 of 8: every figure was right.
+  - **Q03 failed:** a trend sentence ("rose … to July, then eased", when June was the peak). It is C0c's kind, and Q03 has flipped on it before. It copied its example's query shape (Q01's, with the extra distributors column), with the same figures as before.
+  - **Q20 failed:** "October–December show 0 actuals because those months haven't happened yet", when the test is asked on 12 October. Its last run added "or haven't been uploaded" and passed. Its examples (Q01, Q31) don't touch the Monthly Report.
+  - **Q27 failed as before:** its query left out the future-dated price. Its example was Q10 (velocity, not list price) at 0.778, matched by the shared product words "Red Ripe Strawberry" (§7.2).
+  - **Cost and steps:** Q05 took one step fewer (5 → 4, $0.054 → $0.042). Otherwise the steps were the same. The answers cost about 4 % more, leaving out Q01's cache write; input rose 2–10K tokens per question, since every step re-reads the block, mostly from the cache.
+  - **Reading:** the model uses the examples (Q03's query). On cases that already pass, they can't show a gain, and 8 cases can't tell the two flips from run-to-run noise. Q16, Q18, Q22, Q39 and Q61 wait for Q12, Q18, Q19 and Q22 to be verified (about $0.30).
+  - **Balance:** about $47.12.
+- **Fixes after the first check (free; owner: "fix the product name flaw"):**
+  - **Part of a product's name** (two or more words in a row of one of the brand's product or category names, such as "Red Ripe Strawberry") is read as a product, for matching only (`AskNameIndex.FindProductParts`). The template keeps the words, and no slot is made.
+  - **The retailer names taken from aliases** now need at least a fifth of that retailer's aliases, and aliases that differ only in case or punctuation count once. The member stores of catch-all retailers ("UNFI Independents") had made plain words into retailer names: "price" came from "Price Chopper" and "PRICE CHOPPER", and "wholesale", "house" and "discount" came the same way.
+  - **The free retrieval run:** Q27 no longer gets Q10 (0.778 → 0.321), Q27 reads as "what s price slotproduct", and no other match moved.
+- **Reviewed by Claude for the owner** (owner, 2026-10-18: "review the questions on your own… make them verified if you think yes"). Q12, Q18, Q19 and Q22 were verified after re-checking on `caboodle_dev`:
+  - Q12: ABSCO is the only spelling, with 41,149 cases, $1,303,999 and 1,589 stores.
+  - Q18: the four averages, lows and highs match, and every Publix event is a TPR event. The text's "average about 506–814%" means the four promotions' averages; the model sees only the query.
+  - Q19: none of the 276 Sprouts events has an actual lift.
+  - Q22: $40,136 matches B5's check against the screens.
+
+  Each has a note saying so. The owner verified Q10. 12 of 65 cases then get a verified example; 19 proposals are left.
+- **Paid check 2, promotions, $0.29 (`c5a-promotions`):** Q16, Q18, Q22, Q39 and Q61 passed 4 of 5 (their last runs: 5 of 5).
+  - Q16 wrote "two events" where the reference counts 48 (2 event names across stores and products). It ran the same queries as its last pass and didn't follow its example (Q19); Q16 has flipped before.
+  - The steps were the same, Q39's rejected call went away, and the answers cost 3 % more.
+- **Paid check 3, repeated questions, $0.24 (`c5a-repeated`, `ASK_CABOODLE_EVAL_EXAMPLES=own`):** Q01, Q03, Q20, Q31 and Q61, each also given its own verified example, passed 4 of 5 (their last runs: 5 of 5).
+  - Q01 took one step fewer.
+  - Q03 failed on its trend sentence again ("climbed through spring and summer"). It passed its 3 runs since C0 without examples and failed both today with them.
+  - The answers cost 5 % more.
+- **Decision (D177):** the examples in the question are off (`ExamplesPerQuestion` 0 by default; `2` turns them on). Over the three checks, 18 answers with examples passed 13; the same cases' last runs without passed 17. Every figure was right, and each failure was one sentence of wording, which examples don't carry. Only 2 answers saved a step, for 3–5 % more per answer.
+  - Everything else in C5a stays in use: the library, approval, nightly re-check, suggested questions and verified prompts.
+  - The eval follows the app's setting; `ASK_CABOODLE_EVAL_EXAMPLES=2` or `own` measures them again.
+- **Committed** at the owner's request as `4ee2a349` (code and BE docs) and `7477212d` (the three eval reports). Solution 7,284 green, Intelligence 947, DB tests 80 green, Release build 0 errors. Spent in C5a: $1.02. **Balance:** about $46.59.
+
 ### C6 — Public web research
 - Server tools `web_search_20260209` (+ `web_fetch_20260209`), `max_uses` 3, `user_location` US; declared at session start only when `IntelligenceSettings:EnableWebSearch` (later per-org setting) — never toggled mid-session (append-only).
 - History conversion must handle `server_tool_use`, `web_search_tool_result`, `web_fetch_tool_result` blocks and `pause_turn` (resend to continue).
@@ -1611,6 +1785,14 @@ Owner answers recorded 2026-10-11.
 | D167 | C4: the Dates fill-in | **Owner:** the author picks month, quarter, year or a range. Runners pick from last year to next year (months, quarters) or the last five years to next year (years), or type two dates for a range. The question gets the dates in words ("September 2026", "Q3 2026", "1 Jul – 30 Sep 2026"), which C3's rule turns into `custom`. |
 | D168 | C4: writing a prompt without braces | **Owner:** write a real question, select words and "Make it a fill-in": the server says what they could be (a period, dates, a value of each type with exact names first, or text; `GET prompts/values` without a type, no model call), and the author picks. "+ Insert fill-in" (or typing `{`) opens the type menu. A name in braces that is really a value, like `{ABSCO}`, gets a one-click hint ("ABSCO looks like a retailer"). A live preview shows what runners will see. |
 | D169 | C4: "Improve with AI" | **Owner:** one Claude Haiku 5.5 call (`ImproveModel`), only when the author clicks: the prompt rewritten as one clear question in Caboodle's words with exactly the same fill-ins (checked by the server; asked once more with the reason, then the prompt is kept and the author told why), plus words worth turning into fill-ins with their values looked up for the brand. Shown before and after; the author takes it or keeps theirs; nothing is saved. Its cost (about $0.0001) counts toward the monthly budgets, not the daily questions; 30 a day per person; refused once the month's allowance has stopped the organization. A rewrite can shift the meaning, so the author's approval is the guard; proper verification stays in C5. |
+| D170 | C5: size | **Owner (2026-10-18):** two packages. C5a: the library, approval, retrieval, the examples in the question, the nightly re-check, the starters from the library, verified organization prompts and the eval's leave-one-out. C5b, once C5a's results are measured: the strict short-circuit, verified follow-ups and starters filled with the brand's own values (D149). |
+| D171 | C5: what enters first | **Owner:** the 21 starters, verified at once (passing golden cases already approved at C2, D150). As proposals for a platform admin: the other golden cases that passed (from the stored reports, free), thumbs-ups from now on, and organization prompts (D173). The 100-question library is skipped for now: the draft (`ask-caboodle-starter-library-draft.md`) goes to the owner, who checks it with Constance. Its paid run (about $4–6) comes later, with its own approval. The eval leaves each case's own example out (leave-one-out). |
+| D172 | C5: normalizing and retrieval | **Owner:** exact names and known aliases only; unmatched names stay as words. `pg_trgm` plus full-text on the shaped question. At most 2 examples, from a threshold set free on the golden questions. About 1–1.5K more input tokens per question, to be measured by the paid check. |
+| D173 | C5: approval | **Owner:** platform admins only, judging from the source answer and its SQL; nothing is given until verified, and approving costs no money. An organization prompt is verified from one of its answered runs, which replaces D163's "after an eval pass". Thumbs-up proposals show users' questions and answers to platform admins, as C8's triage will (D97). |
+| D174 | C5: slots | **Owner:** C4's types, worked out from the values the answer resolved and editable when verifying. The model sees the placeholders and resolves this question's values itself; C5b binds them as parameters. |
+| D175 | C5: nightly re-check and catalog changes | **Owner:** as for pins (D158): a broken example is out of use until it passes; one whose tables' catalog changed goes to "review again" until it is verified again. Keeping it in use with a warning was weaker, given the precision bar. |
+| D176 | C5: suggestions and follow-ups | **Owner:** `GET suggestions` comes from the library in C5a, with the same output. A platform admin can mark any verified example as a starter, checked by D149's wording rule when it is saved. C0's follow-ups stay. In C5b, a follow-up that closely matches a verified example takes the example's wording (with this answer's values) and is marked verified. |
+| D177 | C5a: the examples in the question, on or off | **Owner delegated (2026-10-18):** "if it doesn't worth it then shut it down". **Off:** `ExamplesPerQuestion` is 0 by default; `2` turns them on.<br>**Evidence:** three paid checks ($1.02). 18 answers with examples passed 13; the same cases' last runs without passed 17. Every figure was right, and each failure was one sentence of wording. Only 2 answers took a step fewer, and one rejected call went away. Each answer cost about 3–5 % more.<br>**What stays:** the library, approval, the nightly re-check, the suggested questions and the verified organization prompts.<br>**Revisit** with real questions (verified thumbs-ups), with the 100-question library, or alongside C5b's short-circuit for repeated questions. |
 
 ### 7.1 Demo track — dropped 2026-10-12 (D3), kept for history
 
@@ -1651,6 +1833,12 @@ Each one is posted with its package, and gets a D number once decided.
 | **Found in C3's follow-up: the promotion events example disagrees with its own rules** (2026-10-18): `TradeSpend.TradeSpendPromoEvents`' example ("events at a retailer in the next three months") filters `Status IN (1, 3, 6)` and `CURRENT_DATE`, while the Status column says "active" is 1, 3, 6, 7 and C3's rule says to filter with the period parameters. Both live Q62 runs copied 1, 3, 6. No figure changes today: no events with status 3 or 7 overlap the next three months | Later (owner) | Align the example: statuses 1, 3, 6, 7 and `@period_start`/`@period_end` with period `next-3-months`; check with the free references. |
 | **C3: Q62 listed TPR events only** (paid check, 2026-10-18): the right window, but 57 promotion × retailer rows of TPR events (statuses 1, 3, 6) instead of 113 promotions and 1,203 events of every type (statuses 1, 3, 6, 7). It passed in C2 | C3 follow-up (owner) | **Decided (owner, 2026-10-18):** the owner's live question framed it the same way (58 TPR promotions and 56 EDLP-only, on 17 Oct), so it isn't noise and the answer says what it leaves out. Q62 now also accepts the TPR-only framing (references `promotions_with_tpr` 56, `tpr_events_active` 491, `promotions_edlp_only` 57). The live run also showed the fact check at work: "another 56 EDLP-only promotions" was worked out in the head (114 − 58), stopped, and counted with a query before it went out ($0.107 for 9 steps). |
 | Who reviews prompts shared with an organization | C4 | **Decided:** D160, the organization's admins (platform admins too). |
+| The 100-question starter library (D92, D171) | Owner, Constance | The draft is [`ask-caboodle-starter-library-draft.md`](ask-caboodle-starter-library-draft.md). Constance marks each question Keep, Change or Drop and adds what's missing. The kept questions are then asked once (a paid run, about $4–6, approved separately), the answers are checked, and the right ones are verified in the examples panel. |
+| **C5a: the golden-case proposals wait for verification** (24, seeded 2026-10-18) | Owner (platform admin) | Only verified examples are given. Today that means the 11 starters with calls. For the 12-case paid check, verify Q10, Q12, Q18, Q19 and Q22 first (the matches of Q16, Q18, Q22, Q27, Q39 and Q61); without them, 6 of the 12 cases get an example. Each proposal now shows its passing run's answer (owner, 2026-10-18), so it is judged by what the user saw, not by its SQL. **Done in part (2026-10-18):** the owner verified Q10; Claude verified Q12, Q18, Q19 and Q22 for the owner after re-checking their figures (§4). 19 are left; with the examples off (D177) they matter for the suggested questions, C5b and turning the examples on again. |
+| **C5a: matches that share a question's shape but ask for something else** (free retrieval run, 2026-10-18): Q12 ("How much did we ship to Albertsons last quarter?") and Q61 ("How many stores did we ship to last month?") match each other at 0.566 | C5a paid check | Measure it in the 12-case check: steps, cost and pass, against each case's last run. If such matches mislead, raise `ExampleMinimumScore` to 0.60 (6 of 65 cases) or give the word share more weight. Both are settings or free changes, checked with the retrieval tool. **Measured (2026-10-18):** Q12 and Q61 passed with each other as their example (checks 1 and 2). Left as is while the examples are off (D177). |
+| **C5a: a product's name makes different questions look alike** (paid check, 2026-10-18): Q27 ("What's our list price for Red Ripe Strawberry?") got Q10 ("What's the velocity of Red Ripe Strawberry at Sprouts this year?") at 0.778, the highest score in the set. "Red Ripe Strawberry" isn't a whole product name ("Bubbies Mochi Ice Cream - Red Ripe Strawberry"), so it stayed as words, and both scores counted them | **Done (2026-10-18, free)** | Built: part of a product's name reads as a product in retrieval, and the retailer names from aliases need a fifth of a retailer's aliases, counting case variants once ("price" had come from "Price Chopper"). Q27 now gets nothing above 0.55; no other match moved (§4). |
+| **To do (owner, 2026-10-18): simpler admin screens in the final UI.** The owner found the test page's example review and C4's prompt form hard to follow ("how is my client Constance going to understand this?") | FE (§10.10) | **Decided:** the final UI shows only what a person needs to decide; the guidance is in §10.10. No backend change needed: the API already gives what those screens need. |
+| **To do (owner, 2026-10-18): a Platform Admin user manual** | After the final UI, with C9 (§8 "Admin manual") | Every admin screen in plain words with screenshots, written once the final UI exists so it isn't written twice; Constance reviews it. Short "What is this?" help on each screen covers most needs until then. |
 | Thumbs-down triage list in the Flight recorder | C8 | **Decided:** D97. Build it in C8; each fixed answer becomes an eval case. |
 | Sonnet 5.5 cache-read price: $0.10 per million tokens (B8; the app's `ModelPrices`) or $0.20 (the `claude-api` skill's table) | Owner (Claude Console) | **Settled (2026-10-16):** $0.10. The live pricing page prices cache hits on Sonnet 5.5 and Opus 5.5 at 0.05x input ($0.10 and $0.20); `ModelPrices` matches it, so the reports' costs stand. The skill's cached table was out of date. |
 | Where the organization admin's usage page and the "questions left today" indicator sit | FE (§10.9) | FE team |
@@ -1710,8 +1898,11 @@ Each one is posted with its package, and gets a D number once decided.
 | C3 | done | `31d598a4` | 2026-10-18: D153–D159 at the short plan (11 tokens plus `custom`, the tool plan, the delta, "not loaded yet", personal pins, the nightly check, the viewer's access); the IAM branch is unchanged since `b5adb1a1`. Built as in §4 "C3 as built" and committed at the owner's request: migration `AddAskCaboodlePins` applied locally, `run_sql` periods, five pin endpoints, the nightly job; solution 7,095 green, Intelligence 760, coverage 97.8 % unit-only, DB tests 65 green, build 0 errors. Test page updated and tested free. Ten points beyond the plan's wording in §4. **Paid, $0.37 (eval report `8e689053`):** 7 of 8; the six relative questions took their token; the two named-date questions typed their dates; Q62 listed TPR events only (§7.2).<br>**Balance:** about $47.85. |
 | C3 follow-ups | done | `280b39e2` | 2026-10-18, owner: named dates through `custom` (examples in the tool description and the prompt) and Q62 accepting the TPR-only framing (new reference columns: 56 promotions with TPR events, 491 TPR events, 57 EDLP-only; references re-checked free). **Paid, $0.24 (`-Label c3-named-dates`):** Q08 now passes `custom`; Q04 and Q17 still type their dates; Q17 failed on a claims-check misreading of a long table (its figures right; §7.2). Solution green, DB tests 65 green.<br>**Balance:** about $47.61. |
 | C4 | done | `40efb441` | 2026-10-18: D160–D164 at the short plan (organization admins review, all three sharing levels now, `{period}`/`{brand}`/text variables, runs and "Verified" on the starters only, one picker call); the IAM branch is unchanged since `b5adb1a1`. At the review the owner widened it (D165–D169): typed fill-ins with values scoped to the brand, the Dates picker, "Make it a fill-in" and "Improve with AI" (Haiku 5.5). Built as in §4 "C4 as built": migration `AddAskCaboodlePrompts` (`20261017213333`) applied locally (`Down` checked), seven prompt endpoints and `GET picker`, `promptId` on the ask; solution 7,198 green, Intelligence 861, coverage 96.9 % unit-only, DB tests 77 green, Release build 0 errors. Test page updated and tested free (13 scenarios). Fourteen points beyond the plan's wording in §4. Committed at the owner's request. $0 spent; the paid improve check (about $0.001–0.002) not run yet.<br>**Balance:** about $47.61. |
-| C5 … C8 | todo | | |
+| C5a | done | `4ee2a349` | 2026-10-18: D170–D176 at the short plan (C5a now and C5b later; the starters verified and everything else proposed; the 100-question draft for Constance, with no paid run yet; exact names, 2 examples, the threshold set free; platform admins verify, prompts from a run; C4's slot types; broken or changed examples out of use; suggestions from the library). The IAM branch is unchanged since `b5adb1a1`. Built as in §4 "C5a as built": migration `AddAskCaboodleExamples` (`20261018111702`) applied locally (`Down` checked); 11 admin routes; the seed from the eval reports (45 in the library: 21 starters verified, 24 proposals); the `<verified_examples>` block; the nightly job. Solution 7,283 green, Intelligence 946, DB tests 80 green, Release build 0 errors. Test page updated and tested free (10 scenarios). Thirteen points beyond the plan's wording in §4. After the owner's first look: seeded proposals show their passing run's answer, and the test page leads with it. **Paid, $1.02 (eval reports `7477212d`):** 8 cases with a verified example 5 of 8 ($0.49); after the product and alias fixes and four proposals verified by Claude for the owner, promotions 4 of 5 ($0.29) and repeated questions 4 of 5 ($0.24); 13 of 18 against 17 of 18 without, every figure right, failures one sentence each. **Examples in the question off (D177);** the rest of C5a stays. Committed at the owner's request.<br>**Balance:** about $46.59. |
+| C5b | todo | | Short-circuit, verified follow-ups, starters filled with the brand's own values (D170). After C5a's measured results. |
+| C6 … C8 | todo | | |
 | C9 | todo | | Caboodle guide. Needs the documentation repo and Constance's review. |
+| Admin manual | todo | | A Platform Admin user manual (owner, 2026-10-18): every admin screen (settings and budgets, usage, verified examples, prompt review, pins, the Flight recorder), in plain words with screenshots. Written after the final UI is built (§10.10), alongside C9 and before go-live; Constance reviews it. |
 | G1 … A3 | todo | | |
 
 ## 9. Data Ask Caboodle does not read
@@ -1870,6 +2061,7 @@ The full contract is in BE `docs/AskCaboodle-FE.md`, "The answer pieces".
 | C2 | `GET askcaboodle/suggestions` for the empty state: `{ starters: [{ id, text, topic }] }` in the order to show. Show the first four (they cover four topics) with the topic as a tag; the rest behind "more", and from C4 in the `/` picker. Fetch for each new conversation and brand change and ignore a reply for an earlier brand; hide the block when the list is empty or the call fails. Clicking a starter asks its text in a new conversation with the same `BrandID`. Free; not the answer's follow-up `suggestions`. Tried on the C1p page |
 | C3 | Pinned reports (BE `docs/AskCaboodle-FE.md`, "Pinned reports"): a Pin action on answers of kind `answer` with a table or headline, once the stream has closed (title, period: a token or "fixed"); the pins page or board: `GET pins` (by brand), each card rendered with `GET pins/{id}/render` in the answer's own components (headline, notes, data block); the change against the previous period ("−4.6 % vs Aug 2026", or "+6.1 pts" for a percent, with the compared spans when the data stops early); the "not loaded yet" note (no figures when nothing in the period is loaded, never 0); a `problem` with Refresh; broken pins with their reason and "Re-ask to repair" (a new conversation from the pin's question); the period switch from `periodChoices` (empty: "its own dates"), rename, delete; status and "checked" from the nightly job. Personal pins only (D157). No AI call, nothing counted. Tried on the C1p page |
 | C4 | The prompt gallery (BE `docs/AskCaboodle-FE.md`, "Prompt gallery"): `GET prompts` gives the tabs in one call (Organization with the starters under "Suggested by Caboodle", all "Verified"; Mine; Shared with me; Pending review when `canReview`). Cards draw each fill-in as a pill named by its `label`: a select of `choices` (a period's `detail` dates next to its label), a search box from `GET prompts/values` when `search`, two date inputs for a `range`, or a text input when `freeText`, starting on `default`. Run fills each with its choice's `text` (words, not tokens or ids), the picked value's name or the dates in words, and asks it in a new conversation with `promptId` (a `{brand}` choice becomes the `BrandID`); a missing value is asked for first. The New/Edit form (D168): title, text with "+ Insert fill-in" (also on `{`) and "Make selection a fill-in" (`GET prompts/values` without a type gives the candidates), the hint for a value written as a name (`{ABSCO}`), one card per fill-in (type, label, a default found by search, any value or the author's list, period choices, the dates format; `{brand}` takes none), a live preview of what runners see, "Improve with AI" (`POST prompts/improve`: before and after, Use this / Keep mine, never silent; suggested words with "Make it a fill-in"; 409 at 30 a day or when the allowance has stopped), who can use it (organization and people only inside an organization; an admin editing the organization's prompt can't change it), people from IAM's members search. Values outside the brand's own data are marked "not in this brand's data". Review: Approve, or Reject with a note shown to the author; `review` and `reviewNote` on the card. The composer's `/` picker from `GET picker` (starters first, then prompts, each once), filtered as the person types, ↑ ↓ Enter Esc, the first unfilled `{name}` selected after insert; send `promptId` with a question inserted from a prompt. The new error `prompt_unavailable`: keep the question and offer to send it without the prompt. No AI call until a prompt is run. Tried on the C1p page |
+| C5a | Verified examples (BE `docs/AskCaboodle-FE.md`, "Verified examples"), for platform admins only. The examples in the question are off by default (D177), so `done.examples` is empty; the library screens are still needed for the suggested questions and verified prompts:<br>**The examples panel:**<ul><li>tabs by status (proposed, verified, broken, review again, rejected) with counts, from `GET examples?filter=`;</li><li>the detail: the calls as the model reads them, the slots, how it was shown, the leftovers (which keep the scope at its brand), the source answer, and the broken reason or "the catalog changed";</li><li>edit the template within its fill-ins, the scope, and the starter topic and data checks (each refusal is one sentence);</li><li>Verify with an optional note (400 with the reason when its calls don't run), Reject with a note, Re-check now, Delete;</li><li>"Similar examples" for any question (`GET examples/similar`).</li></ul>**Elsewhere:**<ul><li>"Propose as example" under a platform admin's answers, next to Pin;</li><li>`done.examples` and history `examples` (`{ id, score, template }`) in the trace;</li><li>on approved organization prompts, "Verify from a run" (`GET prompts/{id}/runs`, `POST`/`DELETE prompts/{id}/verify`) and the "Verified" badge from `verified` on the prompt and picker items.</li></ul>`GET suggestions` is unchanged. No AI call. Tried on the C1p page |
 | C6 | Web sources (`sources` event, `sourceType`) |
 | C7 | "Remember this name for your organization?" after a clarify |
 | C8 | Flight recorder data |
@@ -1880,6 +2072,23 @@ The full contract is in BE `docs/AskCaboodle-FE.md`, "The answer pieces".
 - Where the organization admin's usage page and the "questions left today" indicator sit.
 - How a broker's cross-brand scope is shown and switched (G3).
 - The phone layout: the artifact has a top bar and a drawer for narrow screens.
+
+### 10.10 Keep the admin screens simple (owner, 2026-10-18)
+
+The owner found C5's example review and C4's prompt form hard to follow on the C1p test page, and asked that the final UI be much simpler: Constance and other business experts must be able to use them without help. The test page shows every field the API returns, on purpose, so that each one can be tested; the final screens show only what a person needs to decide, and the API already gives what they need (D71). The guidance:
+- **Reviewing a verified example** (platform admins):
+  - Show the question, the answer as the user saw it (headline, notes, text, the table or chart), and one sentence saying who gets it ("Every brand can get this example", or "Only Bubbies Ice Cream can get this example, because it mentions its own products").
+  - Two buttons: "Yes, this is right, use it" and "No, it's wrong".
+  - Statuses in plain words: Waiting for review, In use, Needs attention (broken, or the catalog changed), Not used.
+  - The reusable wording, fill-ins, calls, tables and "Re-check now" go behind "Technical details". Suggesting it on the empty screen is one toggle with a topic.
+  - The C1p page now follows this order, as a model.
+- **Creating a prompt** (C4):
+  - Start with one box: "Write your question as you'd ask it."
+  - Highlight the words that could change ("Sprouts", "last quarter") and ask "Should people be able to change this?", one click each (`GET prompts/values` without a type already gives the candidates).
+  - Types, defaults and choices are set automatically; their settings fold under "More options".
+  - Sharing is one choice: Just me, My organization, or Specific people. "Improve with AI" stays one button.
+- **Everywhere:** a short "What is this?" line on each admin screen, so the manual (below) is rarely needed.
+- **A Platform Admin user manual** (§7.2, §8): written once the final UI exists, with its screenshots and labels.
 
 ## 11. Deploying to staging and production (tracked)
 
@@ -1910,6 +2119,8 @@ Run each script with psql as a user that can create roles: `psql -h <host> -U <a
 **Since C3:** migration `AddAskCaboodlePins` (a table, no grants) and the Hangfire recurring job `ask-caboodle-pins-nightly` (03:00 UTC), registered at start-up; check it in the Hangfire dashboard after the first deploy.
 
 **Since C4:** migration `AddAskCaboodlePrompts` (three tables and `AskMessages.PromptID`, no grants). `ImproveModel`/`ImproveSeconds` have working defaults (`claude-haiku-5-5`, 20 s); nothing to set after the deploy.
+
+**Since C5a:** migration `AddAskCaboodleExamples` (a table and two columns, no grants). At start-up one Hangfire job brings the seed into the library; the recurring job `ask-caboodle-examples-nightly` (03:30 UTC) re-checks the verified examples on the read-only logins, with no AI call. Check both in the Hangfire dashboard after the first deploy. `ExamplesPerQuestion`/`ExampleMinimumScore`/`ExampleSearchSeconds` have working defaults (0, so the examples are off by D177; 0.55; 3 s). Retrieval calls `pg_trgm` on the main login. The names lookup reads tables the standard read-only login already has. After the deploy, a platform admin verifies the proposals; nothing but the starters is given until then.
 
 **Found on 2026-10-16 (not Ask Caboodle code):** `caboodle/src/Hosts/API/appsettings.Staging.json` and `appsettings.Development.json` hold a Claude API key in plain text. They have been committed since `cf92952e` (4 Mar 2026), and the commit is on `master`, `develop`, `staging` and about 100 other branches on Bitbucket. The owner decides how to rotate the key and move it to a secret store; Ask Caboodle only reads `IntelligenceSettings:ClaudeApiKey`. **Also found 2026-10-17:** the same `appsettings.Development.json` holds a Google Geocoding API key (`Geocoding:ApiKey`) in plain text; rotate it with the Claude key.
 

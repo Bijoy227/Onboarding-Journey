@@ -1,23 +1,35 @@
 # Ask Caboodle — Handoff for the next session
 
-Written 2026-10-18, after C4 (commit `40efb441`). Read this first, then §0, §4 C5 (with "C2 as built", "C3 as built" and "C4 as built": C5's library replaces C2's YAML, its templates reuse C4's typed fill-ins and C3's period tokens, and it gives organization prompts "Verified"), §7.2, §8 and §10 of [`ask-caboodle-be-implementation-plan.md`](ask-caboodle-be-implementation-plan.md).
+Written 2026-10-18, after C5a (commit `4ee2a349`, eval reports `7477212d`; the examples in the question are off by D177). Read this first, then §0, §4 C5 (with "C5a as built", and "C3 as built" and "C4 as built", whose pins runner, period tokens and typed fill-ins C5b builds on), §7.2, §8 and §10 of [`ask-caboodle-be-implementation-plan.md`](ask-caboodle-be-implementation-plan.md).
 
-## Starter prompt (next: C5)
+## Starter prompt (next: C5b's short plan)
 
-> Read `docs/ask-caboodle/ask-caboodle-next-session.md`, then §0, §4 C5 (with "C2 as built", "C3 as built" and "C4 as built", whose starters, period tokens, typed fill-ins and values lookup C5 builds on), §7.2, §8 and §10 of `docs/ask-caboodle/ask-caboodle-be-implementation-plan.md` in `D:\Fork\Onboarding-Journey`. The backend is `D:\Fork\Caboodle BE Repository\caboodle.backend`, branch `feature/ask-caboodle` (last commit C4 `40efb441`; working tree clean).
+> Read `docs/ask-caboodle/ask-caboodle-next-session.md`, then §0, §4 C5 (with "C5a as built", and "C3 as built" and "C4 as built", whose pins runner, period tokens and typed fill-ins C5b builds on), §7.2, §8 and §10 of `docs/ask-caboodle/ask-caboodle-be-implementation-plan.md` in `D:\Fork\Onboarding-Journey`. The backend is `D:\Fork\Caboodle BE Repository\caboodle.backend`, branch `feature/ask-caboodle` (last commits: C5a `4ee2a349` and its eval reports `7477212d`; working tree clean).
 >
-> Next is package C5 (verified examples and short-circuit). First re-fetch `origin/feature/CS-1770-iam-service-broker-workspace` and tell me whether it has commits after `b5adb1a1`; don't merge without my go-ahead. Then post C5's short plan and its open decisions, and wait for my go-ahead. The open decisions:
-> - the size: C5 grew by about a third (D92); split it (for example C5a: library, retrieval and approval; C5b: the short-circuit) or build it at once;
-> - what enters the library first: C2's 21 starters (D151), organization prompts that pass an eval case (D163), thumbs-up answers and eval passes as proposals; and when the 100-question starter library with Constance is written;
-> - normalizing a question for retrieval: names and periods replaced by their types with C4's values lookup and period recognition (D165–D168), then `pg_trgm` and full-text; how many examples go into the user message;
-> - human approval: where a platform admin marks an example verified, and how "Verified" reaches organization prompts;
-> - templates with slots: C4's fill-in types as the slots, so one verified question serves every retailer and period;
-> - the nightly re-check (as C3's pins) and dropping examples when the catalog changes;
-> - `GET suggestions` moving from the YAML to the library (D151), and whether verified similar questions replace C0's follow-ups.
+> First re-fetch `origin/feature/CS-1770-iam-service-broker-workspace` and tell me whether it has commits after `b5adb1a1`; don't merge without my go-ahead.
 >
-> Add C5 to the C1p test page (`docs/ask-caboodle/test-page/ask-caboodle-test.html`). The items under "Parked for later" wait until I bring them up.
+> Then post C5b's short plan and its open decisions, and wait for my go-ahead. C5a measured the examples in the question and switched them off (D177): they didn't make answers more accurate. C5b is the other way the library can pay off: a question asked again (a starter, a saved prompt, the same question from another brand) re-runs its verified calls with no agent loop, then one model call writes the answer, so it is faster, cheaper and the same every time. The open decisions:
+> - whether C5b is worth building now, or we move to C6; size it against what C5a showed;
+> - when the short-circuit may run (the same audience, the shaped question equal to a verified template, every slot resolved to exactly one value, the plan passing today's guard), the one answer call (C0's contract and C0b's check), and how each short-circuit is logged and sampled in the eval;
+> - verified follow-ups (D176): how a follow-up is matched to a verified example, and how it is marked;
+> - which of the brand's own values fill a starter (D149), and whether the filled wording stays "Verified".
+>
+> Add C5b to the C1p test page (`docs/ask-caboodle/test-page/ask-caboodle-test.html`). The items under "Parked for later" wait until I bring them up.
 >
 > Run the free launchers yourself (PowerShell). Finish in the usual order: build with 0 errors, all tests green, my review, then a one-line commit. Paid runs still need my approval first, with the cost stated.
+
+## Waiting for the owner (from C5a, 2026-10-18)
+
+- **D177, the examples in the question are off** (`ExamplesPerQuestion` 0). The owner delegated the call: "if it doesn't worth it then shut it down".
+  - **Evidence:** three paid checks ($1.02). 18 answers with examples passed 13; the same cases' last runs without passed 17. Every figure was right, and each failure was one sentence of wording. Only 2 answers saved a step, for 3–5 % more per answer.
+  - **Turning them back on** is one setting (`2`); the eval measures them with `ASK_CABOODLE_EVAL_EXAMPLES=2` or `own`.
+- **19 golden-case proposals** are left to verify, on the test page's "Examples" panel (free). Each shows its passing run's answer first. There is no rush while the examples are off; they matter for C5b and for the suggested questions.
+  - The owner verified Q10.
+  - Claude verified Q12, Q18, Q19 and Q22 for the owner, after re-checking their figures on `caboodle_dev`, with a note on each (owner: "review the questions on your own").
+- **The 100-question draft** for Constance: [`ask-caboodle-starter-library-draft.md`](ask-caboodle-starter-library-draft.md) (D171). Its paid run (about $4–6) waits until she has marked it.
+- **C5a's thirteen points beyond the plan's wording** (plan §4 "C5a as built"): committed at the owner's request, listed for the owner to object to.
+- **To do, after the final UI:** simpler admin screens (plan §10.10) and a Platform Admin user manual (plan §8 "Admin manual").
+- **Try it live:** rebuild and restart the API first (the seed syncs at start-up). The examples panel, verifying and "Similar examples" are free; "Similar examples" now says the examples are switched off.
 
 ## Waiting for the owner (from C4, 2026-10-18)
 
@@ -56,13 +68,13 @@ The owner will bring these up; don't start them unasked.
 
 | Item | State |
 |---|---|
-| **Backend branch** | `feature/ask-caboodle`, last commit C4 `40efb441`, after the C3 follow-up `280b39e2`, C3's eval report `8e689053`, C3 `31d598a4`, C2's eval report `711dcaef`, C2 `4ff33590`, C1b `f8e56603`, C1 `a01dfc13`, B10b `e26a5f52`, C0b.1 `5f7e7f84`, B10a `26a85f3f`, B9 `a8387b82`, C0b `6da28c2d`, C0 `a102eed1`, B8b `b2f00e22`, B8 `02a256b6` and the IAM merge `4d0830e6`. `origin/feature/ask-caboodle` is at B8b (`b2f00e22`); C0, C0b, B9, B10a, C0b.1, B10b, C1, C1b, C2, C3 and C4 are local only. Never push unless the owner asks. |
+| **Backend branch** | `feature/ask-caboodle`. The last commits are C5a's eval reports `7477212d` and C5a `4ee2a349`, after C4 `40efb441`. Earlier commits: the C3 follow-up `280b39e2`, C3's eval report `8e689053`, C3 `31d598a4`, C2's eval report `711dcaef`, C2 `4ff33590`, C1b `f8e56603`, C1 `a01dfc13`, B10b `e26a5f52`, C0b.1 `5f7e7f84`, B10a `26a85f3f`, B9 `a8387b82`, C0b `6da28c2d`, C0 `a102eed1`, B8b `b2f00e22`, B8 `02a256b6` and the IAM merge `4d0830e6`. `origin/feature/ask-caboodle` is at B8b (`b2f00e22`); C0, C0b, B9, B10a, C0b.1, B10b, C1, C1b, C2, C3, C4 and C5a are local only. Never push unless the owner asks. |
 | **Logins on `caboodle_dev`** | `askcaboodle_app` (standard) and, since B10a, `askcaboodle_admin_app` (platform admins), both created by the owner; their connection strings are the user variables below. |
 | **Docs repo** | `D:\Fork\Onboarding-Journey`, branch `caboodle-access-v2`. Docs commits are one line: `Update - Ask Caboodle docs - …`. |
 | **Model in the app** | **Sonnet 5.5, effort medium** since B7b (D45). Since B8, prices come from the `ModelPrices` table in code, per model and per attempt; the five price settings are gone. Development and Staging settings say `claude-sonnet-5-5`. |
-| **Tests** | With C4: solution 7,198 green across 16 projects (Intelligence 861, coverage 96.9 % unit-only). Release build has 0 errors. The free DB tests (`dbtests.ps1`'s default filter, golden references included) are 77 green: the admin-login ones, C1's trace endpoint, C1b's title/rename race, C2's starter checks, C3's pin tests and C4's prompt, values and improvement-cost tests included. |
+| **Tests** | With C5a: solution 7,284 green across 16 projects (Intelligence 947). Release build 0 errors; the only new warning is the migration's CA1505. The free DB tests (`dbtests.ps1`'s default filter, golden references included) are 80 green. They include the admin-login tests, C1's trace endpoint, C1b's title/rename race, C2's starter checks, C3's pin tests, C4's prompt, values and improvement-cost tests, and C5a's library, names, seed and prompt-verification tests. |
 | **IAM work** | Merge from `origin/feature/CS-1770-iam-service-broker-workspace` (last merged at `b5adb1a1`; still no new commits when fetched on 2026-10-18, at C4's start). Its module settings hold Ask Caboodle's three per-organization settings; the two dollar settings are Platform Admin only. Re-fetch and re-check before each merge. |
-| **Golden eval** | 67 questions in `caboodle/tests/Intelligence.Application.Test/Eval/golden.yaml` (since C2; 63 after B10b), asked as if today were 2026-10-12: 64 counted, plus "App questions" (Q42–Q44), reported apart until C9. Since C2: Q60–Q63, the starters' wordings of Q04, Q08, Q16 and Q17 (4 of 4 passed on 2026-10-17, $0.29). Every starter in `starters.yaml` must stay the exact question of a case. Since C3: `expect.period` on 24 cases and a reported `period` check (did a query take the expected token). Since B10a: a per-case `audience`, the "Platform admin" group (Q49–Q53; since B10b also Q54–Q59 on the data pipeline and the raw files), and `ASK_CABOODLE_EVAL_AUDIENCE=platform-admin`. Since C0: a counted `kind` check, `expect.kinds` for partial answers, and reported headline and database-name checks. Since C0b: a "Fact check" section and a reported `unverified_figures` check. Since B9: Q45–Q48 (fees by type, a distributor's markup, banners by region, the brand's distributors), Q41 answers the fee lines, and calculator references return fee-line figures. Reports and README are in BE `docs/AskCaboodle-Eval/`. |
+| **Golden eval** | 67 questions in `caboodle/tests/Intelligence.Application.Test/Eval/golden.yaml` (since C2; 63 after B10b), asked as if today were 2026-10-12: 64 counted, plus "App questions" (Q42–Q44), reported apart until C9. Since C2: Q60–Q63, the starters' wordings of Q04, Q08, Q16 and Q17 (4 of 4 passed on 2026-10-17, $0.29). Every starter in `starters.yaml` must stay the exact question of a case. Since C3: `expect.period` on 24 cases and a reported `period` check (did a query take the expected token). Since B10a: a per-case `audience`, the "Platform admin" group (Q49–Q53; since B10b also Q54–Q59 on the data pipeline and the raw files), and `ASK_CABOODLE_EVAL_AUDIENCE=platform-admin`. Since C0: a counted `kind` check, `expect.kinds` for partial answers, and reported headline and database-name checks. Since C0b: a "Fact check" section and a reported `unverified_figures` check. Since B9: Q45–Q48 (fees by type, a distributor's markup, banners by region, the brand's distributors), Q41 answers the fee lines, and calculator references return fee-line figures. Since C5a, a case can be asked with the verified examples the app would give it, except its own and those of its other wordings (`Eval/EvalExamples`); they follow the app's setting, off since D177, and `ASK_CABOODLE_EVAL_EXAMPLES=2` (or `own`, which also gives a case its own) turns them on. The report lists the examples given. Reports and README are in BE `docs/AskCaboodle-Eval/`. |
 | **Current baseline (C0b)** | No full run since C0b. B9 changed the catalog and the tool definitions (D110) and checked 9 cases: 9/9, $0.04 per answer. **C0b's full run, Sonnet 5.5 medium:** 38/45 counted (C0: 40/45; the difference is run-to-run flips, none caused by the check), app questions 3/3, **$0.036 per answer**, 13.5 s. 5 of 48 answers corrected by the fact check before the last tuning (about 3 of 48 expected now), none sent with the note. Failing: Q15 (borderline), Q27 (as since B7b), Q29 (a range claim, C0c's kind), Q35 (`cannot_answer` for "nothing found"; stays `answer` by D107). Q33 now accepts either kind (D107). Opus 5.5 medium was last measured in B7b: 41/45, $0.112, 26 s. |
 | **Known weaknesses** | Figures in the wrong place, rankings and pattern claims ("56–68 units per store" when one week is 40; Q11, Q29; B10b's Q57 "two issue types have none open" when one has, passed because a 2 was in the results): C0c. Wrong figures and counts are now caught by C0b (Q16, Q29's "three promo periods"), and hand-added totals pass only when right. |
 | **Data problems** | DI1–DI14 in [`ask-caboodle-data-issues.md`](ask-caboodle-data-issues.md) (B9 added DI11: six approved Prime fees point at no promotion; B10b added DI12: an email address in one Sprouts store's KeHE city, DI13: syncs marked failed although loaded and 3 stuck, DI14: UNFI UPC mappings stored as provider 1, and updated DI9 on zero-unit KeHE lines). The owner's rule: record and maintain them, don't fix them. Add any new one a package finds. DI9 matters for store counts: KeHE zero-case rows count as stores, both in the app and in Ask Caboodle. |
@@ -70,7 +82,7 @@ The owner will bring these up; don't start them unasked.
 ## Money (read before any paid run)
 
 - **Who pays:** the client (Constance) pays the API bill through the Claude Console. The owner cannot add money themselves.
-- **Balance:** about **$47.61**. C4 spent nothing (its improve check was not run). C3 spent $0.61: the 8-case period check $0.37 ($0.30 answers, $0.07 claims check) and the 3-case named-date re-check $0.24 (the changed prompt was cached again on its first case). The owner's live Q62 on the test page ($0.107) went to the key in `appsettings.Development.json`, as C1p's did; C2 spent $0.29 (the 4-case check of its new starters' cases); C1b spent $0.0003 (nine titles from Haiku 5.5); C1 spent $0.50 (a smoke question $0.0834, a 6-case check $0.34, a 1-case check without the fallback $0.04, 14 small timing calls $0.044); B10b spent $0.56 (a 9-case check $0.48, a 2-case re-check $0.08); B10a $0.44 (an 8-case check); B9 $0.59 (a 9-case check); C0b $3.43 (4-case check $0.41, full run $2.62, re-check of 7 $0.40); C0 $3.54; B8b nothing; B8 about $0.075. The Console has the exact figure.
+- **Balance:** about **$46.59**. C5a spent $1.02: the 8 cases that got a verified example ($0.49), then the promotions ($0.29) and the repeated questions ($0.24). C4 spent nothing (its improve check was not run). C3 spent $0.61: the 8-case period check $0.37 ($0.30 answers, $0.07 claims check) and the 3-case named-date re-check $0.24 (the changed prompt was cached again on its first case). The owner's live Q62 on the test page ($0.107) went to the key in `appsettings.Development.json`, as C1p's did; C2 spent $0.29 (the 4-case check of its new starters' cases); C1b spent $0.0003 (nine titles from Haiku 5.5); C1 spent $0.50 (a smoke question $0.0834, a 6-case check $0.34, a 1-case check without the fallback $0.04, 14 small timing calls $0.044); B10b spent $0.56 (a 9-case check $0.48, a 2-case re-check $0.08); B10a $0.44 (an 8-case check); B9 $0.59 (a 9-case check); C0b $3.43 (4-case check $0.41, full run $2.62, re-check of 7 $0.40); C0 $3.54; B8b nothing; B8 about $0.075. The Console has the exact figure.
 - **Cache-read price (settled 2026-10-16):** Sonnet 5.5 cache reads cost $0.10 per million tokens (0.05x input, on the live pricing page), as `ModelPrices` says; the `claude-api` skill's cached $0.20 is out of date.
 - **Typical costs:**
 
@@ -355,6 +367,41 @@ Decisions D160–D169 are in plan §7; "C4 as built" is in §4. In short:
 - **Test page:** the gallery in the rail (tabs, cards with fill-in pills, review, Run), the New/Edit form (insert and make fill-ins, cards per fill-in, preview, Improve with AI, sharing), the `/` picker. Tested free with `drive-c4.mjs` (13 scenarios); the earlier drivers re-ran unchanged. The mock with the prompt routes (`mock-prompts.mjs`), `drive-c4.mjs`, `run-c4.ps1` and `regress.ps1` are in `C:\Users\User\AppData\Local\Temp\claude\d--Fork-Onboarding-Journey\56cf18da-bac0-47dd-9603-54277e0ec947\scratchpad\c1p-test`, while it lasts.
 - **$0 spent.** The paid improve check waits (above).
 
+## Done: C5a — verified examples (commit `4ee2a349`, eval reports `7477212d`, 2026-10-18)
+
+Decisions D170–D176 are in plan §7, and "C5a as built" is in §4. In short:
+- **The library:**
+  - Migration `20261018111702_AddAskCaboodleExamples` (local `caboodle_dev`; `Down` checked) adds `Intelligence.AskExamples`, `AskMessages.ExamplesJson` and `AskPrompts.ExampleID`. No grants.
+  - An example is built from an answer as a pin is (C3). Ids that the answer looked up become C4-typed slots; leftovers (a brand's own ids, codes, names or words) keep it with its brand (D39).
+- **Retrieval and the block:**
+  - The question is shaped with the brand's names (names, periods, dates and numbers become words).
+  - It is scored with `pg_trgm` plus the share of stemmed words, and gets at most 2 examples from 0.55, within 3 s; on failure it answers without them.
+  - A `<verified_examples>` block goes in the user message after `<context>`; the system prompt is unchanged. The fact check reads the message without the block.
+- **Approval:** 11 platform-admin routes under `askcaboodleadmin/examples` and `prompts/{id}/runs|verify`. Thumbs-up and "Propose as example" make proposals; Verify runs the calls first.
+- **Seed:**
+  - `Examples/examples.json` is written by the free `ExampleSeedTool` from the eval reports: 35 entries, 45 in the library with the starters that have no usable run.
+  - The 21 starters are verified at once (11 with calls); the 24 others are proposals.
+  - It syncs at start-up and nightly.
+- **Nightly re-check:** `ask-caboodle-examples-nightly` at 03:30 UTC, through the pins' runner. A broken example is out of use until it passes; a catalog change sends it to "review again".
+- **Starters and prompts:**
+  - `GET suggestions` reads the library's starters, with the same output and `starters.yaml` as the fallback.
+  - An organization prompt verified from a run shows "Verified" until its text or fill-ins change.
+- **Eval:** leave-one-out (each case's own example and its other wordings). The free `ExampleRetrievalTool` shows 13 of 65 cases with a match at 0.55.
+- **Tests:** solution 7,284 green, Intelligence 947, DB tests 80 green, Release build 0 errors.
+- **Test page:**
+  - the "Examples" panel, "Propose as example", the examples given in the trace, and "Verify from a run" on organization prompts;
+  - tested free with `drive-c5.mjs` (10 scenarios), and the earlier drivers re-ran unchanged except C4's new button.
+  - The mock's example routes (`mock-examples.mjs`), `drive-c5.mjs`, `run-c5.ps1` and `regress.ps1` are in `C:\Users\User\AppData\Local\Temp\claude\d--Fork-Onboarding-Journey\d8e1e999-2d82-430e-92d0-1df942168c79\scratchpad\c1p-test`, while it lasts.
+- **Paid, $1.02, and D177:**
+  - The three checks passed 13 of 18 with examples, against 17 of 18 for the same cases' last runs without; every figure was right.
+  - The examples in the question are off (`ExamplesPerQuestion` 0), as the owner delegated.
+  - Before the second and third checks: two free retrieval fixes (part of a product's name reads as a product; retailer names from aliases need a fifth of a retailer's aliases, counting case variants once), and four proposals verified by Claude for the owner.
+- **The 100-question draft:** `ask-caboodle-starter-library-draft.md` (100 questions in 15 topics), for the owner and Constance.
+- **After the owner's first look (2026-10-18):**
+  - The owner got lost in a proposal's detail: the seeded ones showed only their SQL. Each seed entry now carries its passing run's answer, read by key; there is no database change.
+  - The test page's detail now leads with "1. Is this answer right?" and "2. Who can get it?", with the technical parts folded away.
+  - The owner asked for simpler admin screens in the final UI (plan §10.10) and a Platform Admin user manual after it (plan §8 "Admin manual", §7.2). Both are on the to-do list; neither is built now.
+
 ## Working agreement (owner)
 
 1. **One package at a time.** Post the plan and open decisions, then wait for the go-ahead. "Can we do X?" is a question, not a go-ahead.
@@ -447,11 +494,33 @@ dotnet test caboodle/tests/Intelligence.Application.Test/Intelligence.Applicatio
 
 **Paid improve check** (`improve.ps1`, C4, about $0.001–0.002): reads `ANTHROPIC_API_KEY` and the read-only connection string from user scope into the process, sets `ASK_CABOODLE_LIVE_IMPROVE_TEST=1` and runs `dotnet test … --configuration Release --no-build --filter "FullyQualifiedName~LiveImproveTests" --logger "console;verbosity=detailed"`: eight prompts improved with Bubbies' values looked up, each printed with its rewrite, note and suggested fill-ins. Nothing is saved.
 
+**Free examples seed** (`seed.ps1`, C5a, no model calls): the three connection strings of the DB tests, then `ASK_CABOODLE_EXAMPLE_SEED` set to the absolute path of `caboodle/src/Modules/Intelligence/Modules.Intelligence.Application/Examples/examples.json`, then `dotnet test … --configuration Release --no-build --filter "FullyQualifiedName~ExampleSeedTool" --logger "console;verbosity=detailed"`.
+- It rewrites the seed from the stored eval reports. Review the diff before committing.
+- After a seed change, rebuild: the file is an embedded resource.
+
+**Free retrieval check** (`retrieval.ps1`, C5a, no model calls): the same first lines, `ASK_CABOODLE_EXAMPLE_RETRIEVAL=1`, then the filter `FullyQualifiedName~ExampleRetrievalTool`.
+- It syncs the seed into `caboodle_dev`'s library as the API's start-up does.
+- It then prints every golden question's shaped text and its closest examples (with trigram and word scores, under the eval's leave-one-out), and how many cases match at each threshold.
+- Run it before changing `ExampleMinimumScore`, `AskQuestionShape` or `AskExampleNames`.
+
 **Build in Release while the owner's API runs (C4).** The owner keeps the API running from Visual Studio, which locks the Debug output: build and test with `--configuration Release` (and `--no-build` launchers with `--configuration Release` too), and never stop the owner's process.
 
 **New migrations:** `dotnet ef migrations add <Name> --context MainDbContext --project caboodle/src/Database/Migrator/Migrator.csproj --startup-project caboodle/src/Hosts/API/API.csproj` with `ASPNETCORE_ENVIRONMENT=Development` (no database connection needed). Check that the snapshot diff holds only your change, and set a sensible `defaultValue` for a new non-null column (EF writes 0).
 
 ## Lessons from recent sessions
+
+- **Measure a feature where it can help, then let the numbers decide (C5a).** The examples were tested on cases that already passed, so they couldn't show a gain. The leave-one-out hides the repeated question on purpose. Three small checks ($1.02) showed no gain and a 3–5 % cost, so they went off by one setting; the rest of the package stays useful.
+- **A catch-all retailer's aliases are its member stores (C5a).** "UNFI Independents" and "KeHE Independents" hold hundreds of store names, whose first words are plain words ("price", "house", "discount"). Any rule that learns names from aliases needs a share of the retailer's own aliases, and must count case variants once ("Price Chopper" and "PRICE CHOPPER" made "price" a retailer).
+- **Show the reviewer the answer, not the SQL (C5a).** The owner got lost in a proposal that showed only its query. A verify screen leads with what the user saw, and the technical parts fold away (plan §10.10).
+- **Seed from the eval, then leave each case's own example out (C5a).** A library seeded from the golden cases' passing runs would turn the eval into copying. `EvalExamples.Excluded` leaves out each case's own example, the same question on another brand, and its other wordings (Q04/Q60, Q08/Q61, Q16/Q62, Q17/Q63).
+- **Only ids become slots (C5a).** The first seed turned the SQL's `CASE` labels ('UNFI', 'KeHE') into slots, so an example would have generalized a fixed code's label. A name written in SQL stays as written; a brand's own one is a leftover.
+- **Look for a brand's own words everywhere an example shows (C5a).** "Ube" leaked through the question ("our Ube flavor") and a column alias (`all_ube_stores`) after the ids and names were caught. The leftovers now read the question, the SQL's literals and its column aliases, against the brand's own product, category and brand words that no shared name holds.
+- **Trigram similarity alone matches the wrong question (C5a).** Shaped questions share most of their letters ("how many … slotretailer slotperiod"). Averaging in the share of stemmed content words (slot words and "many"/"much" left out) separated cases from stores. Tune it with the free retrieval tool, never with paid runs.
+- **People call a retailer by its aliases' first words (C5a).** "Albertsons" wasn't a name the lists knew (the retailer is ABSCO). The first word or two that at least two of one retailer's aliases share, and no other retailer's do, now name it. A one-word start that only comes with the same second word is dropped ("whole").
+- **`ORDER BY 2 + 3` in Postgres sorts by a constant (C5a).** Positional numbers work only alone. Wrap the scores in a CTE and order by the named columns.
+- **`node -e` through bash loses C# and regex text (C5a).** `$@"…"` (a verbatim interpolated string) was eaten by the shell, and `\b` in a JavaScript string became a backspace character. Write such scripts and edits with the Write or Edit tool, then scan the changed files for control characters.
+- **An entity's `ID` setter is protected (C5a).** To rewrite a stored row from a new object, update by id (`UpdateSeedAsync(id, content, …)`) instead of copying the id across.
+- **`StartupTests` resolves every handler (C5a).** A new `IRepository<T>` the handlers take must be registered in the test's service collection too.
 
 - **Every model the code calls needs a price check (C4).** An unpriced `ImproveModel` would have run with cost 0, so the spend would never have reached the budgets; titles already refused without a price. `AskModelPriceCheck` now warns for the agent's, the title and the improve models; add any new model there and refuse the call without a price.
 - **The read-only gateway binds a null as an untyped parameter (C4).** `COALESCE(@term, '')` fails on Postgres ("could not determine data type"); cast every optional parameter (`@term::text`, `@ids::uuid[]`).

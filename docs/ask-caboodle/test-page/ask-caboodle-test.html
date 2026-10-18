@@ -17,7 +17,11 @@
   prompt form (typed fill-ins, "+ Insert fill-in", "Make selection a fill-in", the {ABSCO} hint, "Improve with AI", who can
   use it, people from IAM's members), approve or reject; and the composer's "/" picker. A question run from a prompt
   carries its promptId.
-  Test parameters: ?api=<url>&token=<jwt>&brand=<id>&ask=<question>&session=<id>&trace=1&pins=1&gallery=1
+  C5: verified examples, for platform admins: a library board (Proposed, Verified, Broken, Review again, Rejected), each
+  example with its calls as the model reads them and the answer it came from (verify or reject, edit its template, who it
+  serves and whether it is a starter, re-check, delete), "Which examples would a question get?", "Propose as example"
+  under an answer, the examples given in the run trace, and "Verified" on organization prompts (verify one from a run).
+  Test parameters: ?api=<url>&token=<jwt>&brand=<id>&ask=<question>&session=<id>&trace=1&pins=1&gallery=1&examples=1
 -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js"></script>
@@ -301,6 +305,29 @@ input.var-pill { width: 9em; }
 .pc-foot { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; border-top: 1px solid var(--line); padding-top: 8px; font-size: 12.5px; color: var(--text-3); }
 .pc-foot .grow { flex: 1; min-width: 0; }
 .review-note { border-left: 3px solid var(--err); background: var(--err-soft); padding: 5px 9px; font-size: 12.5px; border-radius: 0 6px 6px 0; }
+.ex-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); gap: 14px; align-items: start; }
+.ex-list { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.ex-card { border: 1px solid var(--line); border-radius: 10px; background: var(--surface); padding: 9px 12px; text-align: left; display: flex; flex-direction: column; gap: 4px; color: var(--text); }
+.ex-card.on { border-color: var(--accent); box-shadow: inset 3px 0 0 var(--accent); }
+.ex-card .ex-meta { font-size: 11.5px; color: var(--text-3); display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.ex-detail { border: 1px solid var(--line); border-radius: 10px; background: var(--surface); padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.ex-detail h3 { margin: 0; font-size: 15px; font-weight: 600; }
+.ex-detail h4 { margin: 4px 0 0; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-3); font-weight: 600; }
+.ex-detail pre { margin: 0; background: var(--code); border-radius: 8px; padding: 8px 10px; white-space: pre-wrap; word-break: break-word; font-size: 12px; max-height: 280px; overflow: auto; }
+.ex-answer { border-left: 3px solid var(--line-strong); padding: 2px 10px; font-size: 13px; min-width: 0; }
+.ex-similar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.ex-similar .field { flex: 1; min-width: 220px; }
+.ex-matches { display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+.ex-matches .given { font-weight: 600; }
+.ex-detail .row { flex-wrap: wrap; }
+.ex-detail details > summary { cursor: pointer; font-size: 13px; color: var(--text-2); }
+.ex-detail details > :not(summary) { margin-top: 8px; }
+.ex-detail .row > .grow { white-space: normal; }
+.ex-detail .chips { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12.5px; }
+.leftovers { border-left: 3px solid var(--warn); background: var(--warn-soft); padding: 5px 9px; font-size: 12.5px; border-radius: 0 6px 6px 0; }
+.runs-list { display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--line); padding-top: 8px; }
+.runs-list .run { display: flex; flex-direction: column; gap: 3px; font-size: 13px; }
+@media (max-width: 860px) { .ex-layout { grid-template-columns: minmax(0, 1fr); } }
 .group-head { grid-column: 1 / -1; font-size: 11px; text-transform: uppercase; letter-spacing: .07em; color: var(--text-3); font-weight: 600; margin: 6px 0 0; }
 .prompt-editor { display: grid; gap: 8px; padding: 12px 14px; border: 1px solid var(--line-strong); border-radius: 10px; background: var(--surface); }
 .prompt-editor label { display: grid; gap: 3px; font-size: 12px; color: var(--text-3); }
@@ -389,6 +416,7 @@ input.var-pill { width: 9em; }
     <div class="hist-head"><span>Pinned reports</span><button class="btn-link" id="showPins" type="button">Open board</button></div>
     <ul class="history pins-rail" id="pinsRail"></ul>
     <div class="hist-head"><span>Prompt gallery</span><button class="btn-link" id="showGallery" type="button">Open</button></div>
+    <div class="hist-head" id="examplesHead" hidden><span>Verified examples</span><button class="btn-link" id="showExamples" type="button">Open</button></div>
     <div class="hist-head"><span>Conversations</span><button class="btn-link" id="newChat" type="button">New</button></div>
     <ul class="history" id="history"></ul>
   </aside>
@@ -407,7 +435,7 @@ input.var-pill { width: 9em; }
       </label>
       <button class="btn" id="traceToggle" type="button">Run trace</button>
     </header>
-    <div class="scroll" id="scroll"><div class="convo" id="convo"></div><div class="board" id="board" hidden></div><div class="board" id="gallery" hidden></div></div>
+    <div class="scroll" id="scroll"><div class="convo" id="convo"></div><div class="board" id="board" hidden></div><div class="board" id="gallery" hidden></div><div class="board" id="examples" hidden></div></div>
     <footer class="composer-wrap" id="composerWrap">
       <div class="picker" id="picker" role="listbox" aria-label="Saved prompts" hidden></div>
       <div class="status" id="status"></div>
@@ -479,6 +507,8 @@ const state = {
   editor: null,
   picker: { items: null, key: null, error: null, index: 0, shown: [] },
   pickedPrompt: null,
+  examples: { open: false, filter: 'proposed', list: null, counts: {}, error: null, selected: null, detail: null, detailError: null, similar: null, question: '' },
+  promptRuns: new Map(),
 };
 
 const $ = selector => document.querySelector(selector);
@@ -632,6 +662,7 @@ async function loadUsage() {
     const left = usage.questionsLeftToday == null ? 'no daily limit' : `${usage.questionsLeftToday} questions left today`;
     const cost = usage.costUsd == null ? '' : ` · $${Number(usage.costUsd).toFixed(2)} this month`;
     if (usage.costUsd != null) state.isAdmin = true;
+    $('#examplesHead').hidden = !state.isAdmin;
     $('#usage').textContent = left + cost;
   } catch (error) {
     $('#usage').textContent = error.message;
@@ -713,7 +744,7 @@ function fillFromHistory(answer, message) {
   answer.target = answer.finalText;
   answer.shownChars = answer.target.length;
   if (!answered && message.status !== 'cancelled') answer.error = { message: message.errorMessage || 'No answer.', code: message.status };
-  answer.done = { toolCalls: message.toolCalls, tokensIn: message.tokensIn, tokensOut: message.tokensOut, totalTokens: message.totalTokens, estimatedCostUsd: message.costUsd, model: message.model };
+  answer.done = { toolCalls: message.toolCalls, tokensIn: message.tokensIn, tokensOut: message.tokensOut, totalTokens: message.totalTokens, estimatedCostUsd: message.costUsd, model: message.model, examples: message.examples };
   answer.askedOn = message.askedOn;
 }
 
@@ -1249,6 +1280,7 @@ function renderActions(answer) {
       <button class="act" type="button" data-act="copy">Copy</button>
       <button class="act" type="button" data-act="trace">Trace</button>
       ${pinnable(answer) ? `<button class="act ${answer.pinnedId ? 'on' : ''}" type="button" data-act="pin">${answer.pinnedId ? 'Pinned ✓' : 'Pin'}</button>` : ''}
+      ${pinnable(answer) && state.isAdmin ? `<button class="act ${answer.proposedId ? 'on' : ''}" type="button" data-act="propose" title="Platform admins: add this answer to the verified examples for review">${answer.proposedId ? 'Proposed ✓' : 'Propose as example'}</button>` : ''}
     </div>
     ${answer.pinOpen ? `
       <div class="pin-dialog">
@@ -1280,6 +1312,20 @@ async function onAction(answer, action) {
     try { await navigator.clipboard.writeText(answer.finalText || answer.target); toast('Copied.'); } catch { toast('Copy failed.'); }
   } else if (action === 'trace') {
     showTrace(answer);
+  } else if (action === 'propose') {
+    if (answer.proposedId) {
+      showExamples(answer.proposedId);
+      return;
+    }
+
+    try {
+      const example = await (await api('askcaboodleadmin/examples', { method: 'POST', body: { messageId: answer.messageId } })).json();
+      answer.proposedId = example.id;
+      renderActions(answer);
+      toast(`Proposed: "${example.template}" waits for verification${example.canBeShared ? '' : ' (it holds this brand\'s own values, so it serves only this brand)'}.`);
+    } catch (error) {
+      toast(error.message);
+    }
   } else if (action === 'pin') {
     if (answer.pinnedId) {
       showPins();
@@ -1499,7 +1545,10 @@ function renderTrace() {
       ['Cache read', done.cacheReadTokens?.toLocaleString()], ['Cache write', done.cacheWriteTokens?.toLocaleString()],
     ].filter(([, value]) => value != null);
     html += `<dl class="done-card">${rows.map(([key, value]) => `<div><dt>${key}</dt><dd>${esc(value)}</dd></div>`).join('')}
-      ${done.queries ? `<div class="wide"><dt>Queries (platform admins only)</dt><dd>${done.queries.length}</dd></div>` : ''}</dl>`;
+      ${done.queries ? `<div class="wide"><dt>Queries (platform admins only)</dt><dd>${done.queries.length}</dd></div>` : ''}
+      ${done.examples ? `<div class="wide"><dt>Verified examples given (platform admins only)</dt><dd>${done.examples.length
+        ? done.examples.map(use => `<div>${Number(use.score).toFixed(2)} · ${esc(use.template)}</div>`).join('')
+        : 'None close enough'}</dd></div>` : ''}</dl>`;
   }
 
   body.innerHTML = html;
@@ -1575,6 +1624,7 @@ function showPins(focusId) {
   }
 
   hideGallery();
+  hideExamples();
   state.board = true;
   $('#convo').hidden = true;
   $('#board').hidden = false;
@@ -1813,6 +1863,7 @@ function showGallery() {
   }
 
   hidePins();
+  hideExamples();
   state.gallery = true;
   $('#convo').hidden = true;
   $('#gallery').hidden = false;
@@ -1948,14 +1999,35 @@ function promptCard(prompt) {
   const reviewButtons = !prompt.canReview ? ''
     : (prompt.review !== 'approved' ? '<button class="act" type="button" data-pa="approve">Approve</button>' : '')
       + (prompt.review !== 'rejected' ? '<button class="act" type="button" data-pa="reject">Reject</button>' : '');
+  // C5: a platform admin verifies an approved organization prompt from one of its runs.
+  const verifiable = state.isAdmin && prompt.visibility === 'organization' && prompt.review === 'approved';
+  const verifyButtons = !verifiable ? ''
+    : prompt.verified ? '<button class="act" type="button" data-pa="unverify">Remove Verified</button>'
+      : '<button class="act" type="button" data-pa="runs">Verify from a run</button>';
   return `<article class="prompt-card" data-prompt="${esc(prompt.id)}">
-    <div class="pc-top"><span class="pc-title">${esc(prompt.title)}</span>${review}<span class="pill">${esc(visibility)}</span></div>
+    <div class="pc-top"><span class="pc-title">${esc(prompt.title)}</span>${prompt.verified ? '<span class="verified" title="A platform admin verified it from one of its runs">✓ Verified</span>' : ''}${review}<span class="pill">${esc(visibility)}</span></div>
     <p class="pc-text">${templateHtml(prompt)}</p>
     ${note}
     <div class="pc-foot"><span>${prompt.runs} run${prompt.runs === 1 ? '' : 's'}</span><span class="grow">${prompt.isMine ? 'by you' : `by ${esc(prompt.author)}`}</span>
       ${prompt.canEdit ? '<button class="act" type="button" data-pa="edit">Edit</button><button class="act" type="button" data-pa="delete">Delete</button>' : ''}
-      ${reviewButtons}<button class="btn btn-primary" type="button" data-pa="run">Run</button></div>
+      ${reviewButtons}${verifyButtons}<button class="btn btn-primary" type="button" data-pa="run">Run</button></div>
+    ${promptRunsHtml(prompt)}
   </article>`;
+}
+
+// The prompt's answered runs, newest first, each with what it answered, to verify the prompt from one (D163).
+function promptRunsHtml(prompt) {
+  const runs = state.promptRuns.get(prompt.id);
+  if (!runs) return '';
+  if (runs.loading) return '<div class="runs-list"><div class="row muted"><span class="spin"></span>Loading its runs…</div></div>';
+  if (runs.error) return `<div class="runs-list"><div class="error-box">${esc(runs.error)}</div></div>`;
+  return `<div class="runs-list">${runs.items.length ? runs.items.map(run => `<div class="run">
+      <span class="muted">${esc(utc(run.askedOn).toLocaleString())}</span><strong>${esc(run.question)}</strong>
+      ${run.headline ? `<span>${esc(run.headline.label)}: ${esc(run.headline.display)}</span>` : ''}
+      <div class="ex-answer">${markdown(run.text || '')}</div>
+      <div class="row"><button class="btn" type="button" data-pa="verify:${esc(run.messageID)}">Verify from this run</button></div></div>`).join('')
+    : '<p class="muted">No answered runs yet: run it first.</p>'}
+    <div class="row"><button class="btn-link" type="button" data-pa="runs-close">Close</button></div></div>`;
 }
 
 // What a pill holds, or '' when nothing valid is picked yet.
@@ -2040,6 +2112,29 @@ async function onPromptAction(id, action) {
       await api(`askcaboodle/prompts/${id}`, { method: 'DELETE' });
       state.picker.items = null;
       await loadPrompts();
+    } else if (action === 'runs') {
+      state.promptRuns.set(id, { loading: true });
+      renderGallery();
+      try {
+        const runs = await (await api(`askcaboodleadmin/prompts/${id}/runs`)).json();
+        state.promptRuns.set(id, { items: runs.runs });
+      } catch (error) {
+        state.promptRuns.set(id, { error: error.message, items: [] });
+      }
+
+      renderGallery();
+    } else if (action === 'runs-close') {
+      state.promptRuns.delete(id);
+      renderGallery();
+    } else if (action.startsWith('verify:')) {
+      const example = await (await api(`askcaboodleadmin/prompts/${id}/verify`, { method: 'POST', body: { messageId: action.slice(7) } })).json();
+      state.promptRuns.delete(id);
+      toast(`Verified: the run's answer is a verified example for the ${example.scope === 'organization' ? 'organization' : 'brand'}.`);
+      await loadPrompts();
+    } else if (action === 'unverify') {
+      await api(`askcaboodleadmin/prompts/${id}/verify`, { method: 'DELETE' });
+      toast('No longer verified. Its example stays in the library.');
+      await loadPrompts();
     } else if (action === 'approve' || action === 'reject') {
       const note = action === 'reject' ? window.prompt('A note for the author (optional):', '') : null;
       if (action === 'reject' && note === null) return;
@@ -2051,6 +2146,230 @@ async function onPromptAction(id, action) {
   } catch (error) {
     toast(error.message);
   }
+}
+
+/* ---------- verified examples (C5, platform admins) ---------- */
+
+const EXAMPLE_FILTERS = [['proposed', 'Proposed'], ['verified', 'Verified'], ['broken', 'Broken'], ['review-again', 'Review again'], ['rejected', 'Rejected']];
+const EXAMPLE_STATUS = { proposed: ['warn', 'proposed'], verified: ['ok', 'verified'], broken: ['err', 'broken'], 'review-again': ['warn', 'catalog changed'], rejected: ['err', 'rejected'] };
+const EXAMPLE_SCOPES = { brand: 'Its brand only', organization: 'Its organization', everyone: 'Every brand' };
+const STARTER_CHECKS = ['sales', 'distributors', 'promotions-next-three-months', 'promotions-next-year', 'approved-plan-this-year', 'sandbox-plan-this-year', 'category-reviews'];
+
+function showExamples(focusId) {
+  if (state.running) {
+    toast('Wait for the answer to finish.');
+    return;
+  }
+
+  hidePins();
+  hideGallery();
+  state.examples.open = true;
+  $('#convo').hidden = true;
+  $('#examples').hidden = false;
+  $('#composerWrap').hidden = true;
+  $('#convTitle').textContent = 'Verified examples';
+  $('#renameTitle').hidden = true;
+  $('#questionsLeft').hidden = true;
+  if (focusId) {
+    state.examples.filter = 'proposed';
+    state.examples.selected = focusId;
+    loadExample(focusId);
+  }
+
+  renderExamples();
+  loadExamples();
+}
+
+function hideExamples() {
+  if (!state.examples.open) return;
+  state.examples.open = false;
+  $('#examples').hidden = true;
+  $('#convo').hidden = false;
+  $('#composerWrap').hidden = false;
+  showConversationHeader();
+}
+
+let examplesRequest = 0;
+async function loadExamples() {
+  const request = ++examplesRequest;
+  const examples = state.examples;
+  try {
+    const list = await (await api(`askcaboodleadmin/examples?filter=${encodeURIComponent(examples.filter)}`)).json();
+    if (request !== examplesRequest) return;
+    examples.list = list.examples;
+    examples.counts = list.counts;
+    examples.error = null;
+  } catch (error) {
+    if (request !== examplesRequest) return;
+    examples.error = error.message;
+  }
+
+  renderExamples();
+}
+
+async function loadExample(id) {
+  const examples = state.examples;
+  examples.selected = id;
+  examples.detail = null;
+  examples.detailError = null;
+  renderExamples();
+  try {
+    const detail = await (await api(`askcaboodleadmin/examples/${id}`)).json();
+    if (examples.selected === id) examples.detail = detail;
+  } catch (error) {
+    if (examples.selected === id) examples.detailError = error.message;
+  }
+
+  renderExamples();
+}
+
+function exampleStatusPill(status) {
+  const [tone, text] = EXAMPLE_STATUS[status] || ['', status];
+  return `<span class="pill ${tone}">${esc(text)}</span>`;
+}
+
+function renderExamples() {
+  const examples = state.examples;
+  if (!examples.open) return;
+  const tabs = EXAMPLE_FILTERS.map(([key, label]) => `<button class="tab ${key === examples.filter ? 'on' : ''}" type="button" role="tab" aria-selected="${key === examples.filter}" data-ex-tab="${key}">${label}<span class="count">${examples.counts[key] ?? 0}</span></button>`).join('');
+  let list;
+  if (examples.error) list = `<div class="error-box">${esc(examples.error)}</div>`;
+  else if (!examples.list) list = '<div class="row muted"><span class="spin"></span>Loading the library…</div>';
+  else list = examples.list.map(example => `
+    <button class="ex-card ${example.id === examples.selected ? 'on' : ''}" type="button" data-ex="${esc(example.id)}">
+      <span>${esc(example.question)}</span>
+      <span class="ex-meta">${exampleStatusPill(example.status)}<span>${esc(example.source)}${example.sourceReference ? ` ${esc(example.sourceReference)}` : ''}</span><span>· ${esc(EXAMPLE_SCOPES[example.scope] || example.scope)}</span>
+        ${example.starterTopic ? `<span class="verified">starter: ${esc(example.starterTopic)}</span>` : ''}${example.hasCalls ? '' : '<span>· no calls (a starter only)</span>'}${example.forPlatformAdmin ? '<span>· platform admins</span>' : ''}</span>
+    </button>`).join('') || '<p class="muted">Nothing here.</p>';
+
+  const similar = examples.similar;
+  const matches = !similar ? '' : similar.error ? `<div class="error-box">${esc(similar.error)}</div>` : `
+    <div class="ex-matches"><span class="muted">Read as: <span class="mono">${esc(similar.normalized)}</span> · ${similar.limit ? `given at ${similar.minimumScore} or above, ${similar.limit} at most` : 'examples are switched off (ExamplesPerQuestion = 0), so none is given'}</span>
+      ${similar.matches.length ? similar.matches.map(match => `<div class="${match.given ? 'given' : ''}">${Number(match.score).toFixed(3)} ${exampleStatusPill(match.status)} ${match.given ? '✓ given · ' : ''}${esc(match.template)}${match.sourceReference ? ` <span class="muted">${esc(match.sourceReference)}</span>` : ''}</div>`).join('') : '<div class="muted">No example the brand may be shown.</div>'}</div>`;
+
+  $('#examples').innerHTML = `
+    <div class="board-head"><h2>Verified examples</h2><span class="muted">Questions with the calls that answered them right, shown to the model with similar questions · platform admins only · no AI call</span>
+      <button class="btn-link" type="button" data-ex-act="back">Back to the conversation</button></div>
+    <form class="ex-similar" data-ex-similar><input class="field" data-ex-question placeholder="Which examples would this question get? (for the brand picked)" value="${esc(examples.question)}"><button class="btn" type="submit">Find</button></form>
+    ${matches}
+    <div class="tabs" role="tablist">${tabs}</div>
+    <div class="ex-layout"><div class="ex-list">${list}</div><div>${exampleDetailHtml()}</div></div>`;
+  drawExampleAnswer();
+}
+
+function exampleDetailHtml() {
+  const examples = state.examples;
+  if (!examples.selected) return '<p class="muted">Pick an example to see its calls and the answer it came from.</p>';
+  if (examples.detailError) return `<div class="error-box">${esc(examples.detailError)}</div>`;
+  const example = examples.detail;
+  if (!example) return '<div class="row muted"><span class="spin"></span>Loading the example…</div>';
+  const answer = example.answer;
+  const verify = example.status !== 'verified' ? '<button class="btn btn-primary" type="button" data-ex-act="verify">Verify: the answer is right</button>' : '';
+  const reject = example.status !== 'rejected' ? '<button class="btn" type="button" data-ex-act="reject">Reject: it is wrong</button>' : '';
+  const headline = answer?.headline ? `<div class="headline"><div class="hl-val">${esc(answer.headline.display)}</div><div class="hl-lbl">${esc(answer.headline.label)}${answer.headline.rowLabel ? ` · ${esc(answer.headline.rowLabel)}` : ''}</div></div>` : '';
+  const notes = [['Scope', answer?.notes?.scope], ['Period', answer?.notes?.period], ['Source', answer?.notes?.source]].filter(([, value]) => value);
+  const answerHtml = answer
+    ? `<div class="muted">${answer.run ? `From the test run ${esc(answer.run)} (${esc(utc(answer.askedOn).toLocaleDateString())}), which passed the automatic checks against the database.` : `Asked ${esc(utc(answer.askedOn).toLocaleString())}.`}</div>
+      <div class="ex-answer"><strong>${esc(answer.question)}</strong>${headline}${notes.length ? `<div class="notes">${notes.map(([key, value]) => `<div class="note"><b>${key}</b><span>${esc(value)}</span></div>`).join('')}</div>` : ''}${markdown(answer.text || '')}<div data-ex-answer-data></div></div>`
+    : `<p class="muted">${example.calls.length ? 'No answer is stored for it.' : 'A suggested question only: it has no answer and is never given to the model.'}</p>`;
+  const who = example.scope === 'everyone' ? 'Every brand can get this example.' : example.scope === 'organization' ? 'Only the brands of its organization can get this example.' : 'Only the brand it was asked on can get this example.';
+  return `<article class="ex-detail">
+    <div class="row"><h3 class="grow">${esc(example.question)}</h3>${exampleStatusPill(example.status)}</div>
+    <div class="muted">${esc(example.source)}${example.sourceReference ? ` ${esc(example.sourceReference)}` : ''}${example.reviewNote ? ` · note: ${esc(example.reviewNote)}` : ''}${example.lastCheckedOn ? ` · checked ${esc(utc(example.lastCheckedOn).toLocaleString())}` : ''}</div>
+    ${example.brokenReason ? `<div class="error-box">Broken: ${esc(BROKEN_REASONS[example.brokenReason] || example.brokenReason)}${example.brokenDetail ? `: ${esc(example.brokenDetail)}` : ''}</div>` : ''}
+    ${example.status === 'review-again' ? '<div class="leftovers">The catalog of its tables changed since it was verified: check its calls and verify it again.</div>' : ''}
+    <h4>1. Is this answer right?</h4>
+    ${answerHtml}
+    <h4>2. Who can get it?</h4>
+    <div class="row"><span class="grow">${who}</span><select class="field" data-ex-scope aria-label="Who can get it">${Object.entries(EXAMPLE_SCOPES).map(([key, label]) => `<option value="${key}" ${key === example.scope ? 'selected' : ''} ${key !== 'brand' && !example.canBeShared ? 'disabled' : ''}>${label}</option>`).join('')}</select></div>
+    ${example.canBeShared ? '' : `<div class="leftovers">It mentions this brand's own products or codes (${example.leftovers.map(esc).join(', ')}), so only that brand can get it.</div>`}
+    <div class="row">${verify}${reject}</div>
+    <details><summary>Technical details (for engineers)</summary>
+      <h4>Reusable wording</h4>
+      <textarea class="field" rows="2" data-ex-template>${esc(example.template)}</textarea>
+      <div class="muted">Fill-ins: ${example.slots.length ? example.slots.map(slot => `<span class="mono">{${esc(slot.name)}}</span> ${esc(slot.label)}`).join(', ') : 'none'}</div>
+      <h4>Calls, as the model reads them</h4>
+      ${example.calls.length ? example.calls.map(call => `<pre>${esc(call.text)}</pre>`).join('') : '<p class="muted">No calls: it is a starter only.</p>'}
+      ${example.shown ? `<div class="muted">${esc(example.shown)}</div>` : ''}
+      <div class="muted">Tables: ${example.tables.map(esc).join(', ') || '–'}</div>
+      <div class="row"><button class="btn" type="button" data-ex-act="check">Re-check now</button></div>
+    </details>
+    <details ${example.starterTopic ? 'open' : ''}><summary>Also suggest it on the empty screen</summary>
+      <div class="row"><input class="field" data-ex-topic placeholder="Topic, e.g. Sales" value="${esc(example.starterTopic || '')}" maxlength="40"></div>
+      <div class="chips">${STARTER_CHECKS.map(check => `<label><input type="checkbox" data-ex-check="${check}" ${example.starterData.includes(check) ? 'checked' : ''}> ${esc(check)}</label>`).join(' ')}</div>
+      ${example.starterTopic ? '<div class="row"><button class="btn-link" type="button" data-ex-act="unstarter">Stop offering it as a starter</button></div>' : ''}
+    </details>
+    <div class="row"><button class="btn" type="button" data-ex-act="save">Save changes</button><button class="btn-link" type="button" data-ex-act="delete">Delete</button></div>
+  </article>`;
+}
+
+// The answer's table, drawn as in the conversation.
+function drawExampleAnswer() {
+  const examples = state.examples;
+  examples.display?.chart?.destroy();
+  examples.display = null;
+  const host = document.querySelector('#examples [data-ex-answer-data]');
+  const data = examples.detail?.answer?.data;
+  if (!host || !data) return;
+  examples.display = { revealed: true, view: null, chart: null, animateReveal: false, el: { data: host }, data };
+  renderData(examples.display);
+}
+
+async function onExampleAction(action) {
+  const examples = state.examples;
+  const example = examples.detail;
+  if (action === 'back') {
+    hideExamples();
+    return;
+  }
+
+  if (!example) return;
+  const host = $('#examples');
+  try {
+    if (action === 'verify' || action === 'reject') {
+      const note = window.prompt(action === 'verify' ? 'A note (optional): what did you check?' : 'Why is it rejected? (optional)', '');
+      if (note === null) return;
+      examples.detail = await (await api(`askcaboodleadmin/examples/${example.id}/review`, { method: 'POST', body: { decision: action, note: note || null } })).json();
+      toast(action === 'verify' ? 'Verified: similar questions get it from now on.' : 'Rejected.');
+    } else if (action === 'check') {
+      const check = await (await api(`askcaboodleadmin/examples/${example.id}/check`, { method: 'POST' })).json();
+      toast(check.result === 'ok' ? `Its calls ran: ${check.calls.map(call => `${call.rows ?? '–'} rows in ${call.milliseconds} ms`).join(', ') || 'nothing to run'}${check.catalogChanged ? ' · its catalog changed: verify it again' : ''}.`
+        : check.result === 'broken' ? `Broken: ${BROKEN_REASONS[check.brokenReason] || check.brokenReason}.` : check.detail);
+      await loadExample(example.id);
+    } else if (action === 'delete') {
+      if (!confirm('Delete this example for good? A seeded one won\'t come back.')) return;
+      await api(`askcaboodleadmin/examples/${example.id}`, { method: 'DELETE' });
+      examples.selected = null;
+      examples.detail = null;
+      toast('Deleted.');
+    } else if (action === 'save' || action === 'unstarter') {
+      const body = action === 'unstarter' ? { starterTopic: '' } : {
+        template: host.querySelector('[data-ex-template]').value,
+        scope: host.querySelector('[data-ex-scope]').value,
+        starterTopic: host.querySelector('[data-ex-topic]').value.trim() || (example.starterTopic ? '' : null),
+        starterData: [...host.querySelectorAll('[data-ex-check]:checked')].map(box => box.dataset.exCheck),
+      };
+      examples.detail = await (await api(`askcaboodleadmin/examples/${example.id}`, { method: 'PUT', body })).json();
+      toast('Saved.');
+    }
+  } catch (error) {
+    toast(error.message);
+  }
+
+  await loadExamples();
+}
+
+async function findSimilar() {
+  const examples = state.examples;
+  examples.question = $('#examples').querySelector('[data-ex-question]').value.trim();
+  if (!examples.question) return;
+  try {
+    examples.similar = await (await api(`askcaboodleadmin/examples/similar?question=${encodeURIComponent(examples.question)}`)).json();
+  } catch (error) {
+    examples.similar = { error: error.message };
+  }
+
+  renderExamples();
 }
 
 /* ---------- the prompt form (C4) ---------- */
@@ -2736,6 +3055,25 @@ $('#convo').addEventListener('click', event => {
   }
 });
 $('#showGallery').addEventListener('click', showGallery);
+$('#showExamples').addEventListener('click', () => showExamples());
+$('#examples').addEventListener('click', event => {
+  const tab = event.target.closest('[data-ex-tab]');
+  if (tab) {
+    state.examples.filter = tab.dataset.exTab;
+    state.examples.list = null;
+    renderExamples();
+    loadExamples();
+  }
+
+  const card = event.target.closest('[data-ex]');
+  if (card) loadExample(card.dataset.ex);
+  const action = event.target.closest('[data-ex-act]');
+  if (action) onExampleAction(action.dataset.exAct);
+});
+$('#examples').addEventListener('submit', event => {
+  event.preventDefault();
+  findSimilar();
+});
 $('#gallery').addEventListener('click', event => {
   const target = event.target;
   const gallery = target.closest('[data-gal]');
@@ -3041,6 +3379,7 @@ if (params.get('session')) openSession(params.get('session'));
 else if (params.get('ask')) ask(params.get('ask'));
 else if (params.get('pins') === '1' && state.token) loadPins().then(() => showPins());
 else if (params.get('gallery') === '1' && state.token) showGallery();
+else if (params.get('examples') === '1' && state.token) showExamples();
 
 window.askCaboodleTest = {
   state,
