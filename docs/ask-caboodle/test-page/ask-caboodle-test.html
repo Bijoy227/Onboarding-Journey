@@ -669,7 +669,8 @@ async function searchBrands(text) {
   }
 
   try {
-    const response = await api(`brands?brandName=${encodeURIComponent(text)}&PageSize=20`);
+    // sortingOrder is the backend's default (Constants.SORTINGORDER); .NET 6 treats the non-nullable parameter as required.
+    const response = await api(`brands?brandName=${encodeURIComponent(text)}&PageSize=20&sortingOrder=ASC`);
     const page = await response.json();
     const brands = page.data || page.items || [];
     list.innerHTML = brands.length

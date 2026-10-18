@@ -14,11 +14,12 @@ Written 2026-10-19, after C6.1 (commit `ed309b8c`, eval reports `714ba095`), wit
 
 ## Waiting for the owner (from C6.1, 2026-10-19)
 
-- **Q71's category total and two pattern claims** (plan §7.2): it answered from SPINS Item Ranking as it should, but summed only the items with a year-ago change ($61.7M, not $62.6M), and said growth was "concentrated in a few items" and "driven by distribution". These are C0c's kind. Option now: one free catalog line on category totals, then re-check Q71 once (about $0.14). Otherwise they wait for C0c.
+- **Q71's category total and two pattern claims** (plan §7.2): it answered from SPINS Item Ranking as it should, but summed only the items with a year-ago change ($61.7M, not $62.6M), and said growth was "concentrated in a few items" and "driven by distribution". These are C0c's kind. **Decided (owner): left for C0c.**
 - **Q25's wording slip** (plan §7.2): "I can't tell which promotions are cancelled", when the data marks 67. It isn't caused by the line, so it's noted and should be watched in the next full run.
 - **Remember (owner):** the hourly SPINS check reads both SPINS tables whole (no brand index). Time it on staging before go-live (BE runbook checklist 6b, query 6; plan §11).
 - **DI15:** Primal Kitchen's Item Ranking holds Dr. Tung's store-level rows. Ask which file was meant. Until then, its data line says it has Item Ranking data.
-- **Not run (offered):** Q01 and Q10 as controls for the new glossary entry (about $0.12), and Q26 with web search for the changed web rule (about $0.13).
+- **Not run, by the owner's choice ("no need if optional"):** Q01 and Q10 as controls for the new glossary entry, and Q26 with web search for the changed web rule.
+- **Test page fix (owner, 2026-10-19):** changing brand failed with "sortingOrder is required": `GET brands` declares a non-nullable `string sortingOrder` with a default, and .NET 6 treats it as required. The page now sends `sortingOrder=ASC` (the backend's `Constants.SORTINGORDER`).
 - **Try it live:** rebuild and restart the API (no migration). The glossary changed, so the first question writes the hourly cache again (about $0.06). On Rise & Puff, ask "How do we rank in our category?". On Bubbies, "What's trending in frozen novelties nationally?" should name only Bubbies' data and offer web search.
 
 ## Waiting for the owner (from C6, 2026-10-19)
