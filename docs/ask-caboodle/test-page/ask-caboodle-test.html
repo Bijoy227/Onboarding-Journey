@@ -24,7 +24,10 @@
   C6: "Search the web" for a new conversation (platform admins, while the platform switch in the rail is on), "Web search
   on" for a conversation started with it, the fixed banner and the cited sources under a public_web or mixed answer, the
   searches in the run trace, "Search the web for this" under a market question asked without it, and web_search_unavailable.
-  Test parameters: ?api=<url>&token=<jwt>&brand=<id>&ask=<question>&session=<id>&trace=1&pins=1&gallery=1&examples=1
+  C7: saved names. After choosing an option in a clarify that offers it, "Remember 'Fresh Market' as The Fresh Market for
+  your organization?" (for every organization outside one); a Saved names board in the rail (the organization's names and
+  Caboodle's, who saved each, Remove, and Add a name for admins); the saved name a search matched, in the run trace.
+  Test parameters: ?api=<url>&token=<jwt>&brand=<id>&ask=<question>&session=<id>&trace=1&pins=1&gallery=1&examples=1&aliases=1
 -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js"></script>
@@ -271,6 +274,16 @@ table.dt { border-collapse: collapse; width: 100%; font-size: 13px; }
 .pins-rail .open .pill { display: inline-flex; margin-right: 6px; vertical-align: 1px; }
 .board { max-width: 980px; margin: 0 auto; padding: 22px 26px 30px; display: grid; gap: 16px; }
 .board-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.remember-offer { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 2px 0 12px; padding: 8px 10px; border: 1px dashed var(--line); border-radius: 8px; font-size: 13px; }
+.remember-offer .error-text { color: var(--err); flex-basis: 100%; }
+.aliases-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 8px; }
+.aliases-table th, .aliases-table td { padding: 7px 8px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+.aliases-table th { font-size: 12px; color: var(--text-3); font-weight: 600; }
+.alias-add { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; margin: 12px 0; padding: 10px; border: 1px solid var(--line); border-radius: 8px; }
+.alias-add label { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--text-3); }
+.alias-add .grow { flex: 1; min-width: 180px; }
+.alias-add .brand-results { flex-basis: 100%; }
+@media (max-width: 640px) { .aliases-table th:nth-child(4), .aliases-table td:nth-child(4) { display: none; } }
 .board-head h2 { margin: 0; font-size: 20px; font-weight: 600; flex: 1; }
 .pin-card { border: 1px solid var(--line); border-radius: 10px; background: var(--surface); padding: 12px 14px; min-width: 0; }
 .pin-card.broken { border-color: var(--err); }
@@ -428,6 +441,7 @@ input.var-pill { width: 9em; }
     <div class="hist-head"><span>Pinned reports</span><button class="btn-link" id="showPins" type="button">Open board</button></div>
     <ul class="history pins-rail" id="pinsRail"></ul>
     <div class="hist-head"><span>Prompt gallery</span><button class="btn-link" id="showGallery" type="button">Open</button></div>
+    <div class="hist-head"><span>Saved names</span><button class="btn-link" id="showAliases" type="button">Open</button></div>
     <div class="hist-head" id="examplesHead" hidden><span>Verified examples</span><button class="btn-link" id="showExamples" type="button">Open</button></div>
     <div class="hist-head" id="webSettingHead" hidden><span>Web search</span><label class="web-setting" title="The platform setting: lets platform admins start conversations with Search the web"><input type="checkbox" id="webSetting"> on for platform admins</label></div>
     <div class="hist-head"><span>Conversations</span><button class="btn-link" id="newChat" type="button">New</button></div>
@@ -449,7 +463,7 @@ input.var-pill { width: 9em; }
       </label>
       <button class="btn" id="traceToggle" type="button">Run trace</button>
     </header>
-    <div class="scroll" id="scroll"><div class="convo" id="convo"></div><div class="board" id="board" hidden></div><div class="board" id="gallery" hidden></div><div class="board" id="examples" hidden></div></div>
+    <div class="scroll" id="scroll"><div class="convo" id="convo"></div><div class="board" id="board" hidden></div><div class="board" id="gallery" hidden></div><div class="board" id="examples" hidden></div><div class="board" id="aliases" hidden></div></div>
     <footer class="composer-wrap" id="composerWrap">
       <div class="picker" id="picker" role="listbox" aria-label="Saved prompts" hidden></div>
       <div class="status" id="status"></div>
@@ -529,6 +543,7 @@ const state = {
   picker: { items: null, key: null, error: null, index: 0, shown: [] },
   pickedPrompt: null,
   examples: { open: false, filter: 'proposed', list: null, counts: {}, error: null, selected: null, detail: null, detailError: null, similar: null, question: '' },
+  aliases: { open: false, data: null, error: null, adding: { alias: '', type: 'Retailer', search: '', results: [], pick: null, error: null, busy: false } },
   promptRuns: new Map(),
 };
 
@@ -721,6 +736,7 @@ async function openSession(id) {
     const session = await (await api(`askcaboodle/sessions/${id}`)).json();
     hidePins();
     hideGallery();
+    hideAliases();
     resetConversation();
     state.sessionId = session.id;
     state.sessionSaved = true;
@@ -1232,11 +1248,61 @@ function renderFrame(answer) {
 
   const options = frame.kind === 'clarify' && answer.revealed ? frame.options || [] : [];
   answer.el.options.innerHTML = options.length
-    ? `<div class="options ${answer.animateReveal ? 'reveal' : ''}">${options.map(option => `<button class="option" type="button" data-option="${esc(option.label)}"><b>${esc(option.label)}</b>${option.detail ? `<small>${esc(option.detail)}</small>` : ''}</button>`).join('')}</div>`
+    ? `<div class="options ${answer.animateReveal ? 'reveal' : ''}">${options.map((option, index) => `<button class="option" type="button" data-option="${esc(option.label)}" data-index="${index}"><b>${esc(option.label)}</b>${option.detail ? `<small>${esc(option.detail)}</small>` : ''}</button>`).join('')}</div>${rememberOfferHtml(answer)}`
     : '';
   for (const button of answer.el.options.querySelectorAll('[data-option]')) {
-    button.addEventListener('click', () => ask(button.dataset.option));
+    button.addEventListener('click', () => {
+      offerToRemember(answer, Number(button.dataset.index));
+      ask(button.dataset.option);
+    });
   }
+
+  answer.el.options.querySelector('[data-offer-save]')?.addEventListener('click', () => saveOffer(answer));
+  answer.el.options.querySelector('[data-offer-dismiss]')?.addEventListener('click', () => {
+    answer.offer.state = 'dismissed';
+    renderFrame(answer);
+  });
+  answer.el.options.querySelector('[data-offer-open]')?.addEventListener('click', () => showAliases());
+}
+
+// C7: an option the person may save carries remember (the server checked it against the name search); once they pick it,
+// offer to save their word. The server reads the name back from the stored answer, so only the indexes go out.
+function offerToRemember(answer, index) {
+  const remember = (answer.frame?.options || [])[index]?.remember;
+  if (!remember || !answer.messageId || !state.sessionId || answer.offer?.state === 'saved') return;
+  answer.offer = { index, remember, sessionId: state.sessionId, messageId: answer.messageId, state: 'asking', error: null };
+  renderFrame(answer);
+}
+
+function rememberOfferHtml(answer) {
+  const offer = answer.offer;
+  if (!offer || offer.state === 'dismissed') return '';
+  const { remember } = offer;
+  const whom = remember.scope === 'caboodle' ? 'for every organization' : 'for your organization';
+  if (offer.state === 'saved') {
+    return `<div class="remember-offer" data-offer><span>Saved: Ask Caboodle now reads “${esc(remember.term)}” as ${esc(remember.entityName)} ${whom}.</span><button class="btn-link" type="button" data-offer-open>Saved names</button></div>`;
+  }
+
+  return `<div class="remember-offer" data-offer><span>Remember “${esc(remember.term)}” as <b>${esc(remember.entityName)}</b> ${whom}?</span>
+    <button class="btn btn-primary" type="button" data-offer-save ${offer.state === 'saving' ? 'disabled' : ''}>Remember</button>
+    <button class="btn" type="button" data-offer-dismiss>Not now</button>${offer.error ? `<span class="error-text">${esc(offer.error)}</span>` : ''}</div>`;
+}
+
+async function saveOffer(answer) {
+  const offer = answer.offer;
+  offer.state = 'saving';
+  offer.error = null;
+  renderFrame(answer);
+  try {
+    await api('askcaboodle/aliases', { method: 'POST', body: { sessionId: offer.sessionId, messageId: offer.messageId, option: offer.index } });
+    offer.state = 'saved';
+    state.aliases.data = null;
+  } catch (error) {
+    offer.state = 'asking';
+    offer.error = error.message;
+  }
+
+  renderFrame(answer);
 }
 
 function formatValue(value, format) {
@@ -1621,7 +1687,7 @@ function callDetail(call) {
   const detail = call.detail;
   if (!detail) return '<div class="muted">No detail for this call.</div>';
   let html = '';
-  if (detail.matches) html += `<h5>Matched names</h5>${detail.matches.length ? `<ul>${detail.matches.map(match => `<li>${esc(match.name)} <span class="muted">${esc(match.type)}</span></li>`).join('')}</ul>` : '<div class="muted">No match.</div>'}`;
+  if (detail.matches) html += `<h5>Matched names</h5>${detail.matches.length ? `<ul>${detail.matches.map(match => `<li>${esc(match.name)} <span class="muted">${esc(match.type)}</span>${match.savedName ? ` <span class="pill ok">saved name “${esc(match.savedName)}”</span>` : ''}</li>`).join('')}</ul>` : '<div class="muted">No match.</div>'}`;
   if (detail.tables) html += `<h5>Tables</h5><div class="mono">${detail.tables.map(esc).join(', ')}</div>`;
   if (detail.sql) html += `<h5>SQL</h5><pre>${esc(detail.sql)}</pre>`;
   if (detail.error) html += `<h5>Error</h5><pre class="err">${esc(detail.error)}</pre>`;
@@ -1768,6 +1834,7 @@ function showPins(focusId) {
 
   hideGallery();
   hideExamples();
+  hideAliases();
   state.board = true;
   $('#convo').hidden = true;
   $('#board').hidden = false;
@@ -2007,6 +2074,7 @@ function showGallery() {
 
   hidePins();
   hideExamples();
+  hideAliases();
   state.gallery = true;
   $('#convo').hidden = true;
   $('#gallery').hidden = false;
@@ -2306,6 +2374,7 @@ function showExamples(focusId) {
 
   hidePins();
   hideGallery();
+  hideAliases();
   state.examples.open = true;
   $('#convo').hidden = true;
   $('#examples').hidden = false;
@@ -2321,6 +2390,158 @@ function showExamples(focusId) {
 
   renderExamples();
   loadExamples();
+}
+
+// C7: the saved names board. Admins add a name directly, finding the entity with C4's values lookup.
+const ALIAS_TYPES = [['Retailer', 'retailer'], ['Banner', 'banner'], ['Distributor', 'distributor'], ['Region', 'region'], ['Product', 'product'], ['Category', 'category'], ['Promotion', 'promotion'], ['Brand', 'brand']];
+const entityLabel = type => type.replace(/(?<=[a-z])(?=[A-Z])/g, ' ').toLowerCase();
+
+function showAliases() {
+  if (state.running) {
+    toast('Wait for the answer to finish.');
+    return;
+  }
+
+  hidePins();
+  hideGallery();
+  hideExamples();
+  state.aliases.open = true;
+  $('#convo').hidden = true;
+  $('#aliases').hidden = false;
+  $('#composerWrap').hidden = true;
+  $('#convTitle').textContent = 'Saved names';
+  $('#renameTitle').hidden = true;
+  $('#questionsLeft').hidden = true;
+  renderAliases();
+  loadAliases();
+}
+
+function hideAliases() {
+  if (!state.aliases.open) return;
+  state.aliases.open = false;
+  $('#aliases').hidden = true;
+  $('#convo').hidden = false;
+  $('#composerWrap').hidden = false;
+  showConversationHeader();
+}
+
+let aliasesRequest = 0;
+async function loadAliases() {
+  const request = ++aliasesRequest;
+  try {
+    const data = await (await api('askcaboodle/aliases')).json();
+    if (request !== aliasesRequest) return;
+    state.aliases.data = data;
+    state.aliases.error = null;
+  } catch (error) {
+    if (request !== aliasesRequest) return;
+    state.aliases.error = error.message;
+  }
+
+  renderAliases();
+}
+
+function renderAliases() {
+  const aliases = state.aliases;
+  if (!aliases.open) return;
+  const data = aliases.data;
+  const where = !data ? ''
+    : data.scope === 'organization' ? 'Names saved now are your organization’s.'
+    : data.scope === 'caboodle' ? 'You are outside any organization, so names saved now are Caboodle’s, for every organization.'
+    : 'Pick an organization to save names for it.';
+  const table = !data ? '<p class="muted">Loading…</p>'
+    : !data.names.length ? '<p class="muted">No saved names yet. When Ask Caboodle asks which one you meant, choosing one offers to remember your word.</p>'
+    : `<table class="aliases-table"><thead><tr><th>Name</th><th>Stands for</th><th>Whose</th><th>Saved</th><th></th></tr></thead><tbody>${data.names.map(name => `<tr>
+        <td><b>${esc(name.alias)}</b></td>
+        <td>${esc(name.entityName)} <span class="muted">${esc(entityLabel(name.entityType))}${name.brandId ? ' · its brand only' : ''}</span></td>
+        <td>${name.scope === 'caboodle' ? '<span class="pill">Caboodle</span>' : '<span class="pill ok">Your organization</span>'}</td>
+        <td class="muted">${esc(name.savedBy || '–')} · ${esc(new Date(name.savedOn).toLocaleDateString())}</td>
+        <td>${name.canRemove ? `<button class="btn-link" type="button" data-alias-remove="${esc(name.id)}" data-alias-label="${esc(name.alias)}">Remove</button>` : ''}</td></tr>`).join('')}</tbody></table>`;
+  $('#aliases').innerHTML = `<div class="board-head"><h2>Saved names</h2><span class="muted">${data ? `${data.names.length} of ${data.limit} · ` : ''}your words for retailers, products and more, which Ask Caboodle reads without asking</span>
+      <button class="btn" type="button" data-alias-back>Back to the conversation</button></div>
+    ${aliases.error ? `<div class="error-box">${esc(aliases.error)}</div>` : ''}
+    <p class="muted">${esc(where)}</p>${data?.canAdd ? aliasFormHtml() : ''}${table}`;
+}
+
+function aliasFormHtml() {
+  const adding = state.aliases.adding;
+  const typeName = ALIAS_TYPES.find(([value]) => value === adding.type)?.[1] || 'retailer';
+  return `<form class="alias-add" data-alias-add>
+    <label>Name<input class="field" data-alias-name value="${esc(adding.alias)}" maxlength="60" placeholder="e.g. TJR" style="width:140px"></label>
+    <label>Type<select class="field" data-alias-type>${ALIAS_TYPES.map(([value, label]) => `<option value="${value}" ${value === adding.type ? 'selected' : ''}>${label}</option>`).join('')}</select></label>
+    <label class="grow">Stands for<input class="field" data-alias-search value="${esc(adding.pick ? adding.pick.label : adding.search)}" placeholder="Search ${esc(typeName)} names (this brand's first)" autocomplete="off"></label>
+    <button class="btn btn-primary" type="submit" data-alias-submit ${adding.pick && adding.alias.trim() && !adding.busy ? '' : 'disabled'}>Add name</button>
+    <ul class="brand-results" data-alias-results ${adding.results.length && !adding.pick ? '' : 'hidden'}>${aliasResultsHtml()}</ul>
+    ${adding.error ? `<div class="error-box" style="flex-basis:100%">${esc(adding.error)}</div>` : ''}
+  </form>`;
+}
+
+function aliasResultsHtml() {
+  return state.aliases.adding.results.map((value, index) => `<li><button type="button" data-alias-pick="${index}">${esc(value.label)} <small class="muted">${esc(value.detail || '')}${value.inBrandData ? '' : ' · not in this brand\'s data'}</small></button></li>`).join('');
+}
+
+function updateAliasForm() {
+  const host = $('#aliases');
+  const adding = state.aliases.adding;
+  const list = host.querySelector('[data-alias-results]');
+  if (list) {
+    list.innerHTML = aliasResultsHtml();
+    list.hidden = !adding.results.length || !!adding.pick;
+  }
+
+  const submit = host.querySelector('[data-alias-submit]');
+  if (submit) submit.disabled = !(adding.pick && adding.alias.trim() && !adding.busy);
+}
+
+let aliasSearchTimer;
+let aliasSearchRequest = 0;
+async function searchAliasEntities(text) {
+  const request = ++aliasSearchRequest;
+  const adding = state.aliases.adding;
+  const type = ALIAS_TYPES.find(([value]) => value === adding.type)?.[1];
+  try {
+    const { values = [] } = await (await api(`askcaboodle/prompts/values?type=${encodeURIComponent(type)}&search=${encodeURIComponent(text.trim())}`)).json();
+    if (request !== aliasSearchRequest) return;
+    adding.results = values.slice(0, 12);
+  } catch (error) {
+    if (request !== aliasSearchRequest) return;
+    adding.results = [];
+    adding.error = error.message;
+    renderAliases();
+    return;
+  }
+
+  updateAliasForm();
+}
+
+async function addAlias() {
+  const adding = state.aliases.adding;
+  if (!adding.pick || !adding.alias.trim()) return;
+  adding.busy = true;
+  adding.error = null;
+  updateAliasForm();
+  try {
+    const saved = await (await api('askcaboodle/aliases', { method: 'POST', body: { alias: adding.alias.trim(), entityType: adding.type, entityId: adding.pick.value } })).json();
+    state.aliases.adding = { alias: '', type: adding.type, search: '', results: [], pick: null, error: null, busy: false };
+    toast(`Saved: “${saved.alias}” now stands for ${saved.entityName}.`);
+    await loadAliases();
+  } catch (error) {
+    adding.busy = false;
+    adding.error = error.message;
+    renderAliases();
+  }
+}
+
+async function removeAlias(id, label) {
+  if (!confirm(`Remove the saved name “${label}”? Ask Caboodle will stop reading it.`)) return;
+  try {
+    await api(`askcaboodle/aliases/${id}`, { method: 'DELETE' });
+    toast(`Removed “${label}”.`);
+  } catch (error) {
+    state.aliases.error = error.message;
+  }
+
+  await loadAliases();
 }
 
 function hideExamples() {
@@ -3002,6 +3223,7 @@ function newConversation() {
   if (state.running) return false;
   hidePins();
   hideGallery();
+  hideAliases();
   state.webNext = false;
   resetConversation();
   $('#convo').innerHTML = `<div class="empty"><h2>Ask about your Caboodle data</h2><p class="muted">Each question is a real one: about $0.04, counted in today's questions. A conversation takes 20 questions, and its first answer gives it a short title (about $0.00003 more).</p>
@@ -3212,6 +3434,49 @@ $('#webToggle').addEventListener('click', () => {
 $('#webSetting').addEventListener('change', event => saveWebSetting(event.target.checked));
 $('#showGallery').addEventListener('click', showGallery);
 $('#showExamples').addEventListener('click', () => showExamples());
+$('#showAliases').addEventListener('click', () => showAliases());
+$('#aliases').addEventListener('click', event => {
+  const target = event.target;
+  if (target.closest('[data-alias-back]')) hideAliases();
+  const remove = target.closest('[data-alias-remove]');
+  if (remove) removeAlias(remove.dataset.aliasRemove, remove.dataset.aliasLabel);
+  const pick = target.closest('[data-alias-pick]');
+  if (pick) {
+    const adding = state.aliases.adding;
+    adding.pick = adding.results[Number(pick.dataset.aliasPick)];
+    renderAliases();
+  }
+});
+$('#aliases').addEventListener('input', event => {
+  const target = event.target;
+  const adding = state.aliases.adding;
+  if (target.matches('[data-alias-name]')) {
+    adding.alias = target.value;
+    updateAliasForm();
+  }
+
+  if (target.matches('[data-alias-search]')) {
+    adding.search = target.value;
+    adding.pick = null;
+    adding.error = null;
+    clearTimeout(aliasSearchTimer);
+    aliasSearchTimer = setTimeout(() => searchAliasEntities(target.value), 250);
+    updateAliasForm();
+  }
+});
+$('#aliases').addEventListener('change', event => {
+  if (!event.target.matches('[data-alias-type]')) return;
+  const adding = state.aliases.adding;
+  adding.type = event.target.value;
+  adding.pick = null;
+  adding.results = [];
+  adding.search = '';
+  renderAliases();
+});
+$('#aliases').addEventListener('submit', event => {
+  event.preventDefault();
+  addAlias();
+});
 $('#examples').addEventListener('click', event => {
   const tab = event.target.closest('[data-ex-tab]');
   if (tab) {
@@ -3536,6 +3801,7 @@ else if (params.get('ask')) ask(params.get('ask'));
 else if (params.get('pins') === '1' && state.token) loadPins().then(() => showPins());
 else if (params.get('gallery') === '1' && state.token) showGallery();
 else if (params.get('examples') === '1' && state.token) showExamples();
+else if (params.get('aliases') === '1' && state.token) showAliases();
 
 window.askCaboodleTest = {
   state,
