@@ -27,7 +27,10 @@
   C7: saved names. After choosing an option in a clarify that offers it, "Remember 'Fresh Market' as The Fresh Market for
   your organization?" (for every organization outside one); a Saved names board in the rail (the organization's names and
   Caboodle's, who saved each, Remove, and Add a name for admins); the saved name a search matched, in the run trace.
-  Test parameters: ?api=<url>&token=<jwt>&brand=<id>&ask=<question>&session=<id>&trace=1&pins=1&gallery=1&examples=1&aliases=1
+  C8: the Flight recorder, for platform admins: cost, speed and quality for a period (stat tiles, questions and spend per day,
+  the days as a table), the latest full test run against what the app runs now, the to-fix list (thumbs down, figures sent
+  unchecked, no answer) with each answer, its conversation and trace, and Open / Fixed / No fix needed; and every test run.
+  Test parameters: ?api=<url>&token=<jwt>&brand=<id>&ask=<question>&session=<id>&trace=1&pins=1&gallery=1&examples=1&aliases=1&flight=1
 -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js"></script>
@@ -344,6 +347,36 @@ input.var-pill { width: 9em; }
 .runs-list { display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--line); padding-top: 8px; }
 .runs-list .run { display: flex; flex-direction: column; gap: 3px; font-size: 13px; }
 @media (max-width: 860px) { .ex-layout { grid-template-columns: minmax(0, 1fr); } }
+.fr-controls { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; font-size: 13px; }
+.fr-controls label { display: flex; align-items: center; gap: 6px; }
+.fr-controls input[type="date"] { width: 150px; }
+.fr-controls [data-fr-org] { width: 300px; max-width: 100%; }
+.kpis { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
+.kpi { border: 1px solid var(--line); border-radius: 10px; background: var(--surface); padding: 10px 12px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.kpi-label { font-size: 12px; color: var(--text-3); }
+.kpi-value { font-size: 22px; font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums; }
+.kpi-sub { font-size: 12px; color: var(--text-2); }
+.mini-charts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.mini-chart { border: 1px solid var(--line); border-radius: 10px; background: var(--surface); padding: 10px 12px; min-width: 0; }
+.mini-chart h4 { margin: 0 0 6px; font-size: 13px; font-weight: 600; }
+.mini-chart .canvas-box { position: relative; height: 150px; }
+.fr-card { border: 1px solid var(--line); border-radius: 10px; background: var(--surface); padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; min-width: 0; font-size: 13px; }
+.fr-card h3 { margin: 0; font-size: 15px; font-weight: 600; }
+.fr-card details > summary { cursor: pointer; color: var(--text-2); }
+.fr-card .row > .grow { white-space: normal; }
+.fr-scroll { overflow-x: auto; }
+.fr-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.fr-table th, .fr-table td { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+.fr-table th { font-size: 12px; color: var(--text-3); font-weight: 600; }
+.fr-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+.fr-table tr[data-fr-run] { cursor: pointer; }
+.fr-table tr[data-fr-run]:hover td { background: var(--surface-2); }
+.fr-decision { display: flex; flex-direction: column; gap: 8px; }
+.fr-decision .choices { display: flex; gap: 6px 14px; flex-wrap: wrap; font-size: 13px; }
+.fr-list { margin: 0; padding-left: 20px; font-size: 13px; color: var(--text-2); display: flex; flex-direction: column; gap: 3px; }
+.fr-list .this { color: var(--text); font-weight: 600; }
+.ex-detail .steps { margin-top: 6px; }
+@media (max-width: 760px) { .mini-charts { grid-template-columns: minmax(0, 1fr); } .fr-table .wide { display: none; } }
 .group-head { grid-column: 1 / -1; font-size: 11px; text-transform: uppercase; letter-spacing: .07em; color: var(--text-3); font-weight: 600; margin: 6px 0 0; }
 .prompt-editor { display: grid; gap: 8px; padding: 12px 14px; border: 1px solid var(--line-strong); border-radius: 10px; background: var(--surface); }
 .prompt-editor label { display: grid; gap: 3px; font-size: 12px; color: var(--text-3); }
@@ -443,6 +476,7 @@ input.var-pill { width: 9em; }
     <div class="hist-head"><span>Prompt gallery</span><button class="btn-link" id="showGallery" type="button">Open</button></div>
     <div class="hist-head"><span>Saved names</span><button class="btn-link" id="showAliases" type="button">Open</button></div>
     <div class="hist-head" id="examplesHead" hidden><span>Verified examples</span><button class="btn-link" id="showExamples" type="button">Open</button></div>
+    <div class="hist-head" id="flightHead" hidden><span>Flight recorder</span><button class="btn-link" id="showFlight" type="button">Open</button></div>
     <div class="hist-head" id="webSettingHead" hidden><span>Web search</span><label class="web-setting" title="The platform setting: lets platform admins start conversations with Search the web"><input type="checkbox" id="webSetting"> on for platform admins</label></div>
     <div class="hist-head"><span>Conversations</span><button class="btn-link" id="newChat" type="button">New</button></div>
     <ul class="history" id="history"></ul>
@@ -463,7 +497,7 @@ input.var-pill { width: 9em; }
       </label>
       <button class="btn" id="traceToggle" type="button">Run trace</button>
     </header>
-    <div class="scroll" id="scroll"><div class="convo" id="convo"></div><div class="board" id="board" hidden></div><div class="board" id="gallery" hidden></div><div class="board" id="examples" hidden></div><div class="board" id="aliases" hidden></div></div>
+    <div class="scroll" id="scroll"><div class="convo" id="convo"></div><div class="board" id="board" hidden></div><div class="board" id="gallery" hidden></div><div class="board" id="examples" hidden></div><div class="board" id="aliases" hidden></div><div class="board" id="flight" hidden></div></div>
     <footer class="composer-wrap" id="composerWrap">
       <div class="picker" id="picker" role="listbox" aria-label="Saved prompts" hidden></div>
       <div class="status" id="status"></div>
@@ -544,6 +578,11 @@ const state = {
   pickedPrompt: null,
   examples: { open: false, filter: 'proposed', list: null, counts: {}, error: null, selected: null, detail: null, detailError: null, similar: null, question: '' },
   aliases: { open: false, data: null, error: null, adding: { alias: '', type: 'Retailer', search: '', results: [], pick: null, error: null, busy: false } },
+  flight: {
+    open: false, tab: 'overview', from: '', to: '', organizationId: '', data: null, error: null, charts: [],
+    triage: { status: 'open', list: null, error: null, selected: null, detail: null, detailError: null, display: null },
+    runs: null, runsError: null, openRun: null,
+  },
   promptRuns: new Map(),
 };
 
@@ -703,6 +742,7 @@ async function loadUsage() {
     const cost = usage.costUsd == null ? '' : ` · $${Number(usage.costUsd).toFixed(2)} this month`;
     if (usage.costUsd != null) state.isAdmin = true;
     $('#examplesHead').hidden = !state.isAdmin;
+    $('#flightHead').hidden = !state.isAdmin;
     if (state.isAdmin && !state.platformSettings) loadWebSetting();
     $('#usage').textContent = left + cost;
   } catch (error) {
@@ -737,6 +777,7 @@ async function openSession(id) {
     hidePins();
     hideGallery();
     hideAliases();
+    hideFlight();
     resetConversation();
     state.sessionId = session.id;
     state.sessionSaved = true;
@@ -1835,6 +1876,7 @@ function showPins(focusId) {
   hideGallery();
   hideExamples();
   hideAliases();
+  hideFlight();
   state.board = true;
   $('#convo').hidden = true;
   $('#board').hidden = false;
@@ -2075,6 +2117,7 @@ function showGallery() {
   hidePins();
   hideExamples();
   hideAliases();
+  hideFlight();
   state.gallery = true;
   $('#convo').hidden = true;
   $('#gallery').hidden = false;
@@ -2375,6 +2418,7 @@ function showExamples(focusId) {
   hidePins();
   hideGallery();
   hideAliases();
+  hideFlight();
   state.examples.open = true;
   $('#convo').hidden = true;
   $('#examples').hidden = false;
@@ -2405,6 +2449,7 @@ function showAliases() {
   hidePins();
   hideGallery();
   hideExamples();
+  hideFlight();
   state.aliases.open = true;
   $('#convo').hidden = true;
   $('#aliases').hidden = false;
@@ -2542,6 +2587,387 @@ async function removeAlias(id, label) {
   }
 
   await loadAliases();
+}
+
+// C8: the Flight recorder, for platform admins. No AI call.
+const FLIGHT_TABS = [['overview', 'Overview'], ['triage', 'To fix'], ['runs', 'Test runs']];
+const TRIAGE_FILTERS = [['open', 'Open', 'open'], ['fixed', 'Fixed', 'fixed'], ['no-fix-needed', 'No fix needed', 'noFixNeeded'], ['all', 'All', null]];
+const TRIAGE_REASONS = { 'thumbs-down': ['err', 'thumbs down'], 'unverified-figures': ['warn', 'figures not checked'], 'no-answer': ['err', 'no answer'] };
+const TRIAGE_DECISIONS = { open: ['warn', 'open'], fixed: ['ok', 'fixed'], 'no-fix-needed': ['', 'no fix needed'] };
+const KIND_NAMES = { answer: 'answer', clarify: 'asked back', cannot_answer: "can't answer" };
+const usd = (value, digits = 4) => value == null ? '–' : `$${Number(value).toFixed(digits)}`;
+const percent = value => value == null ? '–' : `${Number(value).toFixed(1)} %`;
+const day = (value, options = { day: 'numeric', month: 'short', year: 'numeric' }) => new Date(`${String(value).slice(0, 10)}T00:00:00`).toLocaleDateString(undefined, options);
+const isoDay = date => date.toISOString().slice(0, 10);
+const reasonPill = reason => `<span class="pill ${(TRIAGE_REASONS[reason] || [''])[0]}">${esc((TRIAGE_REASONS[reason] || [, reason])[1])}</span>`;
+const decisionPill = status => `<span class="pill ${(TRIAGE_DECISIONS[status] || [''])[0]}">${esc((TRIAGE_DECISIONS[status] || [, status])[1])}</span>`;
+const whoAsked = item => [item.askedBy.name || 'Someone', item.organizationName || (item.organizationId ? 'an organization' : 'a platform admin\'s own'), item.brandName].filter(Boolean).join(' · ');
+
+function showFlight(tab) {
+  if (state.running) {
+    toast('Wait for the answer to finish.');
+    return;
+  }
+
+  hidePins();
+  hideGallery();
+  hideExamples();
+  hideAliases();
+  const flight = state.flight;
+  flight.open = true;
+  if (tab) flight.tab = tab;
+  $('#convo').hidden = true;
+  $('#flight').hidden = false;
+  $('#composerWrap').hidden = true;
+  $('#convTitle').textContent = 'Flight recorder';
+  $('#renameTitle').hidden = true;
+  $('#questionsLeft').hidden = true;
+  renderFlight();
+  loadFlight();
+  if (flight.tab === 'triage') loadTriage();
+  if (flight.tab === 'runs') loadEvalRuns();
+}
+
+function hideFlight() {
+  const flight = state.flight;
+  if (!flight.open) return;
+  flight.open = false;
+  destroyFlightCharts();
+  $('#flight').hidden = true;
+  $('#convo').hidden = false;
+  $('#composerWrap').hidden = false;
+  showConversationHeader();
+}
+
+function destroyFlightCharts() {
+  const flight = state.flight;
+  for (const chart of flight.charts) chart.destroy();
+  flight.charts = [];
+  flight.triage.display?.chart?.destroy();
+  flight.triage.display = null;
+}
+
+let flightRequest = 0;
+async function loadFlight() {
+  const request = ++flightRequest;
+  const flight = state.flight;
+  const query = new URLSearchParams();
+  if (flight.from) query.set('from', flight.from);
+  if (flight.to) query.set('to', flight.to);
+  if (flight.organizationId) query.set('organizationId', flight.organizationId);
+  try {
+    const data = await (await api(`askcaboodleadmin/flight-recorder?${query}`)).json();
+    if (request !== flightRequest) return;
+    flight.data = data;
+    flight.error = null;
+    flight.from = data.from.slice(0, 10);
+    flight.to = data.to.slice(0, 10);
+  } catch (error) {
+    if (request !== flightRequest) return;
+    flight.error = error.message;
+  }
+
+  renderFlight();
+}
+
+let triageRequest = 0;
+async function loadTriage() {
+  const request = ++triageRequest;
+  const triage = state.flight.triage;
+  const query = new URLSearchParams({ status: triage.status });
+  if (state.flight.organizationId) query.set('organizationId', state.flight.organizationId);
+  try {
+    const list = await (await api(`askcaboodleadmin/triage?${query}`)).json();
+    if (request !== triageRequest) return;
+    triage.list = list;
+    triage.error = null;
+  } catch (error) {
+    if (request !== triageRequest) return;
+    triage.error = error.message;
+  }
+
+  renderFlight();
+}
+
+async function loadTriageItem(id) {
+  const triage = state.flight.triage;
+  triage.selected = id;
+  triage.detail = null;
+  triage.detailError = null;
+  renderFlight();
+  try {
+    const detail = await (await api(`askcaboodleadmin/triage/${id}`)).json();
+    if (triage.selected !== id) return;
+    triage.detail = detail;
+  } catch (error) {
+    if (triage.selected !== id) return;
+    triage.detailError = error.message;
+  }
+
+  renderFlight();
+}
+
+async function saveTriage(form) {
+  const triage = state.flight.triage;
+  const item = triage.detail?.item;
+  if (!item) return;
+  const body = {
+    status: form.querySelector('input[name="fr-status"]:checked')?.value || 'open',
+    note: form.querySelector('[data-fr-note]').value,
+    evalCase: form.querySelector('[data-fr-case]').value,
+  };
+  try {
+    const saved = await (await api(`askcaboodleadmin/triage/${item.messageId}`, { method: 'PUT', body })).json();
+    if (triage.detail?.item.messageId !== saved.messageId) return;
+    triage.detail.item = saved;
+    triage.detailError = null;
+    toast(saved.decision.status === 'open' ? 'Saved: still open.' : `Saved: ${TRIAGE_DECISIONS[saved.decision.status][1]}.`);
+    loadTriage();
+    loadFlight();
+  } catch (error) {
+    triage.detailError = error.message;
+  }
+
+  renderFlight();
+}
+
+async function loadEvalRuns() {
+  const flight = state.flight;
+  if (flight.runs) return;
+  try {
+    flight.runs = await (await api('askcaboodleadmin/eval-runs')).json();
+    flight.runsError = null;
+  } catch (error) {
+    flight.runsError = error.message;
+  }
+
+  renderFlight();
+}
+
+function renderFlight() {
+  const flight = state.flight;
+  if (!flight.open) return;
+  destroyFlightCharts();
+  const open = flight.data?.toFix?.open;
+  const tabs = FLIGHT_TABS.map(([key, label]) => `<button class="tab ${key === flight.tab ? 'on' : ''}" type="button" role="tab" aria-selected="${key === flight.tab}" data-fr-tab="${key}">${label}${key === 'triage' && open != null ? `<span class="count">${open}</span>` : ''}</button>`).join('');
+  const body = flight.tab === 'triage' ? triageHtml() : flight.tab === 'runs' ? evalRunsHtml() : flightOverviewHtml();
+  $('#flight').innerHTML = `
+    <div class="board-head"><h2>Flight recorder</h2><span class="muted">How Ask Caboodle is doing: cost, speed and quality · platform admins only · no AI call</span>
+      <button class="btn" type="button" data-fr-back>Back to the conversation</button></div>
+    <form class="fr-controls" data-fr-period>
+      <label>From <input class="field" type="date" data-fr-from value="${esc(flight.from)}"></label>
+      <label>To <input class="field" type="date" data-fr-to value="${esc(flight.to)}"></label>
+      <button class="btn" type="button" data-fr-range="month">This month</button>
+      <button class="btn" type="button" data-fr-range="30">Last 30 days</button>
+      <input class="field" data-fr-org placeholder="One organization (OrganizationID), or every one" value="${esc(flight.organizationId)}" spellcheck="false">
+      <button class="btn btn-primary" type="submit">Show</button>
+    </form>
+    ${flight.error ? `<div class="error-box">${esc(flight.error)}</div>` : ''}
+    <div class="tabs" role="tablist">${tabs}</div>
+    ${body}`;
+  if (flight.tab === 'overview') drawFlightCharts();
+  if (flight.tab === 'triage') drawTriageAnswer();
+}
+
+function kpiHtml(label, value, sub) {
+  return `<div class="kpi"><span class="kpi-label">${label}</span><span class="kpi-value">${value}</span><span class="kpi-sub">${sub}</span></div>`;
+}
+
+function flightOverviewHtml() {
+  const flight = state.flight;
+  const data = flight.data;
+  if (!data) return flight.error ? '' : '<div class="row muted"><span class="spin"></span>Loading the figures…</div>';
+  const { questions, cost, speed, quality, toFix } = data;
+  const refusals = data.eval.refusals;
+  const tiles = [
+    kpiHtml('Questions', questions.total.toLocaleString(), `${questions.usedModel.toLocaleString()} used the AI${questions.web ? ` · ${questions.web} with web search` : ''}`),
+    kpiHtml('Cost per question', usd(cost.averageUsd), `middle ${usd(cost.medianUsd)} · priciest 5 % ${usd(cost.p95Usd)} · total ${usd(cost.totalUsd, 2)}`),
+    kpiHtml('Wait for an answer', seconds(speed.medianSeconds), `the middle wait · slowest 5 % ${seconds(speed.p95Seconds)} · ${speed.averageSteps ?? '–'} steps on average`),
+    kpiHtml('Thumbs up', percent(quality.thumbsUpPercent), `${quality.thumbsUp} up · ${quality.thumbsDown} down`),
+    kpiHtml('Caught by the fact check', quality.correctedByFactCheck, `answers corrected before sending · ${quality.sentWithUnverifiedFigures} sent with figures not checked`),
+    kpiHtml('Can\'t answer', percent(quality.cannotAnswerPercent), `of answers · ${quality.cannotAnswerThumbsDown} thumbs down on them${refusals ? ` · right in the tests: ${refusals.passed} of ${refusals.cases}` : ''}`),
+    kpiHtml('Asked back', percent(quality.clarifyPercent), 'of answers asked which one was meant'),
+    kpiHtml('No answer', questions.noAnswer, `out of steps, timed out or failed · ${questions.stopped} stopped · ${questions.serviceProblems} AI service problems`),
+    kpiHtml('Read from the cache', percent(speed.cacheReadPercent), `of the input · ${quality.rejectedAnswerAttempts} rejected answer attempts in ${quality.answersWithRejectedAttempts} answers`),
+  ].join('');
+  const endings = Object.entries(questions.byStatus).map(([status, count]) => `${esc(status)} ${count}`).join(' · ') || 'none';
+  const days = data.days.map(row => `<tr><td>${day(row.date)}</td><td class="num">${row.questions}</td><td class="num">${usd(row.costUsd, 2)}</td><td class="num">${usd(row.averageCostUsd)}</td><td class="num">${row.thumbsUp}</td><td class="num">${row.thumbsDown}</td><td class="num">${row.noAnswer}</td></tr>`).join('');
+  return `
+    <div class="kpis">${tiles}</div>
+    <div class="muted">How questions ended: ${endings}. ${esc(day(data.from))} to ${esc(day(data.to))}${data.organizationId ? ', one organization' : ', every organization and platform admins'}.</div>
+    <div class="mini-charts">
+      <div class="mini-chart"><h4>Questions per day</h4><div class="canvas-box"><canvas data-fr-chart="questions" aria-label="Questions per day"></canvas></div></div>
+      <div class="mini-chart"><h4>Spend per day</h4><div class="canvas-box"><canvas data-fr-chart="cost" aria-label="Spend per day in dollars"></canvas></div></div>
+    </div>
+    <details class="fr-card"><summary>The days as a table</summary><div class="fr-scroll"><table class="fr-table"><thead><tr><th>Day</th><th class="num">Questions</th><th class="num">Spend</th><th class="num">Per question</th><th class="num">Up</th><th class="num">Down</th><th class="num">No answer</th></tr></thead><tbody>${days}</tbody></table></div></details>
+    <div class="fr-card"><div class="row"><h3 class="grow">To fix</h3><button class="btn" type="button" data-fr-tab="triage">Open the list</button></div>
+      <div>${toFix.open} open · ${toFix.fixed} fixed · ${toFix.noFixNeeded} no fix needed <span class="muted">(every item now, whatever the period)</span></div></div>
+    ${evalCardHtml(data.eval)}`;
+}
+
+function evalCardHtml(card) {
+  const run = card.latestFullRun;
+  if (!run) return '<div class="fr-card"><h3>Latest full test run</h3><p class="muted">No full test run ships with this version of Ask Caboodle.</p></div>';
+  const rate = run.countedCases ? ` (${Math.round((100 * run.countedPassed) / run.countedCases)} %)` : '';
+  let change;
+  if (card.promptChanged == null || card.catalogChanged == null) change = '<span class="pill">not recorded</span> <span class="muted">This run is older than the Flight recorder, so it can\'t tell whether Ask Caboodle has changed since.</span>';
+  else if (!card.promptChanged && !card.catalogChanged) change = '<span class="pill ok">same as now</span> <span class="muted">Ask Caboodle hasn\'t changed since this run.</span>';
+  else change = `<span class="pill warn">changed since</span> <span class="muted">${[card.promptChanged ? 'Its instructions (system prompt and tools)' : null, card.catalogChanged ? 'its data descriptions (catalog)' : null].filter(Boolean).join(' and ')} changed after this run.</span>`;
+  const failed = run.failedCases.length
+    ? `<div class="fr-scroll"><table class="fr-table"><thead><tr><th>Case</th><th>Question</th><th class="wide">Why it failed</th></tr></thead><tbody>${run.failedCases.map(item => `<tr><td class="mono">${esc(item.id)}</td><td>${esc(item.question)}</td><td class="wide muted">${esc(item.reason)}</td></tr>`).join('')}</tbody></table></div>`
+    : '<p class="muted">Every case passed.</p>';
+  return `<div class="fr-card">
+    <div class="row"><h3 class="grow">Latest full test run</h3><button class="btn-link" type="button" data-fr-tab="runs">Every test run</button></div>
+    <div><span class="kpi-value">${run.countedPassed} of ${run.countedCases}</span> passed${rate} <span class="muted">· ${esc(day(run.runDate))} · ${esc(run.label || run.file)} · ${esc(run.model)} ${esc(run.effort)} · ${usd(run.costPerAnswerUsd)} an answer</span></div>
+    <div>${change}</div>
+    ${card.sameModel === false ? `<div class="leftovers">This run used ${esc(run.model)} ${esc(run.effort)}; the app runs ${esc(card.app.model)} ${esc(card.app.effort)}.</div>` : ''}
+    ${card.refusals ? `<div>Can't-answer replies right: ${card.refusals.passed} of ${card.refusals.cases} <span class="muted">(the "${esc(card.refusals.title)}" group)</span></div>` : ''}
+    <div class="muted">${card.checksSince.runs ? `Since then: ${card.checksSince.runs} smaller checks, ${card.checksSince.passed} of ${card.checksSince.cases} cases passed.` : 'No smaller checks since.'}</div>
+    <details ${run.failedCases.length ? 'open' : ''}><summary>The cases that failed (${run.failedCases.length})</summary>${failed}</details>
+  </div>`;
+}
+
+// One colour per chart (a single series needs no legend; the title names it), bars at most 24px with rounded tops, hairline
+// grid, a tooltip on hover, and the table above as the accessible view. Questions and spend are two charts, never two axes.
+function drawFlightCharts() {
+  const flight = state.flight;
+  if (!flight.data) return;
+  const styles = getComputedStyle(document.documentElement);
+  const token = name => styles.getPropertyValue(name).trim();
+  const labels = flight.data.days.map(row => day(row.date, { day: 'numeric', month: 'short' }));
+  const charts = [
+    ['questions', flight.data.days.map(row => row.questions), value => `${value.toLocaleString()} questions`, value => value],
+    ['cost', flight.data.days.map(row => Number(row.costUsd)), value => usd(value, 2), value => usd(value, 2)],
+  ];
+  for (const [key, values, tooltip, tick] of charts) {
+    const canvas = document.querySelector(`#flight [data-fr-chart="${key}"]`);
+    if (!canvas) continue;
+    flight.charts.push(new Chart(canvas, {
+      type: 'bar',
+      data: { labels, datasets: [{ data: values, backgroundColor: token('--accent'), hoverBackgroundColor: token('--accent'), borderRadius: 4, maxBarThickness: 24 }] },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: false,
+        plugins: { legend: { display: false }, tooltip: { displayColors: false, callbacks: { label: context => tooltip(context.parsed.y) } } },
+        scales: {
+          x: { grid: { display: false }, border: { color: token('--line') }, ticks: { color: token('--text-3'), maxRotation: 0, autoSkip: true, maxTicksLimit: 8 } },
+          y: { beginAtZero: true, grid: { color: token('--line') }, border: { display: false }, ticks: { color: token('--text-3'), maxTicksLimit: 4, precision: key === 'questions' ? 0 : undefined, callback: tick } },
+        },
+      },
+    }));
+  }
+}
+
+function triageHtml() {
+  const triage = state.flight.triage;
+  const counts = triage.list?.counts || state.flight.data?.toFix || {};
+  const tabs = TRIAGE_FILTERS.map(([key, label, countKey]) => `<button class="tab ${key === triage.status ? 'on' : ''}" type="button" role="tab" aria-selected="${key === triage.status}" data-fr-status="${key}">${label}${countKey ? `<span class="count">${counts[countKey] ?? 0}</span>` : ''}</button>`).join('');
+  let list;
+  if (triage.error) list = `<div class="error-box">${esc(triage.error)}</div>`;
+  else if (!triage.list) list = '<div class="row muted"><span class="spin"></span>Loading the list…</div>';
+  else list = triage.list.items.map(item => `
+    <button class="ex-card ${item.messageId === triage.selected ? 'on' : ''}" type="button" data-fr-item="${esc(item.messageId)}">
+      <span>${esc(item.question)}</span>
+      <span class="ex-meta">${item.reasons.map(reasonPill).join('')}${triage.status === 'all' ? decisionPill(item.decision.status) : ''}<span>${esc(whoAsked(item))}</span><span>${esc(utc(item.askedOn).toLocaleString())}</span></span>
+    </button>`).join('') || `<p class="muted">${triage.status === 'open' ? 'Nothing to fix.' : 'Nothing here.'}</p>`;
+  return `<p class="muted">Answers with a thumbs down, figures sent without a check, or no answer (out of steps, timed out, failed). Every item now, whatever the period; the organization filter applies.</p>
+    <div class="tabs" role="tablist">${tabs}</div>
+    <div class="ex-layout"><div class="ex-list">${list}</div><div>${triageDetailHtml()}</div></div>`;
+}
+
+function triageDetailHtml() {
+  const triage = state.flight.triage;
+  if (!triage.selected) return '<p class="muted">Pick an answer to see what went wrong and to mark it.</p>';
+  if (triage.detailError && !triage.detail) return `<div class="error-box">${esc(triage.detailError)}</div>`;
+  const detail = triage.detail;
+  if (!detail) return '<div class="row muted"><span class="spin"></span>Loading the answer…</div>';
+  const { item, message } = detail;
+  const decision = item.decision;
+  const wrong = [
+    item.reasons.includes('thumbs-down') ? `<li>Thumbs down${item.feedbackReason ? `: ${esc(REASONS[item.feedbackReason] || item.feedbackReason)}` : ''}${item.feedbackNote ? ` · “${esc(item.feedbackNote)}”` : ''}</li>` : '',
+    item.reasons.includes('unverified-figures') ? `<li>Sent with figures not checked against the data: ${item.unverifiedFigures.map(esc).join(', ')}</li>` : '',
+    item.reasons.includes('no-answer') ? `<li>No answer (${esc(item.status)})${message.errorMessage ? `: ${esc(message.errorMessage)}` : ''}</li>` : '',
+  ].join('') || '<li>Nothing: this answer isn\'t on the list.</li>';
+  const conversation = detail.conversation.length > 1
+    ? `<h4>The conversation</h4><ol class="fr-list">${detail.conversation.map(turn => `<li class="${turn.messageId === item.messageId ? 'this' : ''}">${esc(turn.question)} <span class="muted">· ${esc(KIND_NAMES[turn.kind] || turn.kind)}${turn.status !== 'answered' ? ` · ${esc(turn.status)}` : ''}</span></li>`).join('')}</ol>`
+    : '';
+  const headline = message.headline ? `<div class="headline"><div class="hl-val">${esc(message.headline.display)}</div><div class="hl-lbl">${esc(message.headline.label)}</div></div>` : '';
+  const notes = [['Scope', message.notes?.scope], ['Period', message.notes?.period], ['Source', message.notes?.source], ['Needed', message.notes?.needed], ['Available', message.notes?.available]].filter(([, value]) => value);
+  const options = message.options?.length ? `<ul>${message.options.map(option => `<li>${esc(option.label)}${option.detail ? ` <span class="muted">${esc(option.detail)}</span>` : ''}</li>`).join('')}</ul>` : '';
+  const result = item.evalCaseResult;
+  const caseLine = result
+    ? `<div class="muted">${esc(result.caseId)} ${result.passed ? 'passed' : 'failed'} in the newest test run that asked it (${esc(day(result.runDate))}).</div>`
+    : decision.evalCase ? `<div class="muted">${esc(decision.evalCase)} isn't in a test run shipped with this version yet.</div>` : '';
+  const choice = (value, label) => `<label><input type="radio" name="fr-status" value="${value}" ${decision.status === value ? 'checked' : ''}> ${label}</label>`;
+  return `<article class="ex-detail">
+    <div class="row"><h3 class="grow">${esc(item.question)}</h3>${decisionPill(decision.status)}</div>
+    <div class="muted">${esc(whoAsked(item))}${item.askedBy.email ? ` · ${esc(item.askedBy.email)}` : ''} · ${esc(utc(item.askedOn).toLocaleString())} · ${usd(item.costUsd)}</div>
+    <h4>1. What went wrong</h4><ul class="fr-list">${wrong}</ul>
+    ${conversation}
+    <h4>2. The answer as shown</h4>
+    <div class="ex-answer">${headline}${notes.length ? `<div class="notes">${notes.map(([key, value]) => `<div class="note"><b>${key}</b><span>${esc(value)}</span></div>`).join('')}</div>` : ''}${message.answer ? markdown(message.answer) : '<p class="muted">No text.</p>'}${options}<div data-fr-answer-data></div></div>
+    <h4>3. Your decision</h4>
+    <form class="fr-decision" data-fr-decision>
+      <div class="choices">${choice('open', 'Open')}${choice('fixed', 'Fixed')}${choice('no-fix-needed', 'No fix needed (the answer was right)')}</div>
+      <textarea class="field" rows="2" maxlength="1000" data-fr-note placeholder="What was fixed, or why no fix is needed">${esc(decision.note || '')}</textarea>
+      <div class="row"><input class="field" style="max-width:240px" data-fr-case maxlength="20" placeholder="The test case it became, e.g. Q75" value="${esc(decision.evalCase || '')}" spellcheck="false"><button class="btn btn-primary" type="submit">Save</button></div>
+      ${caseLine}
+      ${decision.decidedOn ? `<div class="muted">Last saved by ${esc(decision.decidedBy || 'someone')} on ${esc(utc(decision.decidedOn).toLocaleString())}.</div>` : ''}
+      ${triage.detailError ? `<div class="error-box">${esc(triage.detailError)}</div>` : ''}
+    </form>
+    <details><summary>Technical details: the run trace (for engineers)</summary>${traceStepsHtml(detail.trace)}</details>
+  </article>`;
+}
+
+function traceStepsHtml(trace) {
+  if (!trace) return '<p class="muted">No trace is stored for this answer.</p>';
+  const call = item => `<div class="call ${item.ok === false ? 'err' : ''}"><div class="call-h"><span class="call-tool">${esc(item.tool)}</span><span class="call-ms">${esc([item.rowCount != null ? `${item.rowCount} ${item.tool === 'web_search' ? 'results' : 'rows'}` : '', item.durationMs != null ? `${item.durationMs} ms` : ''].filter(Boolean).join(' · '))}</span>${callStatus(item)}</div>
+    <div class="call-sum">${esc(item.summary || '')}${item.selfCorrection ? '<span class="tag">self-correction</span>' : ''}</div><div class="call-body">${callDetail(item)}</div></div>`;
+  return `<div class="muted">${trace.steps.length} steps of ${trace.maxSteps} · ${seconds(trace.elapsedMilliseconds / 1000)}</div>
+    <ol class="steps">${trace.steps.map(step => `<li class="step"><span class="step-num">${step.step}</span><div class="step-top"><span class="step-label">${esc(step.label)}</span></div>${step.calls.length ? `<div class="calls">${step.calls.map(call).join('')}</div>` : ''}</li>`).join('')}</ol>`;
+}
+
+// The answer's table, drawn as in the conversation.
+function drawTriageAnswer() {
+  const triage = state.flight.triage;
+  const host = document.querySelector('#flight [data-fr-answer-data]');
+  const data = (triage.detail?.message?.data || [])[0];
+  if (!host || !data) return;
+  triage.display = { revealed: true, view: null, chart: null, animateReveal: false, el: { data: host }, data };
+  renderData(triage.display);
+}
+
+function evalRunsHtml() {
+  const flight = state.flight;
+  if (flight.runsError) return `<div class="error-box">${esc(flight.runsError)}</div>`;
+  if (!flight.runs) return '<div class="row muted"><span class="spin"></span>Loading the test runs…</div>';
+  const { app, runs } = flight.runs;
+  const rows = runs.map(run => {
+    const since = run.promptVersion == null || run.catalogVersion == null ? '<span class="muted">not recorded</span>'
+      : run.promptVersion === app.promptVersion && run.catalogVersion === app.catalogVersion ? '<span class="pill ok">same as now</span>'
+      : '<span class="pill warn">changed since</span>';
+    const failed = run.failedCases.length
+      ? `<ul class="fr-list">${run.failedCases.map(item => `<li><b class="mono">${esc(item.id)}</b> ${esc(item.question)} <span class="muted">· ${esc(item.reason)}</span></li>`).join('')}</ul>`
+      : '<span class="muted">Every case passed.</span>';
+    return `<tr data-fr-run="${esc(run.file)}">
+        <td>${esc(day(run.runDate))}</td>
+        <td>${esc(run.label || '–')}${run.full ? ' <span class="pill live">full run</span>' : ''}<div class="muted wide">${esc(run.caseFilter || 'every case')}</div></td>
+        <td class="wide">${esc(run.model)} ${esc(run.effort)}</td>
+        <td class="num">${run.countedPassed} of ${run.countedCases}${run.cases !== run.countedCases ? `<div class="muted">${run.passed} of ${run.cases} in all</div>` : ''}</td>
+        <td class="num wide">${usd(run.costPerAnswerUsd)}</td>
+        <td>${since}</td></tr>
+      ${flight.openRun === run.file ? `<tr><td colspan="6">${failed}</td></tr>` : ''}`;
+  }).join('');
+  return `<p class="muted">Every test run shipped with this version of Ask Caboodle, newest first; the app runs ${esc(app.model)} ${esc(app.effort)}. Pick a run to see the cases that failed.</p>
+    <div class="fr-scroll"><table class="fr-table"><thead><tr><th>Date</th><th>Run</th><th class="wide">Model</th><th class="num">Passed (counted)</th><th class="num wide">Per answer</th><th>Ask Caboodle since</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+
+function flightRange(kind) {
+  const today = new Date();
+  const to = isoDay(today);
+  if (kind === 'month') return [`${to.slice(0, 8)}01`, to];
+  return [isoDay(new Date(today.getTime() - 29 * 86400000)), to];
 }
 
 function hideExamples() {
@@ -3224,6 +3650,7 @@ function newConversation() {
   hidePins();
   hideGallery();
   hideAliases();
+  hideFlight();
   state.webNext = false;
   resetConversation();
   $('#convo').innerHTML = `<div class="empty"><h2>Ask about your Caboodle data</h2><p class="muted">Each question is a real one: about $0.04, counted in today's questions. A conversation takes 20 questions, and its first answer gives it a short title (about $0.00003 more).</p>
@@ -3435,6 +3862,71 @@ $('#webSetting').addEventListener('change', event => saveWebSetting(event.target
 $('#showGallery').addEventListener('click', showGallery);
 $('#showExamples').addEventListener('click', () => showExamples());
 $('#showAliases').addEventListener('click', () => showAliases());
+$('#showFlight').addEventListener('click', () => showFlight());
+$('#flight').addEventListener('click', event => {
+  const flight = state.flight;
+  const target = event.target;
+  if (target.closest('[data-fr-back]')) {
+    hideFlight();
+    return;
+  }
+
+  const tab = target.closest('[data-fr-tab]');
+  if (tab) {
+    flight.tab = tab.dataset.frTab;
+    renderFlight();
+    if (flight.tab === 'triage') loadTriage();
+    if (flight.tab === 'runs') loadEvalRuns();
+    return;
+  }
+
+  const range = target.closest('[data-fr-range]');
+  if (range) {
+    [flight.from, flight.to] = flightRange(range.dataset.frRange);
+    flight.organizationId = $('#flight [data-fr-org]').value.trim();
+    renderFlight();
+    loadFlight();
+    return;
+  }
+
+  const status = target.closest('[data-fr-status]');
+  if (status) {
+    flight.triage.status = status.dataset.frStatus;
+    flight.triage.list = null;
+    renderFlight();
+    loadTriage();
+    return;
+  }
+
+  const item = target.closest('[data-fr-item]');
+  if (item) {
+    loadTriageItem(item.dataset.frItem);
+    return;
+  }
+
+  const run = target.closest('[data-fr-run]');
+  if (run) {
+    flight.openRun = flight.openRun === run.dataset.frRun ? null : run.dataset.frRun;
+    renderFlight();
+  }
+});
+$('#flight').addEventListener('submit', event => {
+  event.preventDefault();
+  const flight = state.flight;
+  const form = event.target;
+  if (form.matches('[data-fr-decision]')) {
+    saveTriage(form);
+    return;
+  }
+
+  flight.from = form.querySelector('[data-fr-from]').value;
+  flight.to = form.querySelector('[data-fr-to]').value;
+  flight.organizationId = form.querySelector('[data-fr-org]').value.trim();
+  flight.triage.list = null;
+  renderFlight();
+  loadFlight();
+  if (flight.tab === 'triage') loadTriage();
+});
 $('#aliases').addEventListener('click', event => {
   const target = event.target;
   if (target.closest('[data-alias-back]')) hideAliases();
@@ -3802,6 +4294,7 @@ else if (params.get('pins') === '1' && state.token) loadPins().then(() => showPi
 else if (params.get('gallery') === '1' && state.token) showGallery();
 else if (params.get('examples') === '1' && state.token) showExamples();
 else if (params.get('aliases') === '1' && state.token) showAliases();
+else if (params.get('flight') === '1' && state.token) showFlight();
 
 window.askCaboodleTest = {
   state,
