@@ -30,7 +30,7 @@
   C8: the Flight recorder, for platform admins: cost, speed and quality for a period (stat tiles, questions and spend per day,
   the days as a table), the latest full test run against what the app runs now, the to-fix list (thumbs down, figures sent
   unchecked, no answer) with each answer, its conversation and trace, and Open / Fixed / No fix needed; and every test run.
-  Test parameters: ?api=<url>&token=<jwt>&brand=<id>&ask=<question>&session=<id>&trace=1&pins=1&gallery=1&examples=1&aliases=1&flight=1
+  Test parameters: ?api=<url>&token=<jwt>&brand=<id>&ask=<question>&session=<id>&trace=1&pins=1&gallery=1&examples=1&aliases=1&flight=1&guide=1
 -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js"></script>
@@ -347,6 +347,13 @@ input.var-pill { width: 9em; }
 .runs-list { display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--line); padding-top: 8px; }
 .runs-list .run { display: flex; flex-direction: column; gap: 3px; font-size: 13px; }
 @media (max-width: 860px) { .ex-layout { grid-template-columns: minmax(0, 1fr); } }
+.guide-filters { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.guide-filters .field { flex: 1; min-width: 200px; }
+.guide-filters .seg { flex-wrap: wrap; }
+.guide-rules { margin: 0; padding-left: 18px; font-size: 13.5px; display: flex; flex-direction: column; gap: 3px; }
+.guide-related { display: flex; flex-wrap: wrap; gap: 6px; }
+.guide-review { border-left: 3px solid var(--warn); background: var(--warn-soft); padding: 6px 10px; font-size: 13px; border-radius: 0 6px 6px 0; }
+.note .pill { margin-left: 6px; }
 .fr-controls { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; font-size: 13px; }
 .fr-controls label { display: flex; align-items: center; gap: 6px; }
 .fr-controls input[type="date"] { width: 150px; }
@@ -477,6 +484,7 @@ input.var-pill { width: 9em; }
     <div class="hist-head"><span>Saved names</span><button class="btn-link" id="showAliases" type="button">Open</button></div>
     <div class="hist-head" id="examplesHead" hidden><span>Verified examples</span><button class="btn-link" id="showExamples" type="button">Open</button></div>
     <div class="hist-head" id="flightHead" hidden><span>Flight recorder</span><button class="btn-link" id="showFlight" type="button">Open</button></div>
+    <div class="hist-head" id="guideHead" hidden><span>Caboodle guide</span><button class="btn-link" id="showGuide" type="button">Open</button></div>
     <div class="hist-head" id="webSettingHead" hidden><span>Web search</span><label class="web-setting" title="The platform setting: lets platform admins start conversations with Search the web"><input type="checkbox" id="webSetting"> on for platform admins</label></div>
     <div class="hist-head"><span>Conversations</span><button class="btn-link" id="newChat" type="button">New</button></div>
     <ul class="history" id="history"></ul>
@@ -497,7 +505,7 @@ input.var-pill { width: 9em; }
       </label>
       <button class="btn" id="traceToggle" type="button">Run trace</button>
     </header>
-    <div class="scroll" id="scroll"><div class="convo" id="convo"></div><div class="board" id="board" hidden></div><div class="board" id="gallery" hidden></div><div class="board" id="examples" hidden></div><div class="board" id="aliases" hidden></div><div class="board" id="flight" hidden></div></div>
+    <div class="scroll" id="scroll"><div class="convo" id="convo"></div><div class="board" id="board" hidden></div><div class="board" id="gallery" hidden></div><div class="board" id="examples" hidden></div><div class="board" id="aliases" hidden></div><div class="board" id="flight" hidden></div><div class="board" id="guide" hidden></div></div>
     <footer class="composer-wrap" id="composerWrap">
       <div class="picker" id="picker" role="listbox" aria-label="Saved prompts" hidden></div>
       <div class="status" id="status"></div>
@@ -582,6 +590,9 @@ const state = {
     open: false, tab: 'overview', from: '', to: '', organizationId: '', data: null, error: null, charts: [],
     triage: { status: 'open', list: null, error: null, selected: null, detail: null, detailError: null, display: null },
     runs: null, runsError: null, openRun: null,
+  },
+  guide: {
+    open: false, data: null, error: null, search: '', topic: '', status: 'all', selected: null,
   },
   promptRuns: new Map(),
 };
@@ -743,6 +754,7 @@ async function loadUsage() {
     if (usage.costUsd != null) state.isAdmin = true;
     $('#examplesHead').hidden = !state.isAdmin;
     $('#flightHead').hidden = !state.isAdmin;
+    $('#guideHead').hidden = !state.isAdmin;
     if (state.isAdmin && !state.platformSettings) loadWebSetting();
     $('#usage').textContent = left + cost;
   } catch (error) {
@@ -778,6 +790,7 @@ async function openSession(id) {
     hideGallery();
     hideAliases();
     hideFlight();
+    hideGuide();
     resetConversation();
     state.sessionId = session.id;
     state.sessionSaved = true;
@@ -1281,7 +1294,7 @@ function renderFrame(answer) {
   }
 
   const rows = [['Scope', notes.scope], ['Period', notes.period], ['Source', notes.source]].filter(([, value]) => value);
-  if (rows.length) html += `<div class="notes">${rows.map(([key, value]) => `<div class="note"><b>${key}</b><span>${esc(value)}</span></div>`).join('')}</div>`;
+  if (rows.length) html += `<div class="notes">${rows.map(([key, value]) => `<div class="note"><b>${key}</b><span>${noteValue(key, value)}</span></div>`).join('')}</div>`;
   if (answer.frameHtml !== html) {
     answer.frameHtml = html;
     answer.el.frame.innerHTML = answer.live ? `<div class="reveal">${html}</div>` : html;
@@ -1728,7 +1741,7 @@ function callDetail(call) {
   const detail = call.detail;
   if (!detail) return '<div class="muted">No detail for this call.</div>';
   let html = '';
-  if (detail.matches) html += `<h5>Matched names</h5>${detail.matches.length ? `<ul>${detail.matches.map(match => `<li>${esc(match.name)} <span class="muted">${esc(match.type)}</span>${match.savedName ? ` <span class="pill ok">saved name “${esc(match.savedName)}”</span>` : ''}</li>`).join('')}</ul>` : '<div class="muted">No match.</div>'}`;
+  if (detail.matches) html += `<h5>${detail.matches.length && detail.matches.every(match => match.type === 'guide entry') ? 'Guide entries read' : 'Matched names'}</h5>${detail.matches.length ? `<ul>${detail.matches.map(match => `<li>${esc(match.name)} <span class="muted">${esc(match.type)}</span>${match.savedName ? ` <span class="pill ok">saved name “${esc(match.savedName)}”</span>` : ''}</li>`).join('')}</ul>` : '<div class="muted">No match.</div>'}`;
   if (detail.tables) html += `<h5>Tables</h5><div class="mono">${detail.tables.map(esc).join(', ')}</div>`;
   if (detail.sql) html += `<h5>SQL</h5><pre>${esc(detail.sql)}</pre>`;
   if (detail.error) html += `<h5>Error</h5><pre class="err">${esc(detail.error)}</pre>`;
@@ -1768,7 +1781,7 @@ function renderTrace() {
     const calls = step.calls.map(call => {
       const key = `${step.step}:${call.callId}`;
       const open = answer.openCalls.has(key);
-      const counted = call.tool === 'web_search' ? 'results' : 'rows';
+      const counted = call.tool === 'web_search' ? 'results' : call.tool === 'search_guide' ? 'entries' : 'rows';
       const meta = [call.rowCount != null ? `${call.rowCount} ${counted}` : '', call.durationMs != null ? `${call.durationMs} ms` : ''].filter(Boolean).join(' · ');
       return `<div class="call ${call.ok === false ? 'err' : ''}">
         <button class="call-h" type="button" data-call="${esc(key)}"><span class="call-tool">${esc(call.tool)}</span><span class="call-ms">${esc(meta)}</span>${callStatus(call)}</button>
@@ -1877,6 +1890,7 @@ function showPins(focusId) {
   hideExamples();
   hideAliases();
   hideFlight();
+  hideGuide();
   state.board = true;
   $('#convo').hidden = true;
   $('#board').hidden = false;
@@ -2118,6 +2132,7 @@ function showGallery() {
   hideExamples();
   hideAliases();
   hideFlight();
+  hideGuide();
   state.gallery = true;
   $('#convo').hidden = true;
   $('#gallery').hidden = false;
@@ -2419,6 +2434,7 @@ function showExamples(focusId) {
   hideGallery();
   hideAliases();
   hideFlight();
+  hideGuide();
   state.examples.open = true;
   $('#convo').hidden = true;
   $('#examples').hidden = false;
@@ -2450,6 +2466,7 @@ function showAliases() {
   hideGallery();
   hideExamples();
   hideFlight();
+  hideGuide();
   state.aliases.open = true;
   $('#convo').hidden = true;
   $('#aliases').hidden = false;
@@ -2603,6 +2620,127 @@ const reasonPill = reason => `<span class="pill ${(TRIAGE_REASONS[reason] || [''
 const decisionPill = status => `<span class="pill ${(TRIAGE_DECISIONS[status] || [''])[0]}">${esc((TRIAGE_DECISIONS[status] || [, status])[1])}</span>`;
 const whoAsked = item => [item.askedBy.name || 'Someone', item.organizationName || (item.organizationId ? 'an organization' : 'a platform admin\'s own'), item.brandName].filter(Boolean).join(' · ');
 
+// C9: the Caboodle guide, for platform admins (GET askcaboodleadmin/guide). Kept simple (plan §10.10): the entry as the AI
+// reads it, its status and Constance's question first; where it was written from folds away.
+const GUIDE_AUDIENCES = { everyone: 'everyone', 'organization-admin': 'mainly organization admins', 'platform-admin': 'platform admins only' };
+const GUIDE_STATUS = [['all', 'All'], ['draft', 'Not yet reviewed'], ['approved', 'Approved'], ['questions', 'Questions for Constance']];
+const firstSentence = text => (String(text || '').match(/^.*?[.!?](\s|$)/) || [text])[0].trim();
+const noteValue = (key, value) => key === 'Source' && /\(not yet reviewed\)/i.test(value)
+  ? `${esc(value.replace(/\s*\(not yet reviewed\)/i, ''))}<span class="pill warn">not yet reviewed</span>`
+  : esc(value);
+const guideKind = entry => `<span class="pill">${entry.kind === 'relationship' ? 'How things connect' : 'Concept'}</span>`;
+const guideStatusPill = entry => entry.status === 'approved' ? `<span class="pill ok">Approved ${esc(entry.approvedOn || '')}</span>` : '<span class="pill warn">Not yet reviewed</span>';
+
+function showGuide(key) {
+  if (state.running) {
+    toast('Wait for the answer to finish.');
+    return;
+  }
+
+  hidePins();
+  hideGallery();
+  hideExamples();
+  hideAliases();
+  hideFlight();
+  const guide = state.guide;
+  guide.open = true;
+  if (key) guide.selected = key;
+  $('#convo').hidden = true;
+  $('#guide').hidden = false;
+  $('#composerWrap').hidden = true;
+  $('#convTitle').textContent = 'Caboodle guide';
+  $('#renameTitle').hidden = true;
+  $('#questionsLeft').hidden = true;
+  renderGuide();
+  if (!guide.data) loadGuide();
+}
+
+function hideGuide() {
+  const guide = state.guide;
+  if (!guide.open) return;
+  guide.open = false;
+  $('#guide').hidden = true;
+  $('#convo').hidden = false;
+  $('#composerWrap').hidden = false;
+  showConversationHeader();
+}
+
+async function loadGuide() {
+  const guide = state.guide;
+  guide.error = null;
+  try {
+    guide.data = await (await api('askcaboodleadmin/guide')).json();
+    if (!guide.selected && guide.data.entries.length) guide.selected = guide.data.entries[0].key;
+  } catch (error) {
+    guide.error = error.status === 403 ? 'The Caboodle guide is for platform admins.' : error.message;
+  }
+
+  renderGuide();
+}
+
+function guideMatches(entry) {
+  const guide = state.guide;
+  if (guide.topic && entry.topic !== guide.topic) return false;
+  if (guide.status === 'draft' && entry.status !== 'draft') return false;
+  if (guide.status === 'approved' && entry.status !== 'approved') return false;
+  if (guide.status === 'questions' && !entry.reviewNote) return false;
+  const words = guide.search.trim().toLowerCase();
+  if (!words) return true;
+  const haystack = [entry.title, ...entry.aliases, entry.text, ...entry.rules, entry.example || ''].join(' ').toLowerCase();
+  return words.split(/\s+/).every(word => haystack.includes(word));
+}
+
+function renderGuide() {
+  const guide = state.guide;
+  if (!guide.open) return;
+  const data = guide.data;
+  const count = filter => data ? data.entries.filter(filter).length : 0;
+  const topics = data ? [['', 'All topics', data.entries.length], ...data.topics.map(topic => [topic.key, topic.title, topic.entries])] : [];
+  const summary = data ? `${data.entries.length} entries · ${count(entry => entry.status === 'approved')} approved · ${count(entry => entry.reviewNote)} questions for Constance.` : '';
+  $('#guide').innerHTML = `<div class="board-head"><h2>Caboodle guide</h2><span class="muted">What Ask Caboodle reads to explain Caboodle's terms and how things connect · platform admins only · no AI call</span>
+      <button class="btn-link" type="button" data-guide-back>Back to the conversation</button></div>
+    <p class="muted">Every entry is written from Caboodle's code. Until Constance approves an entry, only platform admins get answers from it, marked "not yet reviewed". ${esc(summary)}</p>
+    <div class="guide-filters"><input class="field" data-guide-search placeholder="Search the entries" value="${esc(guide.search)}">
+      <span class="seg">${GUIDE_STATUS.map(([key, label]) => `<button type="button" class="${guide.status === key ? 'on' : ''}" data-guide-status="${key}">${label}</button>`).join('')}</span></div>
+    <div class="tabs" role="tablist">${topics.map(([key, label, entries]) => `<button class="tab ${key === guide.topic ? 'on' : ''}" type="button" role="tab" aria-selected="${key === guide.topic}" data-guide-topic="${esc(key)}">${esc(label)}<span class="count">${entries}</span></button>`).join('')}</div>
+    <div data-guide-body>${guideBodyHtml()}</div>`;
+}
+
+function renderGuideBody() {
+  const body = $('#guide [data-guide-body]');
+  if (body) body.innerHTML = guideBodyHtml();
+}
+
+function guideBodyHtml() {
+  const guide = state.guide;
+  if (guide.error) return `<div class="error-box">${esc(guide.error)}</div>`;
+  if (!guide.data) return '<p class="muted">Loading…</p>';
+  const shown = guide.data.entries.filter(guideMatches);
+  const selected = guide.data.entries.find(entry => entry.key === guide.selected);
+  const list = shown.length
+    ? shown.map(entry => `<button type="button" class="ex-card ${entry.key === guide.selected ? 'on' : ''}" data-guide-entry="${esc(entry.key)}"><b>${esc(entry.title)}</b>
+        <span class="ex-meta">${guideStatusPill(entry)}${guideKind(entry)}${entry.audience === 'everyone' ? '' : `<span class="pill">${esc(GUIDE_AUDIENCES[entry.audience] || entry.audience)}</span>`}${entry.reviewNote ? '<span class="pill warn">Question</span>' : ''}</span>
+        <span class="muted" style="font-size:12.5px">${esc(firstSentence(entry.text))}</span></button>`).join('')
+    : '<p class="muted">No entry matches.</p>';
+  return `<div class="ex-layout"><div class="ex-list">${list}</div><div>${selected ? guideDetailHtml(selected) : ''}</div></div>`;
+}
+
+function guideDetailHtml(entry) {
+  const topic = state.guide.data.topics.find(item => item.key === entry.topic);
+  return `<div class="ex-detail" data-guide-detail="${esc(entry.key)}">
+    <h3>${esc(entry.title)}</h3>
+    <div class="row">${guideStatusPill(entry)}${guideKind(entry)}<span class="pill">For ${esc(GUIDE_AUDIENCES[entry.audience] || entry.audience)}</span><span class="muted">${esc(topic ? topic.title : entry.topic)} · review batch ${topic ? topic.batch : '–'}</span></div>
+    <div>${esc(entry.text)}</div>
+    ${entry.rules.length ? `<h4>Rules</h4><ul class="guide-rules">${entry.rules.map(rule => `<li>${esc(rule)}</li>`).join('')}</ul>` : ''}
+    ${entry.example ? `<h4>Example</h4><div>${esc(entry.example)}</div>` : ''}
+    ${entry.reviewNote ? `<div class="guide-review"><b>Question for Constance.</b> ${esc(entry.reviewNote)}</div>` : ''}
+    ${entry.related.length ? `<h4>Related</h4><div class="guide-related">${entry.related.map(link => `<button class="btn" type="button" data-guide-entry="${esc(link.key)}">${esc(link.title)}</button>`).join('')}</div>` : ''}
+    <details><summary>Technical details</summary>
+      <div class="muted" style="font-size:12.5px">Key <span class="mono">${esc(entry.key)}</span>${entry.aliases.length ? ` · also called ${esc(entry.aliases.join(', '))}` : ''}</div>
+      <h4>Written from</h4><ul class="guide-rules mono" style="font-size:12px">${entry.sources.map(source => `<li>${esc(source)}</li>`).join('')}</ul>
+    </details>
+  </div>`;
+}
 function showFlight(tab) {
   if (state.running) {
     toast('Wait for the answer to finish.');
@@ -2613,6 +2751,7 @@ function showFlight(tab) {
   hideGallery();
   hideExamples();
   hideAliases();
+  hideGuide();
   const flight = state.flight;
   flight.open = true;
   if (tab) flight.tab = tab;
@@ -2922,7 +3061,7 @@ function triageDetailHtml() {
 
 function traceStepsHtml(trace) {
   if (!trace) return '<p class="muted">No trace is stored for this answer.</p>';
-  const call = item => `<div class="call ${item.ok === false ? 'err' : ''}"><div class="call-h"><span class="call-tool">${esc(item.tool)}</span><span class="call-ms">${esc([item.rowCount != null ? `${item.rowCount} ${item.tool === 'web_search' ? 'results' : 'rows'}` : '', item.durationMs != null ? `${item.durationMs} ms` : ''].filter(Boolean).join(' · '))}</span>${callStatus(item)}</div>
+  const call = item => `<div class="call ${item.ok === false ? 'err' : ''}"><div class="call-h"><span class="call-tool">${esc(item.tool)}</span><span class="call-ms">${esc([item.rowCount != null ? `${item.rowCount} ${item.tool === 'web_search' ? 'results' : item.tool === 'search_guide' ? 'entries' : 'rows'}` : '', item.durationMs != null ? `${item.durationMs} ms` : ''].filter(Boolean).join(' · '))}</span>${callStatus(item)}</div>
     <div class="call-sum">${esc(item.summary || '')}${item.selfCorrection ? '<span class="tag">self-correction</span>' : ''}</div><div class="call-body">${callDetail(item)}</div></div>`;
   return `<div class="muted">${trace.steps.length} steps of ${trace.maxSteps} · ${seconds(trace.elapsedMilliseconds / 1000)}</div>
     <ol class="steps">${trace.steps.map(step => `<li class="step"><span class="step-num">${step.step}</span><div class="step-top"><span class="step-label">${esc(step.label)}</span></div>${step.calls.length ? `<div class="calls">${step.calls.map(call).join('')}</div>` : ''}</li>`).join('')}</ol>`;
@@ -3651,6 +3790,7 @@ function newConversation() {
   hideGallery();
   hideAliases();
   hideFlight();
+  hideGuide();
   state.webNext = false;
   resetConversation();
   $('#convo').innerHTML = `<div class="empty"><h2>Ask about your Caboodle data</h2><p class="muted">Each question is a real one: about $0.04, counted in today's questions. A conversation takes 20 questions, and its first answer gives it a short title (about $0.00003 more).</p>
@@ -3863,6 +4003,50 @@ $('#showGallery').addEventListener('click', showGallery);
 $('#showExamples').addEventListener('click', () => showExamples());
 $('#showAliases').addEventListener('click', () => showAliases());
 $('#showFlight').addEventListener('click', () => showFlight());
+$('#showGuide').addEventListener('click', () => showGuide());
+$('#guide').addEventListener('click', event => {
+  const guide = state.guide;
+  const target = event.target;
+  if (target.closest('[data-guide-back]')) {
+    hideGuide();
+    return;
+  }
+
+  const topic = target.closest('[data-guide-topic]');
+  if (topic) {
+    guide.topic = topic.dataset.guideTopic;
+    renderGuide();
+    return;
+  }
+
+  const status = target.closest('[data-guide-status]');
+  if (status) {
+    guide.status = status.dataset.guideStatus;
+    renderGuide();
+    return;
+  }
+
+  const entry = target.closest('[data-guide-entry]');
+  if (entry) {
+    guide.selected = entry.dataset.guideEntry;
+    const selected = guide.data?.entries.find(item => item.key === guide.selected);
+    if (selected && !guideMatches(selected)) {
+      guide.topic = '';
+      guide.status = 'all';
+      guide.search = '';
+      renderGuide();
+    } else {
+      renderGuideBody();
+    }
+
+    $('#guide [data-guide-detail]')?.scrollIntoView({ block: 'nearest' });
+  }
+});
+$('#guide').addEventListener('input', event => {
+  if (!event.target.matches('[data-guide-search]')) return;
+  state.guide.search = event.target.value;
+  renderGuideBody();
+});
 $('#flight').addEventListener('click', event => {
   const flight = state.flight;
   const target = event.target;
@@ -4295,6 +4479,7 @@ else if (params.get('gallery') === '1' && state.token) showGallery();
 else if (params.get('examples') === '1' && state.token) showExamples();
 else if (params.get('aliases') === '1' && state.token) showAliases();
 else if (params.get('flight') === '1' && state.token) showFlight();
+else if (params.get('guide') === '1' && state.token) showGuide();
 
 window.askCaboodleTest = {
   state,
