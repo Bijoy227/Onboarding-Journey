@@ -1,6 +1,6 @@
 # Caboodle guide — batch 1 of 3, for review
 
-Draft of 19 October 2026, for review with Constance. Generated from the guide file in the code, so what you approve is exactly what Ask Caboodle reads.
+Draft of 3 November 2026, for review with Constance. Generated from the guide file in the code, so what you approve is exactly what Ask Caboodle reads.
 
 Ask Caboodle answers questions about how Caboodle works (what a term means, how things connect, the rules the app follows) only from these entries. We wrote each one from Caboodle's code, not from memory. Until you approve an entry, only Caboodle's own team sees answers that use it, marked "not yet reviewed".
 
@@ -110,13 +110,13 @@ For: everyone. Also called: member, members, role, roles, brand admin, brand mem
 
 **Rules**
 
-- A brand has two built-in roles, Brand Admin and Brand Member; a brokerage has Brokerage Admin and Broker.
+- A brand has two built-in roles, Organization Admin and Brand Member; a brokerage has Organization Admin and Broker.
 - Admins can manage everything in their organization: its details, members, invitations, join requests, email domains, brand access and private files. Brand Members can see the organization, its members and its connections; Brokers can see the organization and its members.
 - Only Caboodle's platform admins create roles beyond the built-in ones; a role made for brands can be used by every brand.
 - A member who can change roles assigns them; nobody can change their own role, suspend or remove themselves, and an organization always keeps at least one active member who can change roles.
 - A suspended member keeps their place but has no access until reactivated; a removed member loses this organization only, not their account or their other organizations.
 
-**Example.** In a brokerage, the Brokerage Admin invites a new Broker and gives them two of the brokerage's connected brands.
+**Example.** In a brokerage, the Organization Admin invites a new Broker and gives them two of the brokerage's connected brands.
 
 **Related:** 1. Organization, 6. Joining an organization, 7. Brand access, 9. Caboodle platform admin
 
@@ -132,8 +132,9 @@ For: everyone. Also called: invitation, invite, access request, request to join,
 
 **Rules**
 
-- An invitation link works for 7 days, and only for an account with the invited email address.
+- An invitation works for 7 days, and only for an account with the invited email address. Someone who signed up without the invitation link can still find it once signed in and accept it.
 - Who may ask to join depends on the organization's joining rule: anyone, only people whose email domain is one of the organization's domains, or nobody (invitation only). A member who can approve requests approves or rejects them and picks the role.
+- Under the email-domain rule, invitations follow it too: an invitation can be sent, resent and accepted only for an email at one of the organization's domains.
 - An email domain lets people with that domain find the organization and ask to join; it never adds anyone by itself. Each domain belongs to one organization, public email domains can't be added, and removing a domain never removes members.
 - Anyone signed in can create their own organization and becomes its admin.
 
@@ -189,15 +190,16 @@ For: everyone. Also called: modules, feature, module settings, settings, switche
 
 ### 9. Caboodle platform admin
 
-For: everyone. Also called: platform admin, caboodle admin, support access, caboodle team.
+For: everyone. Also called: platform admin, caboodle admin, support access, caboodle team, platform staff, caboodle staff.
 
-**What it means.** Caboodle's platform admins are Caboodle's own team. They set up organizations and connections, switch modules on, set module settings and keep the shared reference data, and they can open any organization to help.
+**What it means.** Caboodle's platform admins are Caboodle's own team: the platform admin and the Caboodle staff given admin rights. They set up organizations and connections, switch modules on, set module settings and keep the shared reference data, and they can open any organization to help.
 
 **Rules**
 
 - Only platform admins create, suspend or restore organizations; create, suspend or end brand connections; create roles beyond the built-in ones; switch modules on or off; and change module settings.
 - Only platform admins manage the shared retailers, banners, stores, regions, distributors and distribution centers, and the pipeline that loads distributor files.
-- A platform admin can open any organization without being a member (support access); there they see only the modules that organization has switched on.
+- Caboodle staff (Platform Staff) each have a staff role and, if needed, extra admin rights of their own; they do only the platform work those rights cover. A change to their rights applies from their next action.
+- The platform admin, and staff given support access, can open any organization without being a member (support access); there they see only the modules that organization has switched on.
 
 **Example.** To add a brokerage for a brand, a Caboodle platform admin creates the brokerage and connects it to the brand.
 

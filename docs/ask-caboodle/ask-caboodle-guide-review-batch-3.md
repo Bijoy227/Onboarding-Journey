@@ -1,6 +1,6 @@
 # Caboodle guide — batch 3 of 3, for review
 
-Draft of 19 October 2026, for review with Constance. Generated from the guide file in the code, so what you approve is exactly what Ask Caboodle reads.
+Draft of 3 November 2026, for review with Constance. Generated from the guide file in the code, so what you approve is exactly what Ask Caboodle reads.
 
 Ask Caboodle answers questions about how Caboodle works (what a term means, how things connect, the rules the app follows) only from these entries. We wrote each one from Caboodle's code, not from memory. Until you approve an entry, only Caboodle's own team sees answers that use it, marked "not yet reviewed".
 
@@ -27,6 +27,7 @@ For: everyone. Also called: line review, review window, open review, category re
 - A brokerage keeps its own list of reviews, which the brands connected to it can view; a brand can also keep its own reviews.
 - The month is a calendar month or "Open Review".
 - Region, retailer and category are required, and the same review can't be added twice; deleting a review is permanent.
+- Calendar entries and brand reports keep their own copy of the review's details: editing the review updates them, and deleting the review leaves them in place with the details they had.
 - The retailer and category are typed text: they aren't Caboodle's retailer list or the brand's product categories.
 
 **Example.** A retailer's frozen dessert review in March, with submissions open from January to February and the reset in June.
@@ -383,8 +384,9 @@ For: Caboodle's platform admins only. Also called: store list issues, store merg
 
 **Rules**
 
-- The issue types are pseudo-labelled store, out-of-date retailer name, chain in CRM twice, missing banner, stores at one address, store key conflict, incomplete address, suspect location, broken characters and unlinked sales rows.
+- The issue types are pseudo-labelled store, out-of-date retailer name, chain in CRM twice, missing banner, stores at one address, store key conflict, incomplete address, suspect location, broken characters, unlinked sales rows, and a banner that isn't one of the store's retailer's banners.
 - An issue is open, ignored or resolved.
+- When an admin decides a store's retailer is right, the store's sales rows take that retailer from then on, whatever retailer the distributor's file or a later sync gives them.
 
 **Example.** Two store list entries at one address show as an issue until an admin merges them or marks it ignored.
 
