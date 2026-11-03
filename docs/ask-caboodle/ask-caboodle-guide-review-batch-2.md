@@ -318,6 +318,7 @@ For: everyone. Also called: store count, pod, points of distribution, distributi
 **Rules**
 
 - Count each store once over the whole period: never add up per-month or per-distributor store counts.
+- A store is its store-list store; a line not matched to the store list yet counts by its name and ZIP code, so two stores with the same name are two stores.
 - POD for one product is the stores that received it; for several products, add each product's stores.
 - Caboodle's distributor sales report shows 0 POD for a retailer, store or city whose cases add up to 0.
 - Store counts come from shipments; a banner's door count is how many stores the banner has.
