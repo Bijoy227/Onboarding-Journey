@@ -1,6 +1,6 @@
 # Caboodle guide — batch 3 of 3, for review
 
-Draft of 3 November 2026, for review with Constance. Generated from the guide file in the code, so what you approve is exactly what Ask Caboodle reads.
+Draft of 12 November 2026, for review with Constance. Generated from the guide file in the code, so what you approve is exactly what Ask Caboodle reads.
 
 Ask Caboodle answers questions about how Caboodle works (what a term means, how things connect, the rules the app follows) only from these entries. We wrote each one from Caboodle's code, not from memory. Until you approve an entry, only Caboodle's own team sees answers that use it, marked "not yet reviewed".
 
@@ -88,7 +88,7 @@ For: everyone. Also called: broker market activities, field observation, market 
 **Rules**
 
 - Only brokerages record them, and each sees and edits only its own; the brand sees every brokerage's observations of its products as Broker Market Activities, view and export only.
-- Brokers can pick only banners linked to the brand through its distributors.
+- Brokers can pick only banners linked to the brand through its distributors now or from a future date.
 - An observation updates the product's authorization at that banner, but only upward (Pending, then Commit, then Approved, then Active). It never changes an Active or Discontinued authorization, and Not Active, Declined or Discontinued apply only over Not Active, Declined or no authorization.
 - Deleting an observation doesn't undo the change to the authorization.
 
@@ -144,21 +144,23 @@ For: everyone. Also called: contact, address book, buyer contacts.
 
 ### 54. Activities and pipeline
 
-For: everyone. Also called: pipeline, banner activity, activities, deal stage, plan board, pipeline task.
+For: everyone. Also called: pipeline, banner activity, activities, pipeline project, pipeline task, task status, overdue task, deal stage, plan board.
 
-**What it means.** Banner activities are dated notes a brand logs on a banner. The pipeline is the brand's boards (plans) of task cards moving through stages, each optionally about a retailer.
+**What it means.** Banner activities are dated notes a brand logs on a banner. The Pipeline holds projects of tasks: a brand's projects are filed under the brand and owned by the brand or by a brokerage working on it, and each task has a status, a priority, and an optional due date and person it is assigned to.
 
 **Rules**
 
 - A banner activity can name one of the brand's contacts, and people mentioned in it get an email.
-- A pipeline task needs a title, a plan and a stage; a retailer is optional, and there is no banner or product on it.
-- Stages are shared by every brand unless a brand adds its own.
-- An activity on a task that tags a banner is also logged on that banner.
-- A plan can't be deleted while it has tasks; deleting a task deletes its activities.
+- A project is filed under one brand, or kept in a brokerage member's own Personal workspace; a project can have sub-projects, one level deep.
+- People see their own company's projects, the projects shared with them as viewers or editors, and the tasks assigned to them; a brand's people don't see a brokerage's projects on their brand unless one is shared with them.
+- Projects are shared by invitation or by an invite link that expires; a task can be assigned only to someone who may work on that project.
+- Task statuses are one list for every company (To Do, In Progress, Blocked and Done to start with); each status counts as not started, in progress or done, and a done task records when it was done.
+- An open task is overdue when its due date has passed and due soon when it is due within the next 7 days; a task without a due date is never overdue.
+- The old Pipeline's boards became projects, its cards tasks or project notes, and its activities those notes, when the move ran; moved tasks have no due date, no assignee and medium priority.
 
-**Example.** A task "Pitch new flavors" on the 2027 plan moves from one stage to the next as the meetings happen.
+**Example.** A brokerage files a "Spring reset" project under a brand; a task in it due last Friday and still in progress shows as overdue.
 
-**Related:** 53. Contacts, 11. Banner
+**Related:** 53. Contacts, 11. Banner, 3. Brokerage
 
 | Keep / Change / Drop | Your correction | How your clients say it |
 |---|---|---|
@@ -322,6 +324,9 @@ For: Caboodle's platform admins only. Also called: sync run, data sync, run sync
 **Rules**
 
 - Nothing syncs on a schedule: a platform admin starts each sync.
+- A KeHE sync uses a KeHE login, one KeHE supplier, and one of its KeHE brands or all of them; the login can be the brand's own or that of a brokerage connected to it. Each brand keeps a saved choice, which a platform admin can change for one run and save as the new choice.
+- A KeHE sync doesn't start when no choice is saved, the login is gone, the brokerage is no longer connected, or the supplier or KeHE brand is no longer offered by the login. A sync of one KeHE brand still replaces the brand's whole KeHE month.
+- UNFI syncs use the brand's own UNFI login and have nothing to choose.
 - A run ends failed on any error, partially succeeded when some lines are unmapped, and succeeded otherwise; a failed run may still have loaded its rows, and the latest run of a month is the one whose rows exist.
 - Loading a month replaces that brand's month for that distributor.
 - Syncs and uploads don't start while a store clean-up runs.
@@ -367,6 +372,7 @@ For: Caboodle's platform admins only. Also called: retailer alias, store alias, 
 
 - Only approved aliases are used; platform admins approve, reject or retire them, and aliases made while resolving lines are approved at once.
 - A UPC mapping made by hand is tried before a direct UPC match.
+- When a distributor sends many stores of a retailer with one address, a platform admin can map every store name and number at that address to one store; from then on, lines at that address for that retailer are matched to that store before any customer number is tried.
 
 **Example.** The spellings "SPROUTS FARMERS MKT" and "Sprouts
 

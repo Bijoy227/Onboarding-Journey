@@ -1,6 +1,6 @@
 # Caboodle guide — batch 2 of 3, for review
 
-Draft of 3 November 2026, for review with Constance. Generated from the guide file in the code, so what you approve is exactly what Ask Caboodle reads.
+Draft of 12 November 2026, for review with Constance. Generated from the guide file in the code, so what you approve is exactly what Ask Caboodle reads.
 
 Ask Caboodle answers questions about how Caboodle works (what a term means, how things connect, the rules the app follows) only from these entries. We wrote each one from Caboodle's code, not from memory. Until you approve an entry, only Caboodle's own team sees answers that use it, marked "not yet reviewed".
 
@@ -30,6 +30,7 @@ For: everyone. Also called: sandbox promotion, sandbox, trade spend sandbox, wha
 - How many versions a family may have is a setting for the brand; only versions that exist count, so deleting one frees a place.
 - At most one version is pushed to brand-approved promotions, and exactly one is the reporting version.
 - The brand's limits on how many promotions it has count a family once, and apply to its brokerages too.
+- A promotion can be copied into a new one: you pick some of its versions, a new name and a year. The versions are numbered from 1, every date moves by whole years so the earliest event falls in the chosen year, and the copied reporting version stays the reporting version (otherwise version 1). The copy keeps the events' prices, counts toward the brand's promotion limits and isn't pushed.
 
 **Example.** A summer promotion at one retailer is one family, with a 4-week TPR in version 1 and a 6-week TPR in version 2.
 
@@ -99,7 +100,7 @@ For: everyone. Also called: event, events, event status, cancelled event, promot
 - An event's unit price comes from the brand's list price in effect on its start date for the event's distributor.
 - Statuses Active, Pending, Retailer Approved and Completed count in promotion figures and the monthly report; Cancelled, Did Not Run and Declined events stay listed but count for nothing.
 - Any status can change to any other: in the sandbox, on the brand's promotional calendar, or in the brokerage's promotional management.
-- Caboodle doesn't stop events from overlapping; overlapping events for the same banner and product are merged when the baseline is worked out.
+- Caboodle doesn't stop events from overlapping, except in a simple promotion, where events for the same retailer, banner and product can't overlap; overlapping events for the same banner and product are merged when the baseline is worked out.
 
 **Example.** A 4-week TPR of one ice cream at a Sprouts banner in July with a $1.00 scan allowance, status Retailer Approved.
 
@@ -228,7 +229,7 @@ For: everyone. Also called: plan vs actual, monthly report, variance, actuals, a
 **Rules**
 
 - Planned rows come from approved standard promotions' counted events; promo cases and revenue are spread over the calendar months by days. The sandbox's version of the report uses each family's reporting version.
-- Actual rows come from distributor sales (cases shipped and sales dollars by month), matched to Caboodle's banners by banner name; actuals can also be imported from a file.
+- Actual rows come from distributor sales (cases shipped and sales dollars by month), matched to Caboodle's banners by banner name and shown under the distributor the brand links to that banner on the sales date; sales on days when the banner has no link are left out. Actuals can also be imported from a file.
 - A refresh updates or adds rows and records when it ran; it never clears old actual rows.
 - Variance = (actual cases − planned cases) ÷ planned cases, left blank when the plan is 0.
 - Figures after the last refresh aren't in it, so always check when it was last refreshed.
@@ -251,7 +252,7 @@ For: everyone. Also called: promotion calendar, promos at a glance, calendar not
 
 - It shows approved events only, of every status, simple promotions included; EDLP events show in every month.
 - An event shows in a year when it starts or ends in that year.
-- Events whose retailer, banner, product, category or banner-distributor link is missing are hidden.
+- Events are hidden when their retailer, banner, product, authorization or category is gone, or when their banner isn't linked to the event's distributor on its start date.
 - Calendar notes are the brand's free-text lines for a year, one cell per month, not tied to a promotion; brokers can read them.
 
 **Example.** The July column for one banner lists the two TPR events running there, each with its status.
@@ -339,8 +340,9 @@ For: everyone. Also called: units per store per week, sales rate.
 
 **Rules**
 
-- In Caboodle's distributor sales report, units are cases × case pack, and a month counts as 4.43, 4.29 or 4.0 weeks by its length.
+- In Caboodle's distributor sales report, units are cases × case pack, and the weeks are those of every month in the filter that has shipments, each month counting 4.43, 4.29 or 4.0 weeks by its length.
 - It is worked out per product, so a product that reached more stores can have a lower velocity.
+- Every product is divided by the same weeks, so a product shipped in only some of those months shows a lower velocity.
 - The average weekly sales on a promotion is typed in by people; it isn't this measure.
 
 **Example.** 1,200 units to 50 stores in a 4.43-week month is about 5.4 units per store per week.
@@ -423,7 +425,7 @@ For: everyone. Also called: item ranking, category ranking, market ranking, comp
 
 - It is Caboodle's own market data: questions about the brand's category, competitors and market are answered from it before any web search.
 - Each upload covers a window (for example 52 weeks ending on a date); windows overlap, so a total adds up one window only.
-- Caboodle's Item Ranking screens add up every window that ends in the latest year, so their totals can differ from a one-window total.
+- Caboodle's Item Ranking screens add up every window of the longest length (52 weeks when there is one) that ends in the latest year, so their totals can differ from a one-window total.
 - "Nationally" means the TOTAL US market.
 
 **Example.** A 52-week window ending in June ranks every frozen dessert item in TOTAL US by dollars.

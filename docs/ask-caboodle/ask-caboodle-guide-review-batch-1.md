@@ -1,6 +1,6 @@
 # Caboodle guide — batch 1 of 3, for review
 
-Draft of 3 November 2026, for review with Constance. Generated from the guide file in the code, so what you approve is exactly what Ask Caboodle reads.
+Draft of 12 November 2026, for review with Constance. Generated from the guide file in the code, so what you approve is exactly what Ask Caboodle reads.
 
 Ask Caboodle answers questions about how Caboodle works (what a term means, how things connect, the rules the app follows) only from these entries. We wrote each one from Caboodle's code, not from memory. Until you approve an entry, only Caboodle's own team sees answers that use it, marked "not yet reviewed".
 
@@ -87,10 +87,11 @@ For: everyone. Also called: connected brand, connected brokerage, brokerage conn
 
 **Rules**
 
-- Only Caboodle's platform admins create, suspend or end a connection, and it is active as soon as it is created; neither the brand nor the brokerage requests or accepts it.
+- Only Caboodle's platform admins create, confirm, suspend or end a connection, and it is active as soon as it is created; neither the brand nor the brokerage requests or accepts it.
 - A brand can have several brokerages; a brand and a brokerage have at most one open connection.
 - On a connected brand, the brokerage gets every module the brand has switched on, plus its own brokerage modules. The brand doesn't choose which.
 - Brokerage admins work on every connected brand; a broker works only on the connected brands their admins give them.
+- Some connections were carried over from Caboodle's earlier version because one of the brokerage's brokers worked on the brand there. Until a platform admin confirms one, only the people who already had the brand work on it: the brokerage's admins don't get it, and neither the brokerage nor the brand sees it among their connections.
 - A suspended connection gives no access but keeps each person's brand access. An ended connection removes the brokerage people's access to that brand and can't be reopened: a new connection is needed.
 - Brand members see the brand's brokerages and the brokerage people working on the brand, view only.
 
@@ -115,6 +116,7 @@ For: everyone. Also called: member, members, role, roles, brand admin, brand mem
 - Only Caboodle's platform admins create roles beyond the built-in ones; a role made for brands can be used by every brand.
 - A member who can change roles assigns them; nobody can change their own role, suspend or remove themselves, and an organization always keeps at least one active member who can change roles.
 - A suspended member keeps their place but has no access until reactivated; a removed member loses this organization only, not their account or their other organizations.
+- A person whose Caboodle account is switched off has no access in any organization, even while their membership is active.
 
 **Example.** In a brokerage, the Organization Admin invites a new Broker and gives them two of the brokerage's connected brands.
 
@@ -133,7 +135,7 @@ For: everyone. Also called: invitation, invite, access request, request to join,
 **Rules**
 
 - An invitation works for 7 days, and only for an account with the invited email address. Someone who signed up without the invitation link can still find it once signed in and accept it.
-- Who may ask to join depends on the organization's joining rule: anyone, only people whose email domain is one of the organization's domains, or nobody (invitation only). A member who can approve requests approves or rejects them and picks the role.
+- Who may ask to join depends on the organization's joining rule: anyone, only people whose email domain is one of the organization's domains, or nobody (invitation only). Every active member who can approve requests gets an email about a new request, and approves or rejects it and picks the role.
 - Under the email-domain rule, invitations follow it too: an invitation can be sent, resent and accepted only for an email at one of the organization's domains.
 - An email domain lets people with that domain find the organization and ask to join; it never adds anyone by itself. Each domain belongs to one organization, public email domains can't be added, and removing a domain never removes members.
 - Anyone signed in can create their own organization and becomes its admin.
@@ -157,6 +159,7 @@ For: everyone (mainly organization admins). Also called: full access, custom acc
 - In a brand, every member gets the brand in full when they join; an admin can narrow a Brand Member to chosen modules and actions.
 - In a brokerage, admins work on every connected brand. A Broker works only on the connected brands given to them, each in full (every module the brand has switched on) or custom (chosen modules with chosen actions: view, create, update, delete, import, export).
 - Admin roles can't be limited.
+- A brand reached through a connection carried over from Caboodle's earlier version, and not yet confirmed, stays with the people who had it there: the brokerage's admins don't see it in anyone's brands and can't give it, and changing a person's brands leaves it in place. Once a platform admin confirms the connection, it works like any other.
 - A brand a member has no access to is invisible to them, and its records answer as not found.
 
 **Example.** A Broker given one brand with view-only access to approved promotions can open its promotions but not change them.
@@ -196,7 +199,7 @@ For: everyone. Also called: platform admin, caboodle admin, support access, cabo
 
 **Rules**
 
-- Only platform admins create, suspend or restore organizations; create, suspend or end brand connections; create roles beyond the built-in ones; switch modules on or off; and change module settings.
+- Only platform admins create, suspend or restore organizations; create, confirm, suspend or end brand connections; create roles beyond the built-in ones; switch modules on or off; and change module settings.
 - Only platform admins manage the shared retailers, banners, stores, regions, distributors and distribution centers, and the pipeline that loads distributor files.
 - Caboodle staff (Platform Staff) each have a staff role and, if needed, extra admin rights of their own; they do only the platform work those rights cover. A change to their rights applies from their next action.
 - The platform admin, and staff given support access, can open any organization without being a member (support access); there they see only the modules that organization has switched on.
@@ -221,7 +224,7 @@ For: everyone. Also called: chain, corporate parent, retailers.
 
 - Retailers are shared reference data: every brand sees the same retailers, and only Caboodle's platform admins add or change them.
 - A retailer has one or more banners, and its stores belong to those banners.
-- A brand's list of retailers shows those with at least one banner linked to one of the brand's distributors.
+- A brand's list of retailers shows those with at least one banner linked to one of the brand's distributors today or from a later date; a link that has ended doesn't count.
 - A retailer can't be deleted while it has banners.
 
 **Example.** Kroger is a retailer; Fred Meyer and Ralphs are two of its banners.
@@ -340,15 +343,18 @@ For: everyone. Also called: dc, warehouse, distributor warehouse, distribution c
 
 For: everyone. Also called: distributor markup, markup, distributor banner link, which distributor serves a banner.
 
-**What it means.** For each brand, every banner is served by one of the brand's distributors (or delivery methods), with a markup: the percentage the distributor adds to the brand's case cost when it sells to the retailer.
+**What it means.** For each brand, every banner is served by one of the brand's distributors (or delivery methods) at a time, with a markup: the percentage the distributor adds to the brand's case cost when it sells to the retailer. The link has dates, so a banner can move to another distributor from a chosen day.
 
 **Rules**
 
-- The brand sets which distributor serves each banner and the markup; a banner has one distributor for the brand, and the markup can't be negative.
-- In promotion figures, the retailer's case cost is the brand's case cost plus the markup; take off the case allowances and it is the retailer's net case cost.
-- An approved promotion event takes its distributor from this link, so its price is the brand's list price for that distributor.
-- A brokerage can record market overviews only at banners linked to the brand this way.
-- A banner can't be unlinked from a distributor while approved promotion events use them together.
+- The brand sets which distributor serves each banner and the markup; a banner has one distributor for the brand on any day, and the markup can't be negative. A link can start and end on chosen dates, and the brand can see a banner's past links.
+- In promotion figures, the retailer's case cost is the brand's case cost plus the markup in effect on the event's start date; take off the case allowances and it is the retailer's net case cost.
+- A promotion event takes its distributor from the link in effect on its start date (1 January for an EDLP event), so its price is the brand's list price for that distributor. An approved event can't be saved for a start date when its banner has no distributor that day, and moving its start date can change its distributor and price.
+- The brand can move a banner to another distributor from a date: the old link ends the day before and the new one starts that day with its own markup. Approved events at the banner from that day move to the new distributor and take its list price, sandbox events from that day are priced again, and an event with no price there counts as 0.
+- A markup change can start from a date, so events before it keep the old markup; without a date it changes the markup of the current link for all its events.
+- Lists of the brand's banners and retailers, and the choices when planning a promotion, use today's link, or the next one when a banner has none today.
+- A brokerage can record market overviews only at banners linked to the brand this way, by a link that hasn't ended.
+- A banner that approved events use with a distributor can be unlinked only with an end date on or after the last of those events' start dates, and the link is kept as history; a link no approved event uses is removed.
 
 **Example.** A brand links a Sprouts banner to KeHE with a 25% markup, so a $36.00 case costs Sprouts $45.00 before allowances.
 
@@ -413,6 +419,7 @@ For: everyone. Also called: sku, item, product specification, upc, products.
 - A product has no status of its own: its status is set banner by banner, by its authorization at each banner.
 - A new product gets a Not Active authorization at every banner that exists then, and an empty list price for each of the brand's distributors.
 - Changing a product's case pack recalculates its KeHE cases in the brand's distributor sales.
+- Changing a product's category keeps its list prices; they move to the new category.
 - The KeHE and UNFI item codes are stored and shown only; distributor sales match products by UPC.
 
 **Example.** A 4-pint pack of strawberry ice cream with its own UPC and a case pack of 6.
@@ -474,8 +481,8 @@ For: everyone. Also called: price list, unit price, case price, price in effect,
 
 - A list price is set per product and distributor (or delivery method) and starts on its valid-from date; there is one price per product, distributor and date, and it can't be negative.
 - The distributor must be one of the brand's linked distributors.
-- The price in effect on a day is the one with the latest valid-from date on or before that day. A promotion event uses the price in effect on its start date for its distributor, or 0 when there is none.
-- Saving a price re-prices the brand's approved and sandbox events that start on or after its valid-from date; a price import doesn't.
+- The price in effect on a day is the one with the latest valid-from date on or before that day. A promotion event uses the price in effect on its start date for the distributor its banner is linked to on that date, or 0 when there is none.
+- Saving a price re-prices the brand's approved and sandbox events for that product and distributor that start on or after its valid-from date. A price import does the same for each new price it adds, but not for a price it overwrites.
 - Changing a price's valid-from date adds a new price instead of moving the old one.
 
 **Example.** A price of $3.00 a unit through KeHE from 1 March means a case of 12 costs $36.00 from that day.
@@ -518,7 +525,7 @@ For: everyone. Also called: banner authorization, banner sku, product status, re
 - There is one authorization per brand, banner and product, with one of seven statuses: Active, Pending, Commit, Approved, Not Active, Declined or Discontinued.
 - The active date is kept when the status is Active, and the discontinued date when it is Discontinued. In promotion figures the product's year at the banner starts on its active date and ends the day before its discontinued date.
 - Brand users set authorizations, a brokerage's market overviews also move them, and every new product starts as Not Active at each banner that exists then.
-- A product can go on a promotion at a banner only when it has an authorization there (in any status) and the banner is linked to the event's distributor.
+- A product can go on a promotion at a banner only when it has an authorization there (in any status) and the banner is linked to a distributor on the event's start date; the event takes that distributor.
 - An authorization used by a sandbox promotion can't be deleted, and a banner with authorizations can't be deleted.
 - Brands see authorizations in Retail Reports and the Sales Tracker; brokers see them as the Retail APL.
 
@@ -580,10 +587,10 @@ For: everyone. Also called: product connections, product and banner, product and
 
 - Product and brand: a product belongs to one brand and one of the brand's categories.
 - Product and distributor: the brand links its distributors and delivery methods, and sets the product's list price for each.
-- Product and banner: the product has an authorization at each banner (its status there), and the brand links each banner to one distributor with a markup.
+- Product and banner: the product has an authorization at each banner (its status there), and the brand links each banner to one distributor at a time, with a markup; the link has dates, so a banner can move to another distributor.
 - Product and retailer: only through the retailer's banners; there is no direct link between a product and a retailer.
 - Product and distribution center: through the distributor's APL, matched by UPC.
-- In a promotion event they meet: one product, at one banner of a retailer, through the banner's distributor, at that distributor's list price in effect.
+- In a promotion event they meet: one product, at one banner of a retailer, through the distributor linked to the banner on the event's start date, at that distributor's list price in effect on that date.
 - In distributor sales, a shipment line is matched to the product by its UPC (or a UPC mapping Caboodle has made) and to a store, which gives its banner and retailer.
 
 **Example.** An item authorized Active at Ralphs, whose banner the brand links to KeHE, is priced on a Ralphs promotion at the brand's KeHE list price, and the retailer's cost adds the markup.
