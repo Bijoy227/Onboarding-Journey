@@ -1904,7 +1904,23 @@ Decision D76 (owner, 2026-10-15). Answers questions about how Caboodle works: wh
 
 Prerequisites already met: IAM foundation + module work on the branch base; staging aligned with production (PG 15, `security_invoker`).
 
-### G1 — Module catalog seed
+### G1 — Module catalog seed (done 2026-11-16, commit `905d8bdc7`, after the third develop merge `d36d3ac20`; D231–D234)
+
+**What G1 found (2026-11-16).** The plan below assumed an `OptionalDataSource` link only lists a data source. The code does two other things:
+- **IAM's access ignores it.** `AccessResolver` loads only `Required` links, and `AccessContextBuilder.CustomGrant` gives a custom-access member View on the `Required` sources of each module they hold. An `OptionalDataSource` link changes nobody's access.
+- **The admin's module switches treat it as `Required`.** `ModuleAssignmentService` refuses to switch a module on while a module it links to (`Required` or `OptionalDataSource`) is off (`MissingDependency`), and refuses to switch a linked module off while the module is on (`DependentStillEnabled`); `ApplyModuleAssignmentsRequest` then rolls back with `DependencyConflict`.
+
+So the planned links (distributor sales, SPINS, KeHE, UNFI, the monthly report, and Pipelines again by D226) would have let no brand use Ask Caboodle without all of them, nor switch any of them off while it is on. Locally every one of the 215 brands has every module on, so nothing showed it. A `Required` link would be worse: a member granted Ask Caboodle would get View on the linked modules.
+
+**As built (D231–D234):**
+- **No new links (D231).** What Ask Caboodle may read for a person follows the modules that person holds on the brand, per table, in G3 (catalog `modules:`); a brand without SPINS gets no SPINS answers. No link is needed for that.
+- **The seven existing Brand links stay (D232):** product spec, distributors, retailers, regions, approved promotions, the sandbox and contacts, all `OptionalDataSource`. Every brand has these core modules.
+- **No Pipeline link, no broker links (D233, overturns D226).** Ask Caboodle still reads the Pipeline where the person holds `pipelines` (G3).
+- **Guard test** `Catalog/ModuleSeedTests` (the Ask Caboodle test project now references `Modules.Admin.Application`): Ask Caboodle's links are exactly those seven, Brand audience, `OptionalDataSource` only (never `Required`); the `ask-caboodle` module exists for brands and brokerages.
+- **The third merge's follow-ups:** email types 19–21 in `Email.EmailTemplates` (Platform Staff invitation, access request approved, rejected); guide `joining-an-organization` (the decision email to the person who asked; they can ask again after a rejection) and `caboodle-platform-admin` (staff invited by email: role or rights, 7 days, register or accept with a password, resend replaces the link, the platform admin and existing staff can't be invited); `members-and-roles` and `brand-access` re-checked unchanged (messages and module names only); checks re-recorded; review batches regenerated. `Organization.PlatformStaffInvitations` is not read (D234, §9.2).
+- No migration, no seed change, no model call.
+
+**The original plan, kept for history:**
 - Brand audience: add Ask Caboodle `OptionalDataSource` deps `distributor-sales-report`, `spins`, `kehe`, `unfi`, `monthly-report` (design Q13).
 - Broker audience: add the `ask-caboodle` node to `BrokerRoots` with `OptionalDataSource` deps on the broker-audience data-source modules **that IAM defines** (today: product-spec, retailers, regions, distributors, approved-promotions, trade-spend-sandbox, market-overview, category-review, distributor-apl). Only the Ask Caboodle entries are added; other modules are IAM's (D6).
 - **Status after the IAM merge (2026-10-12, `b30b387c`):**
@@ -1927,6 +1943,7 @@ Prerequisites already met: IAM foundation + module work on the branch base; stag
   - **Brokerages hold the brand's modules too.** On a connected brand, `Brands[brandId].Modules` contains the brand's switched-on modules as well as the brokerage's own. A table is therefore entitled when its `modules.brand` **or** its `modules.broker` slug is granted on that brand. `broker: none` means no extra broker module; it does not hide the table from brokers.
   - **Brand scope:** use `BrandsInScope("ask-caboodle", View)` for the brands in scope.
   - **Platform admins:** they have no brand list, so treat them as unrestricted (no RLS settings).
+- **From G1 (2026-11-16, D231):** the module catalog's links don't say what Ask Caboodle may read; G3 alone does, per person and brand, from `Brands[brandId].Modules` against each table's `modules:`. A custom-access member holds only the modules granted to them plus View on their `Required` sources, so check the person's modules, not the brand's.
 - **From the `develop` merge (2026-11-03):** IAM now has `ActsAsPlatform` = platform admin **or** Platform Staff holding "Support Access to Organizations" (CS-1812), and its own checks (`HasOrgPermission`, `CanUseBrand`, `OwnsBrokerageRecord`) use it. Ask Caboodle still checks `IsPlatformAdmin` in about 36 places, so staff are ordinary users there (D210). Decide here whether staff get any platform-admin audience; the admin login reads the staff tables since the IAM sync.
 
 ### G4 — Row-level security (the real boundary)
@@ -2228,11 +2245,15 @@ Owner answers recorded 2026-10-11.
 | D223 | Develop sync 2: what of the new Pipeline is read | **Owner:** the old Pipeline out, "the new implementation should be there". **Claude:** `Projects`, `Tasks`, `TaskStatuses`, `ProjectMembers` (plain-text notes, masked); not invite links, attachments, the HTML notes or the move's records. |
 | D224 | Develop sync 2: whose projects a brand's Pipeline is | **Claude:** until G3/G4, every project filed under the brand, each with its owner (the brand or a brokerage); the screens' per-person visibility is G4's policy. |
 | D225 | Develop sync 2: the old pipeline grants | **Claude:** revoked now, not left for Pipeline PR 8. |
-| D226 | Develop sync 2: Ask Caboodle's dependency on the Pipelines module | **Claude:** restored in G1 for both audiences (develop retired it for the old Ask Caboodle). |
+| D226 | Develop sync 2: Ask Caboodle's dependency on the Pipelines module | **Claude:** restored in G1 for both audiences (develop retired it for the old Ask Caboodle). **Overturned by D233** (G1): the link would lock the module switches. |
 | D227 | Develop sync 2: new DataHub tables | **Claude:** shared-address rules and the KeHE sync choices are not catalogued (on request): a new table needs the owner's go-ahead. |
 | D228 | Develop sync 2: the KeHE run's login | **Claude:** `DataSyncRuns."CredentialID"` not granted. |
 | D229 | Develop sync 2: Ask Caboodle's own promotion queries | **Claude:** the spans and simple fees count only the events the screens show; a month filter keeps a simple promotion's EDLP events. |
 | D230 | Develop sync 2: dates in the catalog | **Claude:** no catalog text names a date after the eval's as-of date (2026-10-12), so the AI never reads a "future" change. |
+| D231 | G1: links to the data modules | **Owner ("build G1" as proposed):** none added. An `OptionalDataSource` link locks the admin's module switches like a `Required` one and changes nobody's access, so the planned links would have made every data module a condition for Ask Caboodle. What it reads follows each person's modules (G3). |
+| D232 | G1: the seven existing Brand links | **Owner:** kept (product spec, distributors, retailers, regions, approved promotions, sandbox, contacts); a test pins them and keeps them `OptionalDataSource`. |
+| D233 | G1: the Pipeline and broker links | **Owner:** none; overturns D226. Pipeline answers follow the person's `pipelines` module in G3. |
+| D234 | Third develop merge: `Organization.PlatformStaffInvitations` | **Claude (the owner didn't take it up):** not read for now (on request, §9.2); it would be read like `Organization.Invitations`, without the email and token. |
 
 ### 7.1 Demo track — dropped 2026-10-12 (D3), kept for history
 
@@ -2364,9 +2385,11 @@ Each one is posted with its package, and gets a D number once decided.
 | C9.1 | done | `053371c2` | 2026-11-03/04: the owner delegated the decisions (D215–D222) and reviewed at the end ("yes commit"). Built as in §4 "C9.1": the store count as the app's, velocity, POD, region and about twenty other catalog lines as the code does them (58 edits in 22 files), Q76's glossary codes, 21 store values re-recorded free, one guide rule. Solution 7,697 green (Intelligence 1,113), DB tests 84 green (they also ran every rewritten catalog example), Release build 0 errors. **Paid, $0.69:** 10 of 10 (store counts, velocity, voids, plan vs actual, sandbox plan, authorizations, category reviews, Q76). |
 | develop merge 2 | done | `fd497f8e6` | 2026-11-12: `origin/develop` @ `719490ad2`, 19 PRs (the new Pipeline, dated distributor links, simple promotions, exports, shared-address store mapping, KeHE supplier selection, IAM fixes). Seven conflicts, as the dry run showed: the solution file, the module settings seed and two tests (both sides' settings kept, 29), three old Intelligence files (kept deleted). Release build 0 errors, both snapshots consistent, 14 develop migrations applied on `caboodle_dev`; solution 10,224 of 10,226 (only the guide drift check), DB tests 84 green. |
 | develop sync 2 | done | `f2a93e64f` | 2026-11-12: D223–D230. Built as in §4 "Develop sync 2": the new Pipeline in (four tables) and the old out, dated distributor links, Ask Caboodle's promotion queries follow the screens' visibility, 31 guide entries re-read (about 20 changed) and the checks re-recorded, the small items, migration `AddAskCaboodleDevelopSyncGrants` applied locally. Intelligence 1,114 green, DB tests 84 green, Release build 0 errors (the only new warning the migration's CA1505). **Paid, $0.81:** 7 of 10; Q35 as since C0b, Q41 a wording check (widened), Q55 a group-count slip; every figure right. **Waiting:** the local Pipeline move (CS-1652 runbook step 4), then Q81–Q82 and the Q41/Q55 re-check (about $0.30); the security decision before staging (§11). |
+| develop merge 3 | done | `d36d3ac20` | 2026-11-16: `origin/develop` @ `49e3b55d9`, one PR (#927: CS-1851 Platform Staff invitations; CS-1841, 1843, 1858, 1859, 1869, 1872, 1874, 1884 IAM fixes). No conflicts, no Ask Caboodle file changed; both snapshots consistent; 3 migrations applied on `caboodle_dev` (`AddPlatformStaffInvitations`, `AddAccessRequestDecisionEmailTemplates`, `UpdateOrganizationInvitationEmailTemplate`); Release build 0 errors; solution 10,267 of 10,268 (only the guide drift check, 4 entries), DB tests 84 green. Local Pipeline move still not run (0 projects). |
+| G1 | done | `905d8bdc7` | 2026-11-16: D231–D234 (committed at the owner's request). Built as in §5 "G1": no new module links (an `OptionalDataSource` link locks the admin's module switches and grants nothing), the seven Brand links kept and pinned by a test, D226 overturned; the third merge's follow-ups (email types 19–21, two guide rules, checks re-recorded, review batches regenerated). No migration. Solution 10,270 green (Intelligence 1,116), Release build 0 errors. $0 spent. |
 | C9 part 2 | todo | | How-to steps in the guide, after the FE rework, from the reworked screens; Constance reviews them too. |
 | Admin manual | todo | | A Platform Admin user manual (owner, 2026-10-18): every admin screen (settings and budgets, usage, verified examples, prompt review, pins, the Flight recorder), in plain words with screenshots. Written after the final UI is built (§10.10), alongside C9 and before go-live; Constance reviews it. |
-| G1 … A3 | todo | | |
+| G2 … A3 | todo | | C0c comes before G2 (D108). |
 
 ## 9. Data Ask Caboodle does not read
 
@@ -2427,6 +2450,7 @@ Kept up to date in every package that changes the catalog or the grants. The age
 | `DataHub.DistributorSyncSelections`, `DistributorReportOptions`, `DistributorReportOptionRefreshRuns` | Each brand's saved KeHE login, supplier and KeHE brand, and what each login offers (CS-1390) | **On request** (D227); the login itself (`ThirdPartyCredentials`) is never read |
 | `CRM.DistributionCenters` | Warehouse names | **Never:** replaced by `CRM.DistributorDcs` (the grant was revoked in B4) |
 | The DataHub import, sync, mapping and data-quality tables: `ImportJobs`, `ExportJobs`, `DataSyncRuns`, `Unmapped*`, `StoreListIssues`, `StoreMergeHistories`, `StoreCleanupChangeLogs`, `DistributorCustomerLinks`, `AddressReferences`, `BrandDataCleanupJobs`, `UnmappedRecordResolutionAudits` | The import pipeline's internals | **Done in B10b:** platform admins only (file locations hidden, D127). `UnifiedEntities` and `UnifiedEntityAliases` are already read by the name search (approved aliases only). |
+| `Organization.PlatformStaffInvitations` | Invitations to join Caboodle's Platform Staff, with role, rights, status and expiry (CS-1851) | **On request** (D234): would be read like `Organization.Invitations`, for platform admins, without `Email` and `TokenHash` |
 | `DataHub.MappingSuggestions` | Retailer candidates the sync proposed for unmapped values | **On request** (D126): never acted on, and the Unmapped Data screen computes its suggestions live, so answers from it would disagree with the screen |
 | `DataHub.AliasAuditTrail`, `AliasMatchAttempts` | Alias status changes and match attempts | **On request** (D126): 0 rows, no live writer |
 
