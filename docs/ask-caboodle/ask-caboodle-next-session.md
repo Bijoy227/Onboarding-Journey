@@ -1,23 +1,36 @@
 # Ask Caboodle — Handoff for the next session
 
-Updated 2026-11-16, after the fourth `develop` merge (`f71c649ee`) and develop sync 3 with the period examples (`e45bf2c17`, with its eval report). Before them the same day: the third `develop` merge (`d36d3ac20`), G1 (`905d8bdc7`) and the Pipeline cases with the sync error text (`447ed8a5d`, with its eval report). Written 2026-11-12, after the second `develop` merge (`fd497f8e6`) and develop sync 2 (`f2a93e64f`, with its eval report). Before them: the FE handover (`a71c5d9dc`), C9.1 (`053371c2`), the IAM sync (`607edfd6`) and the first `develop` merge (`52cca716`). Read this first, then §0, §4 "Develop sync 2", "C9.1" and "IAM sync", §5 (GA, with the G1, G3 and G4 notes from develop sync 2), §7.2, §8, §9 and §10 of [`ask-caboodle-be-implementation-plan.md`](ask-caboodle-be-implementation-plan.md).
+Updated 2026-11-16, after the FE contract fixes (`7a156843a`), the fourth `develop` merge (`f71c649ee`) and develop sync 3 with the period examples (`e45bf2c17`, with its eval report). Before them the same day: the third `develop` merge (`d36d3ac20`), G1 (`905d8bdc7`) and the Pipeline cases with the sync error text (`447ed8a5d`, with its eval report). Written 2026-11-12, after the second `develop` merge (`fd497f8e6`) and develop sync 2 (`f2a93e64f`, with its eval report). Before them: the FE handover (`a71c5d9dc`), C9.1 (`053371c2`), the IAM sync (`607edfd6`) and the first `develop` merge (`52cca716`). Read this first, then §0, §4 "Develop sync 2", "C9.1" and "IAM sync", §5 (GA, with the G1, G3 and G4 notes from develop sync 2), §7.2, §8, §9 and §10 of [`ask-caboodle-be-implementation-plan.md`](ask-caboodle-be-implementation-plan.md).
 
-## Starter prompt (next: C0c, if the owner agrees)
+## Starter prompt (next: the FE integration run or C0c, as the owner chooses)
 
-> Read `docs/ask-caboodle/ask-caboodle-next-session.md`, then §0, §4 "C0c" and "Develop sync 3", §5 (GA, with G1 as built), §7.2, §8 and §9 of `docs/ask-caboodle/ask-caboodle-be-implementation-plan.md` in `D:\Fork\Onboarding-Journey`. The backend is `D:\Fork\Caboodle BE Repository\caboodle.backend`, branch `feature/ask-caboodle` (last commit: develop sync 3 with the period examples `e45bf2c17`, after the fourth develop merge `f71c649ee`; working tree clean apart from the owner's own untracked docs).
+> Read `docs/ask-caboodle/ask-caboodle-next-session.md`, then §0, §4 "C0c", "Develop sync 3" and "FE contract fixes", §5 (GA, with G1 as built), §7.2, §8 and §9 of `docs/ask-caboodle/ask-caboodle-be-implementation-plan.md` in `D:\Fork\Onboarding-Journey`. The backend is `D:\Fork\Caboodle BE Repository\caboodle.backend`, branch `feature/ask-caboodle` (last commit: the FE contract fixes `7a156843a`, after develop sync 3 `e45bf2c17`; working tree clean apart from the owner's own untracked docs).
 >
 > First fetch and tell me whether `origin/develop` has commits after `94374e4f1`; don't merge without my go-ahead. Paid runs need my words "run the paid check" with the cost stated; the permission check refuses anything less.
 >
-> Then post C0c's short plan (plan §4 C0c: rankings, trend words and figures in the wrong place; it comes before G2, D108, which lets organization users ask), sized with what the Flight recorder holds, with its open decisions in simple English, and wait for my go-ahead. The items under "Parked for later" and the top-selling clarify options (D197) wait until I bring them up.
+> Then ask me which comes first: the FE integration run (the FE branches `feature/CS-1362-dashboard-ask-caboodle` in `D:\Fork\Caboodle FE Repository\caboodle.web` and `D:\Fork\Caboodle FE Admin Repository\caboodle.admin` with the sample data off against the local API; local only, nothing committed in their repos; questions cost about $0.03–0.05 each, approved first) or C0c. For C0c, post its short plan (plan §4 C0c: rankings, trend words and figures in the wrong place; it comes before G2, D108, which lets organization users ask), sized with what the Flight recorder holds, with its open decisions in simple English, and wait for my go-ahead. The items under "Parked for later" and the top-selling clarify options (D197) wait until I bring them up.
 >
 > Run the free launchers yourself (PowerShell). Finish in the usual order: build with 0 errors, all tests green, my review, then a one-line commit. Paid runs still need my approval first, with the cost stated.
+
+## Done (FE contract fixes, 2026-11-16)
+
+- **Committed** `7a156843a` (plan §4 "FE contract fixes", D238–D242; owner: "go for the package", item 2 as recommended):
+  - the to-fix save works (the validator's `MessageId` rule removed);
+  - editors get each prompt fill-in as saved (`saved`); a save keeps other brands' values; an approval stays when nothing changed;
+  - the title's `session` event keeps `webSearch`;
+  - a refused question is a 400 JSON (`EventStreamAttribute`);
+  - contract fixes (`entityID`/`brandID`, 366 days counting both ends, `saved`);
+  - the new FE document BE `docs/AskCaboodle-FE-Updates.md` (backend changes and the FE-side list), linked from the handover.
+- **Results:** solution 10,314 green (Intelligence 1,123, API 59), DB tests 84, Release build 0 errors. No paid check (the agent's answers don't change).
+- **For the FE team:** `docs/AskCaboodle-FE-Updates.md`, `AskCaboodle-FE.md` and `AskCaboodle-FE-Handover.md` reach them when `feature/ask-caboodle` is pushed (owner's call; nothing since `42f00437`, 19 Oct, is pushed), or the owner sends the files.
+- **Next (owner, 2026-11-16):** the FE integration run.
 
 ## Done (develop sync 3 and the period examples, 2026-11-16)
 
 - **Merged and committed:** the fourth develop merge `f71c649ee` (CS-1679: a promotion event must end on or after its start, in the same year, checked on save; CI change).
 - **Committed** `e45bf2c17` (owner, 2026-11-16; plan §4 "Develop sync 3", D236–D237): the guide's event date rule; the 13 catalog examples with a window now pass `run_sql`'s period and name it; two guard tests; four golden references start on 13 Sep (figures unchanged). Solution 10,305 green, DB tests 84 green.
 - **Paid re-check, $0.46 (owner: "run the paid check"):** 3 of 6 (Q52, Q53, Q58). Every window and every figure right. Q55 ("four groups" over three), Q54 ("most mapped thousands", 5 of 13 did) and Q62 ("starting in the window" for two that start before it) failed on one sentence each: C0c's kind, added to its sizing (plan §7.2). Report `docs/AskCaboodle-Eval/2026-11-16-claude-sonnet-5-5-medium-period-examples.md`, committed with it.
-- **FE (owner, 2026-11-16: "FE is done"):** branch `feature/CS-1362-dashboard-ask-caboodle` in `caboodle.web` (app screens) and `caboodle.admin` (platform-admin screens). Both run on sample data (`USE_ASK_CABOODLE_MOCK = true`; admin `USE_MOCK_DATA: true`, "backend not on any environment yet"), not tried in a browser. Every path they call exists in our controllers; fields not compared yet. The BE's FE-facing files are unchanged since the last push `42f00437`; the handover document `docs/AskCaboodle-FE-Handover.md` is local only. Next for it (owner's call): a field-by-field contract check, then the FE with the sample data off against the local API, then push and a staging deploy.
+- **FE (owner, 2026-11-16: "FE is done"):** branch `feature/CS-1362-dashboard-ask-caboodle` in `caboodle.web` (app screens) and `caboodle.admin` (platform-admin screens). Both run on sample data (`USE_ASK_CABOODLE_MOCK = true`; admin `USE_MOCK_DATA: true`, "backend not on any environment yet"), not tried in a browser. The field-by-field contract check followed (section above).
 - **New data issue DI18:** older promotion events break the new rule locally (38 approved and 14 sandbox end before they start; 15 and 16 cross a year). Recorded, not fixed.
 - **Constance:** review batch 2 gained the event date rule. If batch 2 has already gone out, the line goes with the next batch.
 
