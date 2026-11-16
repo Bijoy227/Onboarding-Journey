@@ -97,6 +97,7 @@ For: everyone. Also called: event, events, event status, cancelled event, promot
 
 - An event belongs to one version or one approved promotion, and covers one retailer, banner, product and category.
 - An event's stores can't be more than the banner's door count.
+- An event must end on or after its start date, and in the same year. Caboodle checks this when an event is saved, so events saved before the check came in can still break it.
 - An event's unit price comes from the brand's list price in effect on its start date for the event's distributor.
 - Statuses Active, Pending, Retailer Approved and Completed count in promotion figures and the monthly report; Cancelled, Did Not Run and Declined events stay listed but count for nothing.
 - Any status can change to any other: in the sandbox, on the brand's promotional calendar, or in the brokerage's promotional management.
