@@ -1929,6 +1929,25 @@ Decision D76 (owner, 2026-10-15). Answers questions about how Caboodle works: wh
 - **FE updates document (D242):** BE `docs/AskCaboodle-FE-Updates.md`, newest first: the backend changes above and what to change in the FE (app: plain-text 404s, the 409 keys `Improve`/`Pins`/`Prompts`/`SavedName`, UTC reset and renewal dates, platform admins only until GA; admin: null "No limit" budgets, the 366-day count, the to-fix list's empty period is all time, `evalCase` up to 20, `table_unavailable`, UTC presets, plain-text 404s, the menu for platform admins only). The handover points to it.
 - **Results:** Release build 0 errors; solution 10,314 green (Intelligence 1,123, API 59); DB tests 84, none failed. No paid check: nothing changes what the agent answers.
 
+### FE integration run — CS-1362 against the local API (2026-11-16, owner: "do the FE run")
+
+**How.** Both FE branches were copied out with `git archive` (their repos untouched), set to the local API with the sample data off, and driven in Chrome (Playwright, scratch profiles) against `localhost:5000`. The owner signed in; no password passed through the session. Paid: 5 questions, $0.28 (owner allowed up to 8, cap $0.50).
+
+**Blocks phase 1 (decision for the owner and the FE team; no backend change needed):**
+1. **A platform admin can't reach Ask Caboodle in the app.** `AccessRedirectGuard` and `WorkspaceRouteResolver` (IAM, CS-1820) send a platform admin with no organization to `/use-admin-app` from every workspace route, and the admin panel has no Ask screen. Phase 1 is platform admins only, so nobody can ask through the FE. The FE's own `ModuleRouteGuard` already lets platform admins in.
+2. **A platform admin's questions never carry a brand.** The Ask screen takes the brand from memberships only (`currentBrandId`), so no `BrandID` is sent and nobody can ask about one brand. The API supports `BrandID` for platform admins.
+Likely shape: platform admins open Ask Caboodle in the app with a brand picker that sends `BrandID`. Both were worked around in the local copy only.
+
+**Confirmed on the real API (with the two workarounds), no console errors:** asking and a follow-up (stream events, title after `done`, headline, notes, table and chart), a refusal, web search refused while switched off (`web_search_unavailable`), a prompt run with `promptId`, history (list, reopen, rename), trace, thumbs-down with reason and note, pin and the pinned-reports page, saved names, the prompt gallery (create, edit, delete), propose as example; the admin panel's settings, usage, budgets, Flight recorder (overview, to-fix, test runs), a to-fix decision saved (200, D238), examples list and detail, guide.
+
+**Seen live:** a broker member (Broker role) sees the Ask Caboodle screen and gets 403 on every call (FE app item 4); a title-only edit of a `{period}` prompt sent all 11 periods, the label and a default, and the API's `saved` then showed the changed settings (D239: the FE editor must start from `saved`).
+
+**Not tried:** a clarify with "Remember", web search switched on, the organization admin's usage page, a brokerage's routes.
+
+**Left in local data (the permission check refused the deletes):** the proposed example "How many cases are planned to ship to ABSCO for the last 12 months?" (Waiting for review), the to-fix item marked "No fix needed", the pin "FE run: Sprouts cases by distributor", and four test conversations (one renamed "FE run test: novelties"). The test prompt was deleted.
+
+**For the FE team:** BE `docs/AskCaboodle-FE-Updates.md`, entry "2026-11-16 (later)" (`2ebe501b9`).
+
 ---
 
 ## 5. GA — Brand + Broker versions
@@ -2432,6 +2451,7 @@ Each one is posted with its package, and gets a D number once decided.
 | develop merge 4 | done | `f71c649ee` | 2026-11-16: `origin/develop` @ `94374e4f1`, PR #932 (CS-1679, promotion event dates within one year, checked on save) and PR #930 (CI). No conflicts, no Ask Caboodle file, no migration; Release build 0 errors, solution 10,303 green. |
 | Develop sync 3 + period examples | done | `e45bf2c17` | 2026-11-16, D236–D237, as in §4 "Develop sync 3": the guide's event date rule (DI18), 13 catalog examples on `run_sql`'s period with a `period:` field, two guard tests, the database test binds periods, four golden references from 13 Sep (figures unchanged), guide checks re-recorded, review batch 2 regenerated. Solution 10,305 green (Intelligence 1,118), DB tests 84 green, Release build 0 errors.<br>**Paid re-check, $0.46 (owner approved):** 3 of 6 (Q52, Q53, Q58). Every window and figure right; Q54, Q55 and Q62 failed on a sentence each (C0c's kind, §7.2).<br>**Balance:** about $40.49. |
 | FE contract fixes | done | `7a156843a` | 2026-11-16, D238–D242, as in §4 "FE contract fixes": the to-fix save, `saved` fill-ins for editors (approval kept when nothing changed, other brands' values kept), the title event's `webSearch`, the ask's 400 JSON (`EventStreamAttribute`), contract fixes, and the FE updates document. Solution 10,314 green (Intelligence 1,123, API 59), DB tests 84, Release build 0 errors. No paid check. |
+| FE integration run | done (findings) | `2ebe501b9` (FE doc) | 2026-11-16, §4 "FE integration run": both FE branches against the local API; paid $0.28 (5 questions). Two phase-1 blockers on the FE side (platform admins sent to `/use-admin-app`; no `BrandID` for platform admins), decision pending with the FE team. |
 | C9 part 2 | todo | | How-to steps in the guide, after the FE rework, from the reworked screens; Constance reviews them too. |
 | Admin manual | todo | | A Platform Admin user manual (owner, 2026-10-18): every admin screen (settings and budgets, usage, verified examples, prompt review, pins, the Flight recorder), in plain words with screenshots. Written after the final UI is built (§10.10), alongside C9 and before go-live; Constance reviews it. |
 | G2 … A3 | todo | | C0c comes before G2 (D108). |
