@@ -2,15 +2,30 @@
 
 Updated 2026-11-16, after the FE contract fixes (`7a156843a`), the fourth `develop` merge (`f71c649ee`) and develop sync 3 with the period examples (`e45bf2c17`, with its eval report). Before them the same day: the third `develop` merge (`d36d3ac20`), G1 (`905d8bdc7`) and the Pipeline cases with the sync error text (`447ed8a5d`, with its eval report). Written 2026-11-12, after the second `develop` merge (`fd497f8e6`) and develop sync 2 (`f2a93e64f`, with its eval report). Before them: the FE handover (`a71c5d9dc`), C9.1 (`053371c2`), the IAM sync (`607edfd6`) and the first `develop` merge (`52cca716`). Read this first, then §0, §4 "Develop sync 2", "C9.1" and "IAM sync", §5 (GA, with the G1, G3 and G4 notes from develop sync 2), §7.2, §8, §9 and §10 of [`ask-caboodle-be-implementation-plan.md`](ask-caboodle-be-implementation-plan.md).
 
-## Starter prompt (next: G2's commit, then G3)
+## Starter prompt (next: G4)
 
-> Read `docs/ask-caboodle/ask-caboodle-next-session.md`, then §0, §4 "C0c" (with "As built"), "FE contract fixes" and "FE integration run", §5 (GA, with G1 as built), §7.2, §8 and §9 of `docs/ask-caboodle/ask-caboodle-be-implementation-plan.md` in `D:\Fork\Onboarding-Journey`. The backend is `D:\Fork\Caboodle BE Repository\caboodle.backend`, branch `feature/ask-caboodle` (last commit: the FE integration run's FE updates entry `2ebe501b9`, after the FE contract fixes `7a156843a`; then C0c `7a3ed4939`; working tree clean apart from the owner's own untracked docs).
+> Read `docs/ask-caboodle/ask-caboodle-next-session.md`, then §0, §4 "C0c" (with "As built"), "FE contract fixes" and "FE integration run", §5 (GA, with G1, G2 and G3 as built), §7.2, §8 and §9 of `docs/ask-caboodle/ask-caboodle-be-implementation-plan.md` in `D:\Fork\Onboarding-Journey`. The backend is `D:\Fork\Caboodle BE Repository\caboodle.backend`, branch `feature/ask-caboodle` (last commit: G3 `aa1e76fbf`, after G2 `22314d1a9`; the owner's own untracked docs stay out of every commit).
 >
 > First fetch and tell me whether `origin/develop` has commits after `94374e4f1`; don't merge without my go-ahead. Paid runs need my words "run the paid check" with the cost stated; the permission check refuses anything less.
 >
-> If G2 is still uncommitted (see "Waiting for the owner (G2)"), wait for my "commit". Then post G3's short plan (plan §5 G3: what each person may read, per brand and module; G4's row-level security follows), with its open decisions in simple English, and wait for my go-ahead. "Organizations can ask" stays off until G3, G4 and G7 are done (D249).
+> Post G4's short plan (plan §5 G4: row-level security for `askcaboodle_ro`, set per question from G3's `AskMemberAccess`; pin re-runs and the hourly data checks read through the same login), with its open decisions in simple English, and wait for my go-ahead. "Organizations can ask" stays off until G4 and G7 are done (D249).
 >
 > Run the free launchers yourself (PowerShell). Finish in the usual order: build with 0 errors, all tests green, my review, then a one-line commit. Paid runs still need my approval first, with the cost stated.
+
+## Done (G3, 2026-11-17)
+
+- **Decided (owner: "go with your recommendations"):**
+  - D252: the lists records point to (retailers, banners, regions, distributors, stores) are open to anyone who may ask about the brand;
+  - D253: no brand sent: a brand company's own brand, a brokerage's every brand with Ask Caboodle;
+  - D254: outside the access, the AI says so plainly and answers the rest;
+  - D255: the role isn't told to the AI;
+  - D256: no paid check until G7.
+- **Committed** `aa1e76fbf` (owner: "commit"; plan §5 G3 "As built"):
+  - each member's brands and tables, worked out per question, and the AI told who it's answering;
+  - `get_table_info`, `run_sql` and the promotion calculator refuse what the access doesn't include;
+  - the brand data line, starters, pins and examples follow the same rule; the guide rule; the FE contract and updates document.
+- **Results:** solution 10,354 green (Intelligence 1,160), DB tests 84. No paid check.
+- **Next:** G4 (row-level security), with its short plan first.
 
 ## Done (G2, 2026-11-17)
 
@@ -98,7 +113,7 @@ Updated 2026-11-16, after the FE contract fixes (`7a156843a`), the fourth `devel
 - **The IAM sync's four points beyond the plan's wording** (plan §4 "IAM sync"): committed at the owner's request, listed for the owner to object to. The biggest: `Identity.UserClaims` left B10a's "never granted" list, because since CS-1812 it holds only Platform Staff permissions.
 - **Q76 prints database codes: fixed in C9.1** (D220); it passed C9.1's paid check.
 - **Send Constance the review documents:** all three batches were regenerated with the current text (batch 2 again in C9.1 for the store-count rule; batch 1 still unsent, D211).
-- **Platform Staff in Ask Caboodle (D210):** ordinary users for now; decide again at G3 (plan G3 note).
+- **Platform Staff in Ask Caboodle (D210):** ordinary members of their own organization; in support access they are refused (D250, kept in G3).
 - **Try it live:** restart the API on the merged branch (all migrations are applied locally). The catalog and guide changed, so the first question writes the hourly cache again (about $0.06). As a platform admin, "Who are Caboodle's platform staff?" (none locally) or "How do invitations work?"; on Bubbies, "Which category reviews are on our calendar?". The admin role names change to "Organization Admin" when the API's role seeder runs at start-up.
 
 ## Waiting for the owner (from C9, 2026-10-19)

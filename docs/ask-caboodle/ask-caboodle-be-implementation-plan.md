@@ -2047,6 +2047,30 @@ So the planned links (distributor sales, SPINS, KeHE, UNFI, the monthly report, 
 - **From G1 (2026-11-16, D231):** the module catalog's links don't say what Ask Caboodle may read; G3 alone does, per person and brand, from `Brands[brandId].Modules` against each table's `modules:`. A custom-access member holds only the modules granted to them plus View on their `Required` sources, so check the person's modules, not the brand's.
 - **From the `develop` merge (2026-11-03):** IAM now has `ActsAsPlatform` = platform admin **or** Platform Staff holding "Support Access to Organizations" (CS-1812), and its own checks (`HasOrgPermission`, `CanUseBrand`, `OwnsBrokerageRecord`) use it. Ask Caboodle still checks `IsPlatformAdmin` in about 36 places, so staff are ordinary users there (D210). Decide here whether staff get any platform-admin audience; the admin login reads the staff tables since the IAM sync.
 
+**What G3 found (2026-11-17).**
+- **Every question told the AI "platform administrator (may see every brand)".** Members were kept out only by G2's switch.
+- **The calculator reads with the app's own login.** G4's row-level security won't reach it, so G3's check on each promotion's brand is its only guard.
+- **Strict module tags would break ordinary questions.** Sales by retailer joins the retailer and banner lists; someone with only the sales report doesn't hold the Retailers module.
+
+**As built (2026-11-17, D252–D256, committed `aa1e76fbf`):**
+- **The access** (`Agent/AskMemberAccess`, built per question from IAM; none for platform admins):
+  - the brands in scope: `BrandsInScope(ask-caboodle, View)`, so the `BrandID` sent, or every brand where they have Ask Caboodle;
+  - per brand, the standard tables the modules they may view there grant (each table's `modules:`), plus a brokerage's own company modules;
+  - with no `BrandID` and one brand in scope, that brand is the question's (name, brand data line, examples); the conversation keeps the brand that was sent (D253).
+- **The question's context:** for a member, the "platform administrator" line is replaced by their organization and its type, the brands they may ask about (when none is selected), the tables not in their access, and, per brand, the tables they may read only for their other brands. No role (D255).
+- **The tools:** `get_table_info` and `run_sql` refuse a table outside the access ("Not in this person's access: …"), `run_sql` before anything runs. `get_promotion_performance` refuses a promotion of another brand, or approved or sandbox promotions the access doesn't include for its brand.
+- **The brand data line** names only the kinds of data the member may read.
+- **The prompt:** rule 2 (only tables the user's access includes), a FINAL ANSWER rule ("Your access doesn't include promotions for Bubbies.", answer the rest, never how to get access; D254), and the guide rule's role sentence. The prompt cache is written again once after deploy (about $0.06).
+- **Lookups (D252):** `lookup: true` on 9 tables (retailers, banners, regions, retailer regions, distributors, DCs, distributor banners, distributor brands, stores). `CatalogTableModules.GrantedBy` opens them, so starters, pins and verified examples follow the same rule. Retailer promotion rules stay behind the Retailers module (policies and fees, not names).
+- **Guide:** "Ask Caboodle" gains the rule; checks re-recorded; review batch 3 regenerated.
+- **Docs:** FE contract and FE updates document (no FE change needed).
+- **Results:**
+  - Release build 0 errors.
+  - Solution 10,354 green (Intelligence 1,160; 13 new tests: the access, the context lines, the three tools, the brand data line, the lookups, the handler; one starter test changed to keep checking that a module without View grants nothing).
+  - DB tests 84, none failed.
+  - No model call, no paid check (D256).
+- **Left for later:** another brand's rows inside a table the member may read (G4; pin re-runs and the hourly data checks read through the same login, so they need the settings there too); name search across brands (G5); naming the brand on every row for brokerages (G6).
+
 ### G4 — Row-level security (the real boundary)
 - Migration: RLS policies `TO askcaboodle_ro` only (app unaffected) on every brand-keyed catalog table: `"BrandID" = ANY(string_to_array(current_setting('app.allowed_brand_ids', true), ',')::uuid[])` plus module gating via `app.allowed_brand_modules` (brand:slug pairs) per table module; brokerage-owned tables: `"BrokerageOrganizationID" = current_setting('app.organization_id', true)::uuid`. Shared reference tables: no RLS. Tier-2 views created `WITH (security_invoker = true)`.
 - Gateway: `SET LOCAL app.allowed_brand_ids / app.allowed_brand_modules / app.organization_id` inside the read-only transaction from `AgentAccessContext` (parameterized `set_config`, never string-built from headers).
@@ -2372,6 +2396,11 @@ Owner answers recorded 2026-10-11.
 | D249 | G2: opening to organizations before G3–G4 | **Owner (2026-11-17):** a switch, "Organizations can ask", off by default; members are refused while it is off. It goes on per environment only after G3, G4 and the tenancy tests (G7). |
 | D250 | G2: Platform Staff in support access | **Owner:** refused for now; only platform admins and members ask. Decide again at G3 (D210). |
 | D251 | G2: what a member sees while the switch is off | **Owner:** 403 "Ask Caboodle isn't open to organizations yet."; the FE keeps the app's screen hidden until GA. |
+| D252 | G3: the lists records point to | **Owner (2026-11-17):** retailers, banners, regions, distributors (and which ones serve the brand) and stores are open to anyone who may ask about the brand; the brand's own records need their module. Retailer promotion rules stay behind Retailers (Claude: policies and fees, not names). Applies to starters, pins and examples too. |
+| D253 | G3: no brand selected | **Owner:** a brand company's members get their own brand; a brokerage member every connected brand where they have Ask Caboodle (IAM's cross-brand rule). |
+| D254 | G3: data outside the access | **Owner:** the AI says it plainly ("Your access doesn't include promotions for Bubbies."), never how to get access, and answers the rest. |
+| D255 | G3: the person's role | **Owner:** not told to the AI yet; it gets the organization, the brands and what the access includes. |
+| D256 | G3: paid check | **Owner:** none in G3; members are checked end to end in G7, after G4. |
 
 ### 7.1 Demo track — dropped 2026-10-12 (D3), kept for history
 
@@ -2515,7 +2544,8 @@ Each one is posted with its package, and gets a D number once decided.
 | C9 part 2 | todo | | How-to steps in the guide, after the FE rework, from the reworked screens; Constance reviews them too. |
 | Admin manual | todo | | A Platform Admin user manual (owner, 2026-10-18): every admin screen (settings and budgets, usage, verified examples, prompt review, pins, the Flight recorder), in plain words with screenshots. Written after the final UI is built (§10.10), alongside C9 and before go-live; Constance reviews it. |
 | G2 | done | `22314d1a9` | 2026-11-17 (owner: "commit"), D249–D251, as in §5 G2 "As built": `AskCaboodleAccessAttribute` on the 25 user actions, "Organizations can ask" (off by default, migration applied locally), support access refused. Solution 10,341 green (Intelligence 1,147, API 62), DB tests 84, Release build 0 errors. No paid check. |
-| G3 … A3 | todo | | G3 (what each person may read) and G4 (row-level security) before the switch goes on (D249). |
+| G3 | done | `aa1e76fbf` | 2026-11-17 (owner: "commit"), D252–D256, as in §5 G3 "As built": each member's brands and tables per question, the context lines, the three tools refuse what the access doesn't include, lookups open. Solution 10,354 green (Intelligence 1,160), DB tests 84, Release build 0 errors. No paid check. |
+| G4 … A3 | todo | | G4 (row-level security) before the switch goes on (D249). |
 
 ## 9. Data Ask Caboodle does not read
 

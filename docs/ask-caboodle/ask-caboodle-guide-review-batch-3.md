@@ -200,6 +200,7 @@ For: everyone. Also called: ai assistant, caboodle ai, the ai.
 
 - Every figure comes from a query or Caboodle's calculators, never from general knowledge. It checks each figure, and what it says about rankings, peaks and trends, against the data, and marks what it couldn't check.
 - On a brand, it uses only that brand's data.
+- For each brand it reads only what the person's modules there cover, plus the lists of retailers, banners, regions, distributors and stores. When a question needs other data, it says their access doesn't include it.
 - It can't change data or forecast, and it can't explain steps in the app yet.
 - It is a module: an organization has it only when Caboodle switches it on.
 
