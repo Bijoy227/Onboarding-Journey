@@ -2164,6 +2164,33 @@ So the planned links (distributor sales, SPINS, KeHE, UNFI, the monthly report, 
 ### G7 — Tenancy test matrix + eval
 - Broker sees only connected brands; per-brand module gating (brand A grants promotions, B doesn't); brokerage-owned records isolated; member without `ask-caboodle` refused before any LLM call; brand users never see brokerage-owned records (D7 / Q17). Add broker eval cases to B6.
 
+**As built (2026-11-17, D273–D280, committed `8ac4b8d63`):**
+- **Eval cases asked as a member (D273).** `golden.yaml` gains `askers` and a case-level `asker`. An asker is a real local organization, its type, the modules on each of its brands and, for a brokerage, its own modules. `GoldenSet.AccessFor` builds IAM's `AccessContext` from it. The eval then asks the way the app would for that member: `AskMemberAccess`, its sealed scope, its context lines and each brand's data line; no verified examples.
+  - **Bubbies Ice Cream member:** distributor sales, product specs and Pipelines; no promotions.
+  - **Member of the local brokerage "Caboodle Admin":** Bubbies with promotions, brand reports, category reviews and Pipelines; Rise & Puff without promotions or brand reports; its own category reviews and Pipelines. Cassie Ruby wasn't used: none of its brands has September 2026 sales.
+- **12 cases, Q83–Q94,** in the counted group "Organization members (G7)":
+  - a brand member: their sales, their top product, a module they don't have, another brand, their Pipeline;
+  - a brokerage member across their brands: sales per brand, the brand that shipped most, promotions on one brand only, brand reports, category reviews, open tasks, a brand they don't work with.
+  - The planned "product name several brands share" case became Q94, because Bubbies and Rise & Puff share no product words.
+- **What local data lacks (D274).** `Live/AskPipelineRulesDatabaseTests` adds two projects inside one transaction that is always rolled back: a brokerage project on Bubbies with a task assigned to a member, and a Personal project. It reads them as `askcaboodle_app` with a sealed scope. The assignee sees the project and only their own task; the owner sees the Personal project only with the Pipelines module on their company.
+- **Rows already limited (D278).** Every member's question context now carries `AskMemberAccess.RowsInstruction`. It says the database already limits their rows to what their screens show them (on the Pipeline: their company's projects, projects shared with them, tasks assigned to them), so no sharing or owner filters of its own. An empty result means they have none, never that none exist. The first paid run found this (Q87).
+- **Other brands' names (D279).** A member is never told which other brands use Caboodle. So a question naming one gets "nothing by that name" or a question back about matching stores in their own data. Q85 and Q94 check that no figure of the other brand appears, not the wording.
+- **Brokerage starters (D276, D280).**
+  - `starters.yaml` takes `audience: brokerage`: such a starter shows only to a brokerage's members asking across two or more brands with none selected, ahead of the others.
+  - One ships: "Which of my brands shipped the most cases last month?" (Q89, topic Sales).
+  - Q90's and Q92's questions wait. Their first run had one wrong date sentence each (a 1 October start called "inside" a window beginning 12 October; a wrong "latest"), and C0c's checks don't cover dates. Parked as date sentence checks.
+  - The example seed gives a brokerage starter the standard audience, the catalog it reads; who sees it stays `starters.yaml`'s.
+- **Q90's reference** counted 4 events that aren't approved. It now uses the approved statuses and a promotion type, as the other promotion cases do: 1,203 events.
+- **Paid checks (D275).** The owner said "run the paid check" twice; total $1.13.
+  - **First run, 7 of 12, $0.63** (`g7-members`). Every access boundary held: no other brand's figure in any answer. The failures: Q87 (D278), Q85 and Q94 (the cases' wording, D279), Q90 and Q92 (one date sentence each).
+  - **After the fixes, all 12 again: 12 of 12, $0.50** (`g7-members-fix`).
+- **Results:**
+  - Release build 0 errors.
+  - Solution 10,382 green (Intelligence 1,188).
+  - DB tests 96. Guide checks re-recorded (text unchanged). No migration.
+- **The switch (D277).** "Organizations can ask" may go on in staging now; in production after G8.
+- **Docs:** FE updates, the FE contract's starters line, the deployment note on the switch.
+
 ### G8 — Ops & compliance
 - Rotate the committed Claude key; move `ClaudeApiKey` to secrets/env (`IntelligenceSettings__ClaudeApiKey`) in every env; remove it from appsettings.
 - Read-only login role + `ReadOnlyConnectionString` per env (B2).
@@ -2490,6 +2517,14 @@ Owner answers recorded 2026-10-11.
 | D270 | G6: each brand's data across brands | **Owner:** given for up to 10 brands; above that, the AI checks with a query. |
 | D271 | G6: brokerage starters | **Owner:** built in G7, each the question of an eval case run as a brokerage (D145). |
 | D272 | G6: paid check | **Owner:** none in G6; G7's brokerage eval cases check it (paid, cost stated first). |
+| D273 | G7: who the eval asks as | **Owner (2026-11-17, "go with your recommendations"):** real local organizations (a Bubbies Ice Cream member, the brokerage "Caboodle Admin"), with each asker's modules set in the golden set. |
+| D274 | G7: what local data lacks (assigned tasks, Personal projects) | **Owner:** rows added in a transaction that is always rolled back; nothing is kept. |
+| D275 | G7: paid check | **Owner:** about 12 member cases, about $1.00, capped at $1.50. Ran 7 of 12 ($0.63), then the re-check after D278–D279, 12 of 12 ($0.50). |
+| D276 | G7: brokerage starters | **Owner:** only questions whose eval case passed. |
+| D277 | G7: "Organizations can ask" | **Owner:** on in staging after G7; in production after G8. |
+| D278 | G7: rows the database already limits | **Owner (2026-11-17, "go with your recommendations"):** every member's context says the database limits their rows to what their screens show, and an empty result means they have none, never that none exist. |
+| D279 | G7: a question naming another brand | **Owner:** members are never told other brands' names; the cases check that no figure leaks and accept "not found" or a question back. |
+| D280 | G7: wrong date sentences (Q90, Q92) | **Owner:** not fixed in G7; parked as date sentence checks (a C0c follow-up). The Q90 and Q92 starters wait; Q89's ships. |
 
 ### 7.1 Demo track — dropped 2026-10-12 (D3), kept for history
 
@@ -2638,7 +2673,8 @@ Each one is posted with its package, and gets a D number once decided.
 | G4b | done | `7c4558b71` | 2026-11-17 (owner: "commit"), D261–D264, as in §5 G4b "As built": the scope's headers, migration `AddAskCaboodleScreenRules` (applied locally; `Down` checked), the 7 tables follow their screens, modules by audience for a brokerage's records. Solution 10,371 green (Intelligence 1,177), DB tests 94, Release build 0 errors. No paid check. |
 | G5 | done | `385e1741a` | 2026-11-17 (owner: "commit"), D265–D268, as in §5 G5 "As built": the name search, saved names and the prompt gallery's value lists read with the asker's scope. Solution 10,376 green (Intelligence 1,182), DB tests 95, Release build 0 errors. No migration, no paid check. |
 | G6 | done | `ebf78a820` | 2026-11-17 (owner: "commit"), D269–D272, as in §5 G6 "As built": across several brands a brand column and each brand's data line, in the question's context only. Solution 10,379 green (Intelligence 1,185), DB tests 95, Release build 0 errors. No migration, no paid check. |
-| G7 … A3 | todo | | G7 (tenancy test matrix + eval, brokerage starters) before the switch goes on (D249); G8 ops. |
+| G7 | done | `8ac4b8d63` | 2026-11-17 (owner: "commit"), D273–D280, as in §5 G7 "As built": eval cases asked as a member (Q83–Q94), the Pipeline rules on rolled-back rows, the rows line (D278), one brokerage starter. Paid 7 of 12 ($0.63), then 12 of 12 ($0.50). Solution 10,382 green (Intelligence 1,188), DB tests 96, Release build 0 errors. No migration. |
+| G8 … A3 | todo | | G8 ops (the key, read-only logins per environment, the data-handling statement, network rules) before "Organizations can ask" goes on in production (D277). |
 
 ## 9. Data Ask Caboodle does not read
 
