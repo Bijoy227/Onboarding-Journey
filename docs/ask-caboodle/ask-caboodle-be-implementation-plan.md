@@ -2131,6 +2131,20 @@ So the planned links (distributor sales, SPINS, KeHE, UNFI, the monthly report, 
 ### G5 — Entity search scope
 - Registry scope rules on: Brand-scoped types filtered by allowlist; Brand/Brokerage (`Organization.Organizations`) limited to connected orgs; broker candidates tagged with brand name.
 
+**What G5 found (2026-11-17).** The name search read with the server's own SQL and a scope of everything, so a member with no brand selected could find another brand's products, categories, promotions and name. No change to its SQL was needed: G4's row rules filter it once it reads with the asker's scope. Products already say their brand ("brand: Bubbies, UPC …"), so a brokerage's candidates are tagged.
+
+**As built (2026-11-17, D265–D268, committed `385e1741a`):**
+- **The search takes a scope** (`IEntitySearch.SearchAsync`/`FindAsync`, every query of `EntitySearchService`); there is no default.
+- **Who passes what:** `search_entity` and the clarify's offer to save a name pass the question's `AskAgentContext.ReadScope` (a member's scope, everything for a platform admin); saving a name (`SaveAskAliasRequest`) builds the member's scope for the draft's brand (or the brands in scope) and answers "That product wasn't found." for a record outside it (D267); the prompt gallery's value lists and the fill-ins checked when a prompt is saved or improved read with `AskPromptBrandChoices.ReadScope`, set by `AskPromptBrands` (a member's scope for `ScopeIds`, everything for a platform admin, nothing otherwise) (D266). The per-brand cache of shared values the brand's data holds stays the server's own.
+- **Effect for members:** products and categories only of their brands with Product Spec, promotions only with the approved or sandbox module, brand names only theirs; retailers, banners, regions, distributors, warehouses and stores as before (D265). A saved name of a record outside their access stops matching.
+- **Not changed:** the names matched to choose verified examples (C5, `AskExampleNames`) read everything: internal, never shown, and the examples given are already limited to the person's brands and modules.
+- **Results:**
+  - Release build 0 errors.
+  - Solution 10,376 green (Intelligence 1,182; new tests: every search query reads the given scope, the tool searches as the asker, the value lists read as the viewer, saving a name is checked against the member's scope).
+  - DB tests 95, none failed (1 new: on local data, another brand's product is found only as that brand's member with Product Spec, another brand's name never, retailers and distributors the same for everyone).
+  - No migration, no model call, no paid check (D268).
+- **Docs:** FE contract and FE updates document (no FE change).
+
 ### G6 — Audience behavior
 - Audience block in the first user message (broker: name the brand on every row, ask which brand when ambiguous); suggestions/gallery seeds per org type; cross-brand answers carry a brand column.
 
@@ -2455,6 +2469,10 @@ Owner answers recorded 2026-10-11.
 | D262 | G4b: the Pipeline for members | **Owner:** copy the screens: their company's projects, their Personal projects, shared projects (directly or through the parent), and only their own tasks where they just have a task. Replaces D224 for members: a brand's members don't see a brokerage's project on their brand unless shared (Bubbies' two on local data). Platform admins and the eval unchanged. |
 | D263 | G4b: a project's member list | **Owner:** only for people who own the project or have it shared with them; an assignee sees their task, not the list. |
 | D264 | G4b: paid check | **Owner:** none; members end to end in G7. |
+| D265 | G5: store names | **Owner (2026-11-17, "go with your recommendations"):** open to every asker, like retailers and banners. |
+| D266 | G5: the prompt gallery's value lists | **Owner:** read with the person's scope, so a fill-in never offers what their access doesn't include. |
+| D267 | G5: saving a name for something they can't see | **Owner:** "That product wasn't found.", as for a record that doesn't exist. |
+| D268 | G5: paid check | **Owner:** none; members end to end in G7. |
 
 ### 7.1 Demo track — dropped 2026-10-12 (D3), kept for history
 
@@ -2601,7 +2619,8 @@ Each one is posted with its package, and gets a D number once decided.
 | G3 | done | `aa1e76fbf` | 2026-11-17 (owner: "commit"), D252–D256, as in §5 G3 "As built": each member's brands and tables per question, the context lines, the three tools refuse what the access doesn't include, lookups open. Solution 10,354 green (Intelligence 1,160), DB tests 84, Release build 0 errors. No paid check. |
 | G4 | done | `653128438` | 2026-11-17 (owner: "commit"), D257–D260, as in §5 G4 "As built": the sealed scope, the key, the gateway, migration `AddAskCaboodleRowSecurity` (applied locally; `Down` checked), 20 brand tables by brand, 7 closed to members until G4b. Solution 10,366 green (Intelligence 1,172), DB tests 90, Release build 0 errors. No paid check. |
 | G4b | done | `7c4558b71` | 2026-11-17 (owner: "commit"), D261–D264, as in §5 G4b "As built": the scope's headers, migration `AddAskCaboodleScreenRules` (applied locally; `Down` checked), the 7 tables follow their screens, modules by audience for a brokerage's records. Solution 10,371 green (Intelligence 1,177), DB tests 94, Release build 0 errors. No paid check. |
-| G5 … A3 | todo | | G5 (name search within the person's brands), G6 and G7 before the switch goes on (D249). |
+| G5 | done | `385e1741a` | 2026-11-17 (owner: "commit"), D265–D268, as in §5 G5 "As built": the name search, saved names and the prompt gallery's value lists read with the asker's scope. Solution 10,376 green (Intelligence 1,182), DB tests 95, Release build 0 errors. No migration, no paid check. |
+| G6 … A3 | todo | | G6 (audience behavior) and G7 (tenancy test matrix + eval) before the switch goes on (D249). |
 
 ## 9. Data Ask Caboodle does not read
 
