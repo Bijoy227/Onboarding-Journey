@@ -2,15 +2,31 @@
 
 Updated 2026-11-16, after the FE contract fixes (`7a156843a`), the fourth `develop` merge (`f71c649ee`) and develop sync 3 with the period examples (`e45bf2c17`, with its eval report). Before them the same day: the third `develop` merge (`d36d3ac20`), G1 (`905d8bdc7`) and the Pipeline cases with the sync error text (`447ed8a5d`, with its eval report). Written 2026-11-12, after the second `develop` merge (`fd497f8e6`) and develop sync 2 (`f2a93e64f`, with its eval report). Before them: the FE handover (`a71c5d9dc`), C9.1 (`053371c2`), the IAM sync (`607edfd6`) and the first `develop` merge (`52cca716`). Read this first, then §0, §4 "Develop sync 2", "C9.1" and "IAM sync", §5 (GA, with the G1, G3 and G4 notes from develop sync 2), §7.2, §8, §9 and §10 of [`ask-caboodle-be-implementation-plan.md`](ask-caboodle-be-implementation-plan.md).
 
-## Starter prompt (next: G4)
+## Starter prompt (next: G4b)
 
-> Read `docs/ask-caboodle/ask-caboodle-next-session.md`, then §0, §4 "C0c" (with "As built"), "FE contract fixes" and "FE integration run", §5 (GA, with G1, G2 and G3 as built), §7.2, §8 and §9 of `docs/ask-caboodle/ask-caboodle-be-implementation-plan.md` in `D:\Fork\Onboarding-Journey`. The backend is `D:\Fork\Caboodle BE Repository\caboodle.backend`, branch `feature/ask-caboodle` (last commit: G3 `aa1e76fbf`, after G2 `22314d1a9`; the owner's own untracked docs stay out of every commit).
+> Read `docs/ask-caboodle/ask-caboodle-next-session.md`, then §0, §4 "C0c" (with "As built"), "FE contract fixes" and "FE integration run", §5 (GA, with G1–G4 as built and G4b), §7.2, §8 and §9 of `docs/ask-caboodle/ask-caboodle-be-implementation-plan.md` in `D:\Fork\Onboarding-Journey`. The backend is `D:\Fork\Caboodle BE Repository\caboodle.backend`, branch `feature/ask-caboodle` (last commit: G4 `653128438`, after G3 `aa1e76fbf`; the owner's own untracked docs stay out of every commit).
 >
 > First fetch and tell me whether `origin/develop` has commits after `94374e4f1`; don't merge without my go-ahead. Paid runs need my words "run the paid check" with the cost stated; the permission check refuses anything less.
 >
-> Post G4's short plan (plan §5 G4: row-level security for `askcaboodle_ro`, set per question from G3's `AskMemberAccess`; pin re-runs and the hourly data checks read through the same login), with its open decisions in simple English, and wait for my go-ahead. "Organizations can ask" stays off until G4 and G7 are done (D249).
+> Post G4b's short plan (plan §5 G4b: rules for a brokerage's reviews, reports, market overview, the review calendar and the Pipeline that copy their screens), with its open decisions in simple English, and wait for my go-ahead. "Organizations can ask" stays off until G4b and G7 are done (D249).
 >
 > Run the free launchers yourself (PowerShell). Finish in the usual order: build with 0 errors, all tests green, my review, then a one-line commit. Paid runs still need my approval first, with the cost stated.
+
+## Done (G4, 2026-11-17)
+
+- **Decided (owner: "go with your recommendations"):**
+  - D257: the scope is sealed with a per-database key the read-only logins can't read; a changed or missing scope reads nothing;
+  - D258: a brokerage's records and the Pipeline split off to G4b, closed to members until then;
+  - D259: a member sees only their brands in Caboodle's brand list;
+  - D260: no paid check.
+- **Committed** `653128438` (owner: "commit"; plan §5 G4 "As built"):
+  - the sealed scope on every query, the key, and the gateway change; every caller states whose rows it reads;
+  - migration `AddAskCaboodleRowSecurity` (applied locally, `Down` checked): row rules on 27 tables, the first in the database;
+  - pinned reports read the viewer's scope; the nightly check reads the pin's brand;
+  - the deployment doc (G2's and G4's migrations, the backup note), FE contract and updates document.
+- **Results:** solution 10,366 green (Intelligence 1,172), DB tests 90. No paid check.
+- **For devops before release:** backups made with `pg_dump` by a login that doesn't own the tables need `--enable-row-security` (deployment checklist 4a).
+- **Next:** G4b, with its short plan first.
 
 ## Done (G3, 2026-11-17)
 

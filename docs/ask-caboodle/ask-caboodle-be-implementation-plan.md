@@ -2082,6 +2082,34 @@ So the planned links (distributor sales, SPINS, KeHE, UNFI, the monthly report, 
   - **Market Overview** (`ViewerBrokerageId`): a brand sees all rows about itself. A brokerage sees only its own rows.
   - **The Pipeline (since develop sync 2, D224):** the screens show a person their own company's projects ("OrganizationID" = the current organization for brand projects, "OwnerUserID" for Personal ones), the projects shared with them (`Pipelines.ProjectMembers`, also through the parent project) and the tasks assigned to them (`PipelineProjectQueries.VisibleProjects`, `PipelineRightsCalculator`). A brand never sees a brokerage's project on its brand unless it is shared, and support access never sees Personal projects. The policy needs the user's id as well as the organization (`app.user_id`).
 
+**What G4 found (2026-11-17).**
+- **A plain setting isn't a boundary.** The rules above trust `app.allowed_brand_ids`, but a query can call `set_config` itself, and the SQL check's text match can be slipped (a Unicode-escaped name). So the scope is sealed with a key only the server and the database know (D257).
+- **13 places query through the read-only login,** most with the server's own fixed SQL (hourly data checks, names, prompt values, pins' loaded-data check). Each now states its scope; none is left to a default that reads everything.
+- **The platform-admin login is a member of `askcaboodle_ro`,** so the rules apply to it too: admins' queries carry a scope of everything.
+- **The calculator, the starters' checks and the name search read with other logins or the server's own SQL;** the calculator keeps G3's check, the name search is G5's.
+
+**As built (2026-11-17, D257–D260, committed `653128438`):**
+- **The scope** (`Sql/AskReadScope`): everything (platform admins, the server's own SQL), or per table with a row rule the brands that may be read there. `Payload()` is `1|*` or `1|Schema.Table=guid,…;…`; `Seal(key)` adds `.` and its HMAC-SHA256 in hex.
+- **The key** (`Sql/AskScopeKey`): one random key per database in `Intelligence.AskScopeKeys`, made by the migration, read once through the main login; neither read-only role can read it.
+- **The gateway** sets the sealed scope for each query's transaction (`set_config('app.ask_scope', @scope, true)`), so a pooled connection never carries it into the next question. `ISqlGateway.QueryAsync` takes the scope; every caller states one.
+- **Who reads what:** `run_sql` a member's `AskMemberAccess.ReadScope()` (the brands in scope whose modules grant each table), a platform admin everything; a pinned report the viewer's scope (a member: the pin's brand, in the tables their modules there grant; a brandless pin: their brands now); a pin's nightly check only the pin's brand (a brandless or platform-admin pin: everything; the check keeps only the status); the server's own fixed queries everything.
+- **The migration** `AddAskCaboodleRowSecurity`:
+  - schema `AskCaboodleScope` with `Hmac` (from the built-in `sha256`, no extension), `Payload` (the body when the seal matches, else null), `SeesAll` and `Brands(table)`; security definer, parallel safe; only the last two are executable by `askcaboodle_ro`;
+  - on 27 tables: row-level security on, `"AskCaboodleEveryone"` (permissive, every login, every row: the app, backups and reports see no change) and `"AskCaboodleScope"` (restrictive, `askcaboodle_ro` only): 20 brand tables (19 plus `Brand.Brands` by `"ID"`, D259) read `SeesAll() OR "BrandID" = ANY(Brands('Schema.Table'))`; 7 tables only `SeesAll()` until G4b (D258).
+- **G3 follows:** the 7 tables are closed to members in `AskMemberAccess` (the AI says their access doesn't include them) and in a member's pin check. `AskCaboodleScope` is a sensitive schema for the SQL check.
+- **Checked on `caboodle_dev` as `askcaboodle_app`:** no scope 0 rows; a forged "everything" 0; a sealed Bubbies scope 545,028 sales rows of one brand, one brand in the list, no promotions; retailers unchanged; `pg_stats` hidden for the ruled tables. A query that rewrites its own scope reads no other brand. The member's answers equal the rules-free main login's; warm timings of two large sales queries 113–208 ms against 117–135 ms without rules (parallel plans kept). The migration's `Down` was run and re-applied.
+- **Docs:** deployment (G2's and G4's migrations, backups with `pg_dump`, a check query, rollback), FE contract and FE updates document (no FE change).
+- **Guide:** "Ask Caboodle" and "Pinned report" re-checked (text unchanged, checks re-recorded).
+- **Results:**
+  - Release build 0 errors.
+  - Solution 10,366 green (Intelligence 1,172; new tests: the scope's format and seal, members' and pins' scopes, `run_sql`'s scope, the 7 closed tables).
+  - DB tests 90, none failed (6 new: a member's rows, a foreign seal and a rewritten scope, per-table brands, the 7 tables, the database's rules against the code, the same answers and the timings).
+  - No model call, no paid check (D260).
+
+### G4b — A brokerage's records and the Pipeline (D258)
+- Restrictive rules on `Broker.CategoryReviews`, `BrandReports`, `MarketOverviews`, `CategoryReviewCalender` and `Pipelines.Projects`, `Tasks`, `ProjectMembers` that copy the screens, as listed under G4 above (`CategoryReviewArea`, `BrandReportScope`, `ViewerBrokerageId`, the Pipeline's visible projects with `app.user_id`).
+- The scope gains the organization and the person; `AskReadScope.WaitingForG4b` and the migration's list empty out; G3's closed list follows.
+
 ### G5 — Entity search scope
 - Registry scope rules on: Brand-scoped types filtered by allowlist; Brand/Brokerage (`Organization.Organizations`) limited to connected orgs; broker candidates tagged with brand name.
 
@@ -2401,6 +2429,10 @@ Owner answers recorded 2026-10-11.
 | D254 | G3: data outside the access | **Owner:** the AI says it plainly ("Your access doesn't include promotions for Bubbies."), never how to get access, and answers the rest. |
 | D255 | G3: the person's role | **Owner:** not told to the AI yet; it gets the organization, the brands and what the access includes. |
 | D256 | G3: paid check | **Owner:** none in G3; members are checked end to end in G7, after G4. |
+| D257 | G4: how the database knows the scope | **Owner (2026-11-17, "go with your recommendations"):** sealed: the server signs the scope with a per-database key the read-only logins can't read, and the database checks the seal; a changed or missing scope reads nothing. The plan's plain setting could be rewritten by the query it limits. |
+| D258 | G4: a brokerage's records and the Pipeline | **Owner:** split off to G4b, with rules that copy their screens; until then members can't read them (only a scope of everything does). |
+| D259 | G4: Caboodle's list of brands | **Owner:** a member sees only the brands in their scope in `Brand.Brands`. |
+| D260 | G4: paid check | **Owner:** none; the database tests cover it, members end to end in G7. |
 
 ### 7.1 Demo track — dropped 2026-10-12 (D3), kept for history
 
@@ -2545,7 +2577,8 @@ Each one is posted with its package, and gets a D number once decided.
 | Admin manual | todo | | A Platform Admin user manual (owner, 2026-10-18): every admin screen (settings and budgets, usage, verified examples, prompt review, pins, the Flight recorder), in plain words with screenshots. Written after the final UI is built (§10.10), alongside C9 and before go-live; Constance reviews it. |
 | G2 | done | `22314d1a9` | 2026-11-17 (owner: "commit"), D249–D251, as in §5 G2 "As built": `AskCaboodleAccessAttribute` on the 25 user actions, "Organizations can ask" (off by default, migration applied locally), support access refused. Solution 10,341 green (Intelligence 1,147, API 62), DB tests 84, Release build 0 errors. No paid check. |
 | G3 | done | `aa1e76fbf` | 2026-11-17 (owner: "commit"), D252–D256, as in §5 G3 "As built": each member's brands and tables per question, the context lines, the three tools refuse what the access doesn't include, lookups open. Solution 10,354 green (Intelligence 1,160), DB tests 84, Release build 0 errors. No paid check. |
-| G4 … A3 | todo | | G4 (row-level security) before the switch goes on (D249). |
+| G4 | done | `653128438` | 2026-11-17 (owner: "commit"), D257–D260, as in §5 G4 "As built": the sealed scope, the key, the gateway, migration `AddAskCaboodleRowSecurity` (applied locally; `Down` checked), 20 brand tables by brand, 7 closed to members until G4b. Solution 10,366 green (Intelligence 1,172), DB tests 90, Release build 0 errors. No paid check. |
+| G4b … A3 | todo | | G4b (a brokerage's records and the Pipeline) and G7 before the switch goes on (D249). |
 
 ## 9. Data Ask Caboodle does not read
 
