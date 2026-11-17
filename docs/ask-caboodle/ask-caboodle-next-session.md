@@ -2,15 +2,22 @@
 
 Updated 2026-11-16, after the FE contract fixes (`7a156843a`), the fourth `develop` merge (`f71c649ee`) and develop sync 3 with the period examples (`e45bf2c17`, with its eval report). Before them the same day: the third `develop` merge (`d36d3ac20`), G1 (`905d8bdc7`) and the Pipeline cases with the sync error text (`447ed8a5d`, with its eval report). Written 2026-11-12, after the second `develop` merge (`fd497f8e6`) and develop sync 2 (`f2a93e64f`, with its eval report). Before them: the FE handover (`a71c5d9dc`), C9.1 (`053371c2`), the IAM sync (`607edfd6`) and the first `develop` merge (`52cca716`). Read this first, then §0, §4 "Develop sync 2", "C9.1" and "IAM sync", §5 (GA, with the G1, G3 and G4 notes from develop sync 2), §7.2, §8, §9 and §10 of [`ask-caboodle-be-implementation-plan.md`](ask-caboodle-be-implementation-plan.md).
 
-## Starter prompt (next: G6)
+## Starter prompt (next: G7)
 
-> Read `docs/ask-caboodle/ask-caboodle-next-session.md`, then §0, §4 "C0c" (with "As built"), "FE contract fixes" and "FE integration run", §5 (GA, with G1–G5 as built), §7.2, §8 and §9 of `docs/ask-caboodle/ask-caboodle-be-implementation-plan.md` in `D:\Fork\Onboarding-Journey`. The backend is `D:\Fork\Caboodle BE Repository\caboodle.backend`, branch `feature/ask-caboodle` (last commit: G5 `385e1741a`, after G4b `7c4558b71`; the owner's own untracked docs stay out of every commit).
+> Read `docs/ask-caboodle/ask-caboodle-next-session.md`, then §0, §4 "C0c" (with "As built"), "FE contract fixes" and "FE integration run", §5 (GA, with G1–G6 as built), §7.2, §8 and §9 of `docs/ask-caboodle/ask-caboodle-be-implementation-plan.md` in `D:\Fork\Onboarding-Journey`. The backend is `D:\Fork\Caboodle BE Repository\caboodle.backend`, branch `feature/ask-caboodle` (last commit: G6 `ebf78a820`, after G5 `385e1741a`; the owner's own untracked docs stay out of every commit).
 >
 > First fetch and tell me whether `origin/develop` has commits after `94374e4f1`; don't merge without my go-ahead. Paid runs need my words "run the paid check" with the cost stated; the permission check refuses anything less.
 >
-> Post G6's short plan (plan §5 G6: how answers behave for each audience: a brokerage names the brand on every row and asks which brand when it matters; suggestions and the gallery per organization type), with its open decisions in simple English, and wait for my go-ahead. "Organizations can ask" stays off until G6 and G7 are done (D249).
+> Post G7's short plan (plan §5 G7: the tenancy test matrix and eval cases run as a brand member and as a brokerage, including assigned tasks and Personal projects, which local data lacks; brokerage starters, D271), with its open decisions and the paid run's cost in simple English, and wait for my go-ahead. "Organizations can ask" stays off until G7 is done (D249).
 >
 > Run the free launchers yourself (PowerShell). Finish in the usual order: build with 0 errors, all tests green, my review, then a one-line commit. Paid runs still need my approval first, with the cost stated.
+
+## Done (G6, 2026-11-17)
+
+- **Decided (owner: "go with your recommendations"):** D269 a brokerage question naming no brand is answered across their brands, one row per brand; D270 each brand's data line for up to 10 brands; D271 brokerage starters in G7; D272 no paid check until G7.
+- **Committed** `ebf78a820` (owner: "commit"; plan §5 G6 "As built"): the across-brands instruction and each brand's data line, in the question's context only. Q17 recorded as settled by G4b (design doc).
+- **Results:** solution 10,379 green (Intelligence 1,185), DB tests 95. No migration, no paid check.
+- **Next:** G7 (tenancy test matrix + eval, brokerage starters), with its short plan and the paid run's cost first.
 
 ## Done (G5, 2026-11-17)
 

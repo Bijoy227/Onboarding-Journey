@@ -2148,6 +2148,19 @@ So the planned links (distributor sales, SPINS, KeHE, UNFI, the monthly report, 
 ### G6 — Audience behavior
 - Audience block in the first user message (broker: name the brand on every row, ask which brand when ambiguous); suggestions/gallery seeds per org type; cross-brand answers carry a brand column.
 
+**As built (2026-11-17, D269–D272, committed `ebf78a820`):**
+- **Across several brands** (a member with more than one brand in scope and none selected: in practice a brokerage), the question's context adds `AskMemberAccess.AcrossBrandsInstruction`: a result covering more than one brand gets a brand column (the name from `Brand.Brands`), the text names the brand with each figure, the scope note lists the brands; a total across brands only when asked, labelled "all your brands"; ask which brand only when the question clearly needs a single one (a product or promotion several brands share, one brand's calendar), otherwise answer for every brand it covers (D269). The brand line no longer tells the AI to ask whenever a question needs a brand.
+- **Each brand's data** (`IAskBrandData.BrandsBlockAsync`): one line per brand ("- Bubbies: has …. Not found: …."), from the same hourly checks, only the kinds the member may read there, for 2 to `MaxBrandsListed` (10) brands; above that none, and the AI checks with a query (D270). Kept in `AskAgentContext.BrandsDataBlock`, given only when no brand is selected, inside `<brand_data>` so the fact check skips it.
+- **In the question's context only:** the shared instructions are unchanged, so the prompt cache isn't touched; brand companies and platform admins get nothing new.
+- **Brokerage starters** wait for G7, where eval cases run as a brokerage (D271, D145).
+- **Q17 (design, "may a brand see brokerage-owned records about it?")** is settled by G4b: copying the screens (D262), a brand company sees every brokerage's brand reports and market overview about its brand.
+- **Results:**
+  - Release build 0 errors.
+  - Solution 10,379 green (Intelligence 1,185; new tests: the instruction only across several brands, the per-brand lines and their limits, the handler gives them with no brand selected).
+  - DB tests 95, none failed. Guide checks re-recorded (text unchanged).
+  - No migration, no model call, no paid check (D272); G7's brokerage eval cases check this behaviour on real answers.
+- **Docs:** FE updates document (no FE change).
+
 ### G7 — Tenancy test matrix + eval
 - Broker sees only connected brands; per-brand module gating (brand A grants promotions, B doesn't); brokerage-owned records isolated; member without `ask-caboodle` refused before any LLM call; brand users never see brokerage-owned records (D7 / Q17). Add broker eval cases to B6.
 
@@ -2473,6 +2486,10 @@ Owner answers recorded 2026-10-11.
 | D266 | G5: the prompt gallery's value lists | **Owner:** read with the person's scope, so a fill-in never offers what their access doesn't include. |
 | D267 | G5: saving a name for something they can't see | **Owner:** "That product wasn't found.", as for a record that doesn't exist. |
 | D268 | G5: paid check | **Owner:** none; members end to end in G7. |
+| D269 | G6: a brokerage question that names no brand | **Owner (2026-11-17, "go with your recommendations"):** answer across all their brands, one row per brand with the brand named; ask which brand only when the question clearly needs a single one. |
+| D270 | G6: each brand's data across brands | **Owner:** given for up to 10 brands; above that, the AI checks with a query. |
+| D271 | G6: brokerage starters | **Owner:** built in G7, each the question of an eval case run as a brokerage (D145). |
+| D272 | G6: paid check | **Owner:** none in G6; G7's brokerage eval cases check it (paid, cost stated first). |
 
 ### 7.1 Demo track — dropped 2026-10-12 (D3), kept for history
 
@@ -2620,7 +2637,8 @@ Each one is posted with its package, and gets a D number once decided.
 | G4 | done | `653128438` | 2026-11-17 (owner: "commit"), D257–D260, as in §5 G4 "As built": the sealed scope, the key, the gateway, migration `AddAskCaboodleRowSecurity` (applied locally; `Down` checked), 20 brand tables by brand, 7 closed to members until G4b. Solution 10,366 green (Intelligence 1,172), DB tests 90, Release build 0 errors. No paid check. |
 | G4b | done | `7c4558b71` | 2026-11-17 (owner: "commit"), D261–D264, as in §5 G4b "As built": the scope's headers, migration `AddAskCaboodleScreenRules` (applied locally; `Down` checked), the 7 tables follow their screens, modules by audience for a brokerage's records. Solution 10,371 green (Intelligence 1,177), DB tests 94, Release build 0 errors. No paid check. |
 | G5 | done | `385e1741a` | 2026-11-17 (owner: "commit"), D265–D268, as in §5 G5 "As built": the name search, saved names and the prompt gallery's value lists read with the asker's scope. Solution 10,376 green (Intelligence 1,182), DB tests 95, Release build 0 errors. No migration, no paid check. |
-| G6 … A3 | todo | | G6 (audience behavior) and G7 (tenancy test matrix + eval) before the switch goes on (D249). |
+| G6 | done | `ebf78a820` | 2026-11-17 (owner: "commit"), D269–D272, as in §5 G6 "As built": across several brands a brand column and each brand's data line, in the question's context only. Solution 10,379 green (Intelligence 1,185), DB tests 95, Release build 0 errors. No migration, no paid check. |
+| G7 … A3 | todo | | G7 (tenancy test matrix + eval, brokerage starters) before the switch goes on (D249); G8 ops. |
 
 ## 9. Data Ask Caboodle does not read
 
