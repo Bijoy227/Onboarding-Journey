@@ -2014,6 +2014,28 @@ So the planned links (distributor sales, SPINS, KeHE, UNFI, the monthly report, 
 - **Leave two guards unchanged (D59):** `organization-usage` stays on IAM's `organization.update`. `AskCaboodleAdminController` stays on the admin permission plus `IsPlatformAdmin`.
 - API.Test reflection test stays green.
 
+**What G2 found (2026-11-17).**
+- **IAM's `[RequireModule]` can't be the guard.** Its `ModuleRefusal` refuses anyone outside an organization, and platform admins ask from the admin panel, with no organization (D243).
+- **Support access passes it.** Platform Staff in support access pass the module guard as members of the organization they're supporting.
+- **Nothing per person limits what Ask Caboodle reads yet.** The read-only login sees every brand, and the brand is an instruction to the AI. G3 and G4 build that wall, so G2 lands closed.
+
+**As built (2026-11-17, D249–D251, committed `22314d1a9`):**
+- **The rule** (`Usage/AskCaboodleAccess.Refusal`):
+  - a platform admin passes;
+  - support access is refused ("Ask Caboodle isn't available in support access yet.");
+  - a member is refused while `OrganizationsCanAsk` is off ("Ask Caboodle isn't open to organizations yet.");
+  - otherwise IAM's `ModuleRefusal(ask-caboodle, ask-caboodle, View, crossBrand: true)` decides: the module on the `BrandID` sent, or on any brand without one; a `BrandID` that isn't a GUID is a 400.
+- **The guard** (`AskCaboodleAccessAttribute`, API): an `[Authorize]` that is also an MVC authorization filter, so it needs no policy registration. It replaces `[MustHavePermission(Execute, IntelligenceTools, Admin)]` on the 25 user actions of `AskCaboodleController`, and answers in IAM's envelope (403 under `Access`, 400 under `BrandID`). `organization-usage` keeps `[RequireOrgPermission(organization.update)]`, and `AskCaboodleAdminController` is unchanged (D59).
+- **The switch:** `AskPlatformSettings.OrganizationsCanAsk`, off by default (migration `AddAskCaboodleOrganizationsCanAsk`, applied locally), on `GET`/`PUT askcaboodleadmin/settings` as optional `organizationsCanAsk`.
+- **Handlers:** none of the user handlers refuses a member; their platform-admin branches only show cost, detail or the platform's starters and names.
+- **Docs:** FE contract (who may call, the refusals, the setting) and the FE updates document (the admin panel's switch).
+- **Guide:** the "Ask Caboodle limits" check re-recorded; its text is unchanged (the switch isn't a limit, and "Ask Caboodle" already says an organization has it only when Caboodle switches it on).
+- **Results:**
+  - Release build 0 errors.
+  - Solution 10,341 green (Intelligence 1,147, API 62; new tests: the rule's cases, the setting, every action carrying the rule, the filter's 403 and 400).
+  - DB tests 84, none failed.
+  - No model call, no paid check.
+
 ### G3 — Agent access context
 - Build `AgentAccessContext { Audience, OrganizationId, BrandAllowlist (BrandsWith(ask-caboodle, View)), BrandModules (brand → slugs from Brands[brandId].Modules), ActiveBrandId? }` per request from `IAccessContext.GetCurrentAsync()`.
 - Pass entitlements (allowed brands with names, allowed tables) in the **first user message** — the system prompt stays identical for everyone (cost L3).
@@ -2347,6 +2369,9 @@ Owner answers recorded 2026-10-11.
 | D246 | C0c: how strict | **Owner:** clear cases only; a sentence the checks can't tie to one result, one column and one row passes. |
 | D247 | C0c: measuring | **Owner:** a free replay over the stored answers, then a targeted paid check of about 12 questions (about $1, cap $1.20), on "run the paid check". |
 | D248 | C0c as built | **Claude, along D244–D247:** the facts line, the six statement checks, the hold for counted lists, the correction wording, the prompt rules, the eval judge's full-table note and the guide rule (§4 C0c "As built"). |
+| D249 | G2: opening to organizations before G3–G4 | **Owner (2026-11-17):** a switch, "Organizations can ask", off by default; members are refused while it is off. It goes on per environment only after G3, G4 and the tenancy tests (G7). |
+| D250 | G2: Platform Staff in support access | **Owner:** refused for now; only platform admins and members ask. Decide again at G3 (D210). |
+| D251 | G2: what a member sees while the switch is off | **Owner:** 403 "Ask Caboodle isn't open to organizations yet."; the FE keeps the app's screen hidden until GA. |
 
 ### 7.1 Demo track — dropped 2026-10-12 (D3), kept for history
 
@@ -2489,7 +2514,8 @@ Each one is posted with its package, and gets a D number once decided.
 | FE integration run | done (findings) | `2ebe501b9` (FE doc) | 2026-11-16, §4 "FE integration run": both FE branches against the local API; paid $0.28 (5 questions). Two phase-1 blockers on the FE side (platform admins sent to `/use-admin-app`; no `BrandID` for platform admins), decision pending with the FE team. |
 | C9 part 2 | todo | | How-to steps in the guide, after the FE rework, from the reworked screens; Constance reviews them too. |
 | Admin manual | todo | | A Platform Admin user manual (owner, 2026-10-18): every admin screen (settings and budgets, usage, verified examples, prompt review, pins, the Flight recorder), in plain words with screenshots. Written after the final UI is built (§10.10), alongside C9 and before go-live; Constance reviews it. |
-| G2 … A3 | todo | | C0c comes before G2 (D108). |
+| G2 | done | `22314d1a9` | 2026-11-17 (owner: "commit"), D249–D251, as in §5 G2 "As built": `AskCaboodleAccessAttribute` on the 25 user actions, "Organizations can ask" (off by default, migration applied locally), support access refused. Solution 10,341 green (Intelligence 1,147, API 62), DB tests 84, Release build 0 errors. No paid check. |
+| G3 … A3 | todo | | G3 (what each person may read) and G4 (row-level security) before the switch goes on (D249). |
 
 ## 9. Data Ask Caboodle does not read
 

@@ -2,15 +2,28 @@
 
 Updated 2026-11-16, after the FE contract fixes (`7a156843a`), the fourth `develop` merge (`f71c649ee`) and develop sync 3 with the period examples (`e45bf2c17`, with its eval report). Before them the same day: the third `develop` merge (`d36d3ac20`), G1 (`905d8bdc7`) and the Pipeline cases with the sync error text (`447ed8a5d`, with its eval report). Written 2026-11-12, after the second `develop` merge (`fd497f8e6`) and develop sync 2 (`f2a93e64f`, with its eval report). Before them: the FE handover (`a71c5d9dc`), C9.1 (`053371c2`), the IAM sync (`607edfd6`) and the first `develop` merge (`52cca716`). Read this first, then §0, §4 "Develop sync 2", "C9.1" and "IAM sync", §5 (GA, with the G1, G3 and G4 notes from develop sync 2), §7.2, §8, §9 and §10 of [`ask-caboodle-be-implementation-plan.md`](ask-caboodle-be-implementation-plan.md).
 
-## Starter prompt (next: C0c's paid check and commit, then G2)
+## Starter prompt (next: G2's commit, then G3)
 
 > Read `docs/ask-caboodle/ask-caboodle-next-session.md`, then §0, §4 "C0c" (with "As built"), "FE contract fixes" and "FE integration run", §5 (GA, with G1 as built), §7.2, §8 and §9 of `docs/ask-caboodle/ask-caboodle-be-implementation-plan.md` in `D:\Fork\Onboarding-Journey`. The backend is `D:\Fork\Caboodle BE Repository\caboodle.backend`, branch `feature/ask-caboodle` (last commit: the FE integration run's FE updates entry `2ebe501b9`, after the FE contract fixes `7a156843a`; then C0c `7a3ed4939`; working tree clean apart from the owner's own untracked docs).
 >
 > First fetch and tell me whether `origin/develop` has commits after `94374e4f1`; don't merge without my go-ahead. Paid runs need my words "run the paid check" with the cost stated; the permission check refuses anything less.
 >
-> If C0c is still uncommitted (see "Waiting for the owner (C0c)"), ask me for its paid check in so many words ("run the paid check", about $1, cap $1.20), report it, and wait for my "commit". Then post G2's short plan (plan §5 G2: organization users can ask; D108's prerequisite C0c done), with its open decisions in simple English, and wait for my go-ahead. Platform admins ask from the admin panel (D243); the FE builds that.
+> If G2 is still uncommitted (see "Waiting for the owner (G2)"), wait for my "commit". Then post G3's short plan (plan §5 G3: what each person may read, per brand and module; G4's row-level security follows), with its open decisions in simple English, and wait for my go-ahead. "Organizations can ask" stays off until G3, G4 and G7 are done (D249).
 >
 > Run the free launchers yourself (PowerShell). Finish in the usual order: build with 0 errors, all tests green, my review, then a one-line commit. Paid runs still need my approval first, with the cost stated.
+
+## Done (G2, 2026-11-17)
+
+- **Decided (owner, 2026-11-17):**
+  - D249: a switch, "Organizations can ask", off by default; on only after G3, G4 and G7.
+  - D250: Platform Staff in support access refused for now.
+  - D251: members see "Ask Caboodle isn't open to organizations yet." while it's off.
+- **Committed** `22314d1a9` (owner: "commit"; plan §5 G2 "As built"):
+  - the new guard on the 25 user endpoints: platform admins pass; members need the switch and the module on the brand;
+  - the settings field, with its migration (applied locally);
+  - the FE contract and the FE updates document.
+- **Results:** solution 10,341 green (Intelligence 1,147, API 62), DB tests 84. No paid check.
+- **Next:** G3 (what each person may read), then G4 (row-level security), with their short plans first.
 
 ## Done (C0c, 2026-11-17)
 
