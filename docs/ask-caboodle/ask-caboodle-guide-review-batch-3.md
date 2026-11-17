@@ -1,6 +1,6 @@
 # Caboodle guide — batch 3 of 3, for review
 
-Draft of 16 November 2026, for review with Constance. Generated from the guide file in the code, so what you approve is exactly what Ask Caboodle reads.
+Draft of 17 November 2026, for review with Constance. Generated from the guide file in the code, so what you approve is exactly what Ask Caboodle reads.
 
 Ask Caboodle answers questions about how Caboodle works (what a term means, how things connect, the rules the app follows) only from these entries. We wrote each one from Caboodle's code, not from memory. Until you approve an entry, only Caboodle's own team sees answers that use it, marked "not yet reviewed".
 
@@ -198,7 +198,7 @@ For: everyone. Also called: ai assistant, caboodle ai, the ai.
 
 **Rules**
 
-- Every figure comes from a query or Caboodle's calculators, never from general knowledge, and a figure it couldn't check against the data is marked.
+- Every figure comes from a query or Caboodle's calculators, never from general knowledge. It checks each figure, and what it says about rankings, peaks and trends, against the data, and marks what it couldn't check.
 - On a brand, it uses only that brand's data.
 - It can't change data or forecast, and it can't explain steps in the app yet.
 - It is a module: an organization has it only when Caboodle switches it on.
