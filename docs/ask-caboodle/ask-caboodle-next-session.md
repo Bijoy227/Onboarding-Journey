@@ -2,15 +2,29 @@
 
 Updated 2026-11-16, after the FE contract fixes (`7a156843a`), the fourth `develop` merge (`f71c649ee`) and develop sync 3 with the period examples (`e45bf2c17`, with its eval report). Before them the same day: the third `develop` merge (`d36d3ac20`), G1 (`905d8bdc7`) and the Pipeline cases with the sync error text (`447ed8a5d`, with its eval report). Written 2026-11-12, after the second `develop` merge (`fd497f8e6`) and develop sync 2 (`f2a93e64f`, with its eval report). Before them: the FE handover (`a71c5d9dc`), C9.1 (`053371c2`), the IAM sync (`607edfd6`) and the first `develop` merge (`52cca716`). Read this first, then §0, §4 "Develop sync 2", "C9.1" and "IAM sync", §5 (GA, with the G1, G3 and G4 notes from develop sync 2), §7.2, §8, §9 and §10 of [`ask-caboodle-be-implementation-plan.md`](ask-caboodle-be-implementation-plan.md).
 
-## Starter prompt (next: G4b)
+## Starter prompt (next: G5)
 
-> Read `docs/ask-caboodle/ask-caboodle-next-session.md`, then §0, §4 "C0c" (with "As built"), "FE contract fixes" and "FE integration run", §5 (GA, with G1–G4 as built and G4b), §7.2, §8 and §9 of `docs/ask-caboodle/ask-caboodle-be-implementation-plan.md` in `D:\Fork\Onboarding-Journey`. The backend is `D:\Fork\Caboodle BE Repository\caboodle.backend`, branch `feature/ask-caboodle` (last commit: G4 `653128438`, after G3 `aa1e76fbf`; the owner's own untracked docs stay out of every commit).
+> Read `docs/ask-caboodle/ask-caboodle-next-session.md`, then §0, §4 "C0c" (with "As built"), "FE contract fixes" and "FE integration run", §5 (GA, with G1–G4b as built), §7.2, §8 and §9 of `docs/ask-caboodle/ask-caboodle-be-implementation-plan.md` in `D:\Fork\Onboarding-Journey`. The backend is `D:\Fork\Caboodle BE Repository\caboodle.backend`, branch `feature/ask-caboodle` (last commit: G4b `7c4558b71`, after G4 `653128438`; the owner's own untracked docs stay out of every commit).
 >
 > First fetch and tell me whether `origin/develop` has commits after `94374e4f1`; don't merge without my go-ahead. Paid runs need my words "run the paid check" with the cost stated; the permission check refuses anything less.
 >
-> Post G4b's short plan (plan §5 G4b: rules for a brokerage's reviews, reports, market overview, the review calendar and the Pipeline that copy their screens), with its open decisions in simple English, and wait for my go-ahead. "Organizations can ask" stays off until G4b and G7 are done (D249).
+> Post G5's short plan (plan §5 G5: the name search finds only the person's brands' entities; it reads with the server's own SQL and a scope of everything today), with its open decisions in simple English, and wait for my go-ahead. "Organizations can ask" stays off until G5, G6 and G7 are done (D249).
 >
 > Run the free launchers yourself (PowerShell). Finish in the usual order: build with 0 errors, all tests green, my review, then a one-line commit. Paid runs still need my approval first, with the cost stated.
+
+## Done (G4b, 2026-11-17)
+
+- **Decided (owner: "go with your recommendations"):**
+  - D261: a brokerage member with no brand reads each of their brands' pages put together, plus their own catalog;
+  - D262: the Pipeline copies the screens (replaces D224 for members);
+  - D263: a project's member list only for its owners and the people it's shared with;
+  - D264: no paid check.
+- **Committed** `7c4558b71` (owner: "commit"; plan §5 G4b "As built"):
+  - the scope names the person, their company and their brokerage;
+  - migration `AddAskCaboodleScreenRules` (applied locally, `Down` checked): category reviews, the calendar, brand reports, market overview and the Pipeline follow their screens;
+  - a brokerage's records go by each audience's own module, as the screens check.
+- **Results:** solution 10,371 green (Intelligence 1,177), DB tests 94. Not checkable locally: assigned tasks and Personal projects (none in the data). No paid check.
+- **Next:** G5 (name search within the person's brands), with its short plan first.
 
 ## Done (G4, 2026-11-17)
 

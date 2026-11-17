@@ -2110,6 +2110,24 @@ So the planned links (distributor sales, SPINS, KeHE, UNFI, the monthly report, 
 - Restrictive rules on `Broker.CategoryReviews`, `BrandReports`, `MarketOverviews`, `CategoryReviewCalender` and `Pipelines.Projects`, `Tasks`, `ProjectMembers` that copy the screens, as listed under G4 above (`CategoryReviewArea`, `BrandReportScope`, `ViewerBrokerageId`, the Pipeline's visible projects with `app.user_id`).
 - The scope gains the organization and the person; `AskReadScope.WaitingForG4b` and the migration's list empty out; G3's closed list follows.
 
+**As built (2026-11-17, D261–D264, committed `7c4558b71`):**
+- **The scope's headers** (`AskReadScope.With`): `@user`, `@org`, `@brokerage` (a brokerage's member), `@personal` (their own company, when its grant has the Pipelines module and it isn't support access, as in `PipelineRightsCalculator`), `@catalog-reviews` (when their access includes category reviews). Every table with a row rule, the 7 included, carries its brand list. `AskMemberAccess.ReadScope()` sets them; a pinned report builds the same access for the pin's brand.
+- **Modules as the screens check them:** the catalog's `brokerage` tables go by the asker's own audience slug (`CatalogTableModules.GrantedFor`): a brokerage's Brand Report and Market Overview modules, a brand's calendar and Broker Market Activities; other tables keep either slug (G3).
+- **The migration** `AddAskCaboodleScreenRules` replaces the 7 tables' restrictive rule (G4's "everything only"):
+  - `Broker.CategoryReviews`: the brands' own reviews, or catalog reviews (no brand) of `CatalogOwners()` when `@catalog-reviews` is set (`CategoryReviewArea.ReadCondition`);
+  - `Broker.CategoryReviewCalender`: the entry's brand in the list, and its review's copied owner the same brand, a catalog owner, or none (`CalendarCondition`);
+  - `Broker.BrandReports`, `Broker.MarketOverviews`: the brand in the list, and with `@brokerage` only that brokerage's rows (`BrandReportScope`, the viewer brokerage);
+  - `Pipelines.Projects`: `PipelineProjects(false)`; `Tasks`: every task of `PipelineProjects(true)`, or their own task in `PipelineProjects(false)`; `ProjectMembers`: `PipelineProjects(true)` (D263);
+  - functions `Ids(key)` (Brands now calls it), `CatalogOwners()` (a brokerage's own; a brand company's active `BrandConnections`) and `PipelineProjects(full_view)` (`VisibleProjects`: the module on the project's brand or their own company, then owner, member of it or its parent, or, unless full view, a task assigned), security definer and parallel safe, so the three Pipeline rules never read one another.
+- **A brokerage member with no brand** reads what each of their brands' pages shows, put together, plus their own catalog (D261). **The Pipeline** is the screens' (D262), replacing D224's "every project filed under the brand" for members; platform admins and the eval are unchanged.
+- **Checked on `caboodle_dev`** (`AskScreenRulesDatabaseTests`): for a brokerage (the one with the most brand reports, on all 8 report brands) and a brand company (the brand with the most reporting brokerages), each of the four Broker tables read through `askcaboodle_app` equals the screen's condition on the main login, and no other brokerage's report is read; for the Pipeline, the company owning the most projects and a shared member read exactly the screen's visible projects, their tasks and members; a brand whose every project is another company's reads none. Not checkable on local data: assigned tasks (none assigned) and Personal projects (none exist). The migration's `Down` was run and re-applied.
+- **Results:**
+  - Release build 0 errors.
+  - Solution 10,371 green (Intelligence 1,177; new tests: the headers, audience modules for a brokerage's records, a brand company's scope).
+  - DB tests 94, none failed (4 new). The loaded-months timing test went over its 5 s once, on the first run after the migration (6 s, cold cache); alone 1 s, and 3 s in two later full runs.
+  - No model call, no paid check (D264).
+- **Docs:** deployment (the migration, rollback), FE contract and FE updates document (no FE change). Guide checks re-recorded (text unchanged).
+
 ### G5 — Entity search scope
 - Registry scope rules on: Brand-scoped types filtered by allowlist; Brand/Brokerage (`Organization.Organizations`) limited to connected orgs; broker candidates tagged with brand name.
 
@@ -2433,6 +2451,10 @@ Owner answers recorded 2026-10-11.
 | D258 | G4: a brokerage's records and the Pipeline | **Owner:** split off to G4b, with rules that copy their screens; until then members can't read them (only a scope of everything does). |
 | D259 | G4: Caboodle's list of brands | **Owner:** a member sees only the brands in their scope in `Brand.Brands`. |
 | D260 | G4: paid check | **Owner:** none; the database tests cover it, members end to end in G7. |
+| D261 | G4b: a brokerage member with no brand selected | **Owner (2026-11-17, "go with your recommendations"):** what each of their brands' pages shows, put together, plus their own catalog (as D253). |
+| D262 | G4b: the Pipeline for members | **Owner:** copy the screens: their company's projects, their Personal projects, shared projects (directly or through the parent), and only their own tasks where they just have a task. Replaces D224 for members: a brand's members don't see a brokerage's project on their brand unless shared (Bubbies' two on local data). Platform admins and the eval unchanged. |
+| D263 | G4b: a project's member list | **Owner:** only for people who own the project or have it shared with them; an assignee sees their task, not the list. |
+| D264 | G4b: paid check | **Owner:** none; members end to end in G7. |
 
 ### 7.1 Demo track — dropped 2026-10-12 (D3), kept for history
 
@@ -2578,7 +2600,8 @@ Each one is posted with its package, and gets a D number once decided.
 | G2 | done | `22314d1a9` | 2026-11-17 (owner: "commit"), D249–D251, as in §5 G2 "As built": `AskCaboodleAccessAttribute` on the 25 user actions, "Organizations can ask" (off by default, migration applied locally), support access refused. Solution 10,341 green (Intelligence 1,147, API 62), DB tests 84, Release build 0 errors. No paid check. |
 | G3 | done | `aa1e76fbf` | 2026-11-17 (owner: "commit"), D252–D256, as in §5 G3 "As built": each member's brands and tables per question, the context lines, the three tools refuse what the access doesn't include, lookups open. Solution 10,354 green (Intelligence 1,160), DB tests 84, Release build 0 errors. No paid check. |
 | G4 | done | `653128438` | 2026-11-17 (owner: "commit"), D257–D260, as in §5 G4 "As built": the sealed scope, the key, the gateway, migration `AddAskCaboodleRowSecurity` (applied locally; `Down` checked), 20 brand tables by brand, 7 closed to members until G4b. Solution 10,366 green (Intelligence 1,172), DB tests 90, Release build 0 errors. No paid check. |
-| G4b … A3 | todo | | G4b (a brokerage's records and the Pipeline) and G7 before the switch goes on (D249). |
+| G4b | done | `7c4558b71` | 2026-11-17 (owner: "commit"), D261–D264, as in §5 G4b "As built": the scope's headers, migration `AddAskCaboodleScreenRules` (applied locally; `Down` checked), the 7 tables follow their screens, modules by audience for a brokerage's records. Solution 10,371 green (Intelligence 1,177), DB tests 94, Release build 0 errors. No paid check. |
+| G5 … A3 | todo | | G5 (name search within the person's brands), G6 and G7 before the switch goes on (D249). |
 
 ## 9. Data Ask Caboodle does not read
 
